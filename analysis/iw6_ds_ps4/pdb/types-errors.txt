@@ -1,0 +1,4 @@
+Error encountered while reconstructing 'D3D11_MESSAGE_ID': pdb error: Support for types of kind 0x0000 is not implemented
+Error encountered while reconstructing '_unnamed_0x115fe': pdb error: Support for types of kind 0x0001 is not implemented
+Error encountered while reconstructing '_unnamed_0x1162f': pdb error: Support for types of kind 0x0001 is not implemented
+Error encountered while reconstructing '_unnamed_0x6149': pdb error: Support for types of kind 0x0000 is not implemented

@@ -18,7 +18,6 @@ on:
       - tools/ghidra/**
       - tools/fetch_originals.py
       - tools/unpack/**
-      - tools/pdb/**
       - .github/workflows/ghidra.yml
 
 concurrency:

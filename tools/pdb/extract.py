@@ -7,7 +7,8 @@ Generated output only. Re-running on the same PDB/MAP reproduces identical files
 
 Pass `-` for a file the build doesn't have (e.g. a server build with an EXE and MAP but no PDB).
 
-Needs llvm-pdbutil (apt install llvm).
+Needs llvm-pdbutil (apt install llvm) and resymc
+(cargo install --locked --git https://github.com/ergrelet/resym --rev 5be09381 resymc).
 
 Writes:
   analysis/<build>/pdb/sections.tsv    section index, name, virtual address, virtual size
@@ -16,6 +17,8 @@ Writes:
   analysis/<build>/pdb/lines.tsv       function start -> (source file, first line) from line tables
   analysis/<build>/pdb/locals.tsv      parameter/local names and types per function, as Ghidra stack offsets
   analysis/<build>/pdb/statics.tsv     file- and function-static data: source file, scope, name, va, type
+  analysis/<build>/pdb/types.h         every PDB type as C++ with offsets and sizes (resymc), independent of Ghidra
+  analysis/<build>/pdb/types-errors.txt  types resymc could not rebuild
   analysis/<build>/pdb/raw/*.txt       llvm-pdbutil dumps the tables were parsed from
   analysis/<build>/map/publics.tsv     linker MAP publics: va, name, flags, lib, obj
 """
@@ -319,9 +322,21 @@ def main():
         "role\tfile\tsha256\n" + "".join(f"{role}\t{p.name}\t{sha256(p)}\n" for role, p in inputs))
 
 
+def extract_types(out, pdb):
+    """All types as C++ from resymc: complete even where Ghidra's PDB loader gives up on a deep struct."""
+    res = subprocess.run(["resymc", "dump-all", "-s", "-x", "-f", "portable", str(pdb), str(out / "pdb" / "types.h")],
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        sys.exit(f"resymc failed: {res.stderr[-2000:]}")
+    errors = sorted(line.split("] ", 1)[-1] for line in res.stderr.splitlines() if "ERROR" in line)
+    (out / "pdb" / "types-errors.txt").write_text("".join(e + "\n" for e in errors))
+    return len(errors)
+
+
 def extract_pdb(out, pdb, base):
     raw = out / "pdb" / "raw"
     raw.mkdir(parents=True, exist_ok=True)
+    print(f"{out.name}: types.h written, {extract_types(out, pdb)} type(s) resymc could not rebuild")
 
     dumps = {
         "summary": pdbutil("dump", "-summary", str(pdb)),

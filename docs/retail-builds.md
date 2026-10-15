@@ -38,6 +38,10 @@ against its own PDB), as CoDMPServer_s was for BO1.
 - **Identical code folding** (/OPT:ICF) is on: tiny functions with identical bodies share one address, so a
   function's line-table entry can belong to a different function (e.g. `SV_GetMigrationDefaultFlags` carries
   `gfx_d3d/r_dvars.cpp`). The module is the reliable source attribution.
+- **All types as C++** in `pdb/types.h` (resymc): ~10,800 types with field offsets and sizes, including the ones
+  Ghidra's PDB loader struggles with (`bgs_t`, 0x55700 bytes, takes Ghidra ~57 min per pass and ends in "exceeded
+  maximum allowed depth"). Only 4 fail (`pdb/types-errors.txt`): the SDK enum `D3D11_MESSAGE_ID` and three unnamed
+  types. This is the type reference for reconstruction; Ghidra's `types.h` is secondary.
 - `pdb/locals.tsv` is empty for now: x64 locals are RSP-relative after the prologue and need the frame size
   from the unwind data to become Ghidra stack offsets. Ghidra's own PDB analyzer applies them meanwhile.
 
