@@ -7,9 +7,9 @@ graph = "re_iw6"
 r2_public = "https://r2.houseofkublai.com/"
 ghidra = "12.1.4"
 compiler = "MSVC 2012 (VC11, cl 17.00, Update 4 = build 61030 in the MP Rich header), x64. Retail: optimized, no asserts expected"
-# Original source roots, for turning PDB/MAP/assert paths into repo paths (tools/pdb/extract.py). Unknown until a
-# symbol build or assert strings show the tree; the retail PDB paths only give the output dir c:\trees\iw6-release\game\pc\.
-source_roots = []
+# Original source roots, for turning PDB/MAP paths into repo paths (tools/pdb/extract.py). From the server PDBs;
+# demonware, libs and speex sit beside src\ and are kept as <external>.
+source_roots = ['c:\trees\iw6\code_source\src']
 
 # kind: "retail" = the final target (the Microsoft Store build, reportedly without Arxan; R2 key pending upload).
 #       "reference" = has symbols (PDB/MAP: the PC server build, Xbox 360 prototype MAPs), keys pending.
@@ -21,6 +21,61 @@ source_roots = []
 # `protection = "arxan"`: the code is encrypted on disk and decrypted by the entry stub at startup.
 # tools/unpack/arxan.py emulates that stub and writes the decrypted image; Ghidra analyses that, never the
 # raw file. `unpacked_sha256` pins the result, so the unpacked image is reproducible from the original.
+
+# Reference builds: Windows x64 dedicated servers ("dh_server"), one per console platform they hosted matches for.
+# Each has its full private PDB and linker MAP. Config ServerDH_<PLATFORM>_Ship: optimized ship builds, unlike BO1's
+# servers. Same compiler as retail (VS2012; these Rich headers show Update 2, build 60315). In R2 each folder also holds
+# an identical copy named iw6_ds_<platform>.*.
+
+# Primary reference: PS4 host. Latest changelist (715098) and ProductVersion 3.15, the same as the final Steam build.
+[[build]]
+id = "iw6_ds_ps4"
+kind = "reference"
+analyze = true
+timestamp = "2014-10-25T03:33:17Z"
+changelist = 715098
+pdb_path = 'c:\trees\iw6\game\dedicated\ps4\iw6mp64_dh_server_orbis.pdb'
+pdb_guid = "70D4F11F-0EFF-492F-BF1F-7C33C2BD4890"
+pdb_age = 108
+exe = { key = "ghosts/Ghosts/Call of Duty - Ghosts PS4 Server/iw6_ds.exe", sha256 = "46d92b7e3033baa4012b9d6192b9189196ed6c8b6949f5a6b631eaf15692edfe" }
+pdb = { key = "ghosts/Ghosts/Call of Duty - Ghosts PS4 Server/iw6_ds.pdb", sha256 = "38c281559f90d36b38212bf6a4a505968810c95689e8c8da109d38445f5536f2" }
+map = { key = "ghosts/Ghosts/Call of Duty - Ghosts PS4 Server/iw6_ds.map", sha256 = "e365db0392f768ee2eb318ee8e4cfd686d9b806e22cb7ee00b0864446bb7b2b9" }
+
+# Xbox One host: older (changelist 665584, 2014-02-22, ProductVersion 3.8). Second reference and a ground-truth pair
+# for validating the matcher (two symbol builds matched blind).
+[[build]]
+id = "iw6_ds_xb3"
+kind = "reference"
+analyze = false
+timestamp = "2014-02-22T04:45:04Z"
+changelist = 665584
+pdb_path = 'c:\trees\iw6\game\dedicated\xb3\iw6mp64_dh_server_durango.pdb'
+pdb_guid = "E0577A5D-76BF-4896-8155-D21FB4D05842"
+pdb_age = 42
+exe = { key = "ghosts/Ghosts/Call of Duty - Ghosts Xbox One Server/iw6_ds.exe", sha256 = "3d4781fd1e91b4d8563a18507efd0ca6a65deaa1ed792a8fe4eb2ed0bc670573" }
+pdb = { key = "ghosts/Ghosts/Call of Duty - Ghosts Xbox One Server/iw6_ds.pdb", sha256 = "d433a9ec2449073f0689b8704d58d3317b87ec0e8c7ee68b58c0682652e8be4d" }
+map = { key = "ghosts/Ghosts/Call of Duty - Ghosts Xbox One Server/iw6_ds.map", sha256 = "3376e6cc5dc6effb0be6d383d5dbad7e5684faec3b0b31e0ee67eb5ac70df6a6" }
+
+# PS3 and Xbox 360 hosts: same changelist as PS4 (715098). Kept for completeness; not analysed.
+[[build]]
+id = "iw6_ds_ps3"
+kind = "reference"
+analyze = false
+timestamp = "2014-10-27T23:47:22Z"
+changelist = 715098
+exe = { key = "ghosts/Ghosts/Call of Duty - Ghosts PS3 Server/iw6_ds.exe", sha256 = "e7e8b2bb531983d4d3986d14da8d37f3fe6d53f49a67bbaabec93981ad296636" }
+pdb = { key = "ghosts/Ghosts/Call of Duty - Ghosts PS3 Server/iw6_ds.pdb", sha256 = "65f7785084e24d24596ee8aff2520d2b80eb85deec1ba56e44cf26fbd96d098c" }
+map = { key = "ghosts/Ghosts/Call of Duty - Ghosts PS3 Server/iw6_ds.map", sha256 = "f409bf404e39cd6850cee4c992485a6a93ff882f5e76049043972ec3f5636d72" }
+
+[[build]]
+id = "iw6_ds_xenon"
+kind = "reference"
+analyze = false
+timestamp = "2014-10-27T23:41:15Z"
+changelist = 715098
+exe = { key = "ghosts/Ghosts/Call of Duty - Ghosts Xbox 360 Server/iw6_ds.exe", sha256 = "1e6d1e312ec1ecfb7233f9efaed1109916c2631292d7ed1144a132abe35b4d3a" }
+pdb = { key = "ghosts/Ghosts/Call of Duty - Ghosts Xbox 360 Server/iw6_ds.pdb", sha256 = "adc55327519572bff56583efbad6822d3ebc6281fe3f91cf1204b481aa5545ca" }
+map = { key = "ghosts/Ghosts/Call of Duty - Ghosts Xbox 360 Server/iw6_ds.map", sha256 = "f55d7409b3259c2bac1de99d9b3450c74b883e7152d403ca986e8d674b9941ad" }
 
 # Final Steam MP exe (2018-04-25, ProductVersion 3.15), as distributed in Plutonium's exe set.
 # Activision Authenticode signature verifies (digest matches): an unmodified original.

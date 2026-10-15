@@ -135,6 +135,29 @@ def parse_modules(text):
     return mods
 
 
+def derive_module_sources(mods, procs, first_line):
+    """VS2012 x64 PDBs leave the module's 'src file' empty. Use the module's own functions' line-table sources:
+    the source whose file stem equals the object's stem, else the most common one. Fills procs' module_source
+    and the module records, so pseudocode groups by original compiland as on BO1."""
+    from collections import Counter
+    by_mod = {}
+    for p in procs:
+        src = first_line.get(p[0], ("", 0))[0]
+        if src and not str(p[4]) == "":
+            by_mod.setdefault(p[4], Counter())[src] += 1
+    for idx, cnt in by_mod.items():
+        m = mods.get(idx)
+        if m is None or m["source"]:
+            continue
+        stem = Path(m["obj"].replace("\\", "/")).stem.lower()
+        same = [s for s in cnt if Path(s).stem.lower() == stem]
+        m["derived"] = max(same, key=lambda s: cnt[s]) if same else cnt.most_common(1)[0][0]
+    for p in procs:
+        m = mods.get(p[4])
+        if not p[5] and m is not None and m.get("derived"):
+            p[5] = m["derived"]
+
+
 def parse_procs(text, mods, va_of):
     out, mod = [], None
     lines = text.splitlines()
@@ -324,6 +347,7 @@ def extract_pdb(out, pdb, base):
     first_line = parse_lines(dumps["lines"], va_of)
     procs = parse_procs(dumps["symbols"], mods, va_of)
     procs.sort(key=lambda r: (r[0], r[2]))
+    derive_module_sources(mods, procs, first_line)
 
     canon = make_canon([rel_source(m[k]) for m in mods.values() for k in ("obj", "lib", "source")]
                        + [p[5] for p in procs] + [s for s, _ in first_line.values()])
@@ -334,7 +358,7 @@ def extract_pdb(out, pdb, base):
     tsv(out / "pdb" / "statics.tsv", ["source", "scope", "name", "va", "type", "kind"],
         sorted(([canon(rel_source(r[0])), *r[1:]] for r in statics), key=lambda r: (r[0], r[1], r[2])))
     tsv(out / "pdb" / "modules.tsv", ["module", "obj", "lib", "source"],
-        [[m["index"], canon(rel_source(m["obj"])), canon(rel_source(m["lib"])), canon(rel_source(m["source"]))]
+        [[m["index"], canon(rel_source(m["obj"])), canon(rel_source(m["lib"])), canon(rel_source(m["source"])) if m["source"] else canon(m.get("derived", ""))]
          for m in sorted(mods.values(), key=lambda m: m["index"])])
     tsv(out / "pdb" / "functions.tsv", ["va", "size", "name", "scope", "module", "module_source", "line_source", "line", "type"],
         [[p[0], p[1], p[2], p[3], p[4], p[5], *first_line.get(p[0], ("", "")), p[6]] for p in procs])
