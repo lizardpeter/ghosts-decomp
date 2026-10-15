@@ -1,15 +1,16 @@
 # ghosts-decomp
 
 Decompilation of **Call of Duty: Ghosts (IW6)**, PC x64. The final target is the Microsoft Store build
-(multiplayer first), reportedly without Arxan; it is being uploaded.
+(multiplayer first): no Arxan, rebuilt with VS2019 in 2024.
 
 | Build | Linked | Role |
 |---|---|---|
-| Microsoft Store MP/SP | (pending) | **target** |
+| `iw6mp64_MSStore_ship` / `iw6sp64_MSStore_ship` (Store, 4.0.9.0) | 2024-11-18 | **target**, GDK platform layer |
+| `iw6_ds_ps4` (+ Xbox One, PS3, 360 hosts) | 2014 | reference: Windows dedicated servers with full PDB and MAP |
 | `iw6mp64_ship` (Steam MP, 3.15) | 2018-04-25 | related: Arxan-protected, original Activision signature; community address maps exist for it |
 | `iw6sp64_ship` (Steam SP) | 2015-02-10 | related: Arxan-protected, modified after release |
 
-Compiler: MSVC 2012 (VC11) x64. Reference builds with symbols are being added (docs/prior-art.md).
+Compilers: Store build VS2019 (x64, LTCG); servers and Steam exes VS2012 (x64).
 
 - How the repo is organised and the rules for changing it: [AGENTS.md](AGENTS.md)
 - Progress: [STATUS.md](STATUS.md)

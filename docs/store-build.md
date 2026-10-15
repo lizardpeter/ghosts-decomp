@@ -1,7 +1,26 @@
 # The Microsoft Store build (final target)
 
-Status: package metadata and data files are in R2 (`ghosts/DUMP/`); the executables are still uploading. The
-exe-level findings (protection, link date, PDB path, compiler) are to be filled in when they arrive.
+Status: both executables are in R2 (`ghosts/DUMP/`); the rest of the package is still uploading.
+
+## The executables
+
+| | iw6mp64_MSStore_ship.exe | iw6sp64_MSStore_ship.exe |
+|---|---|---|
+| sha256 | dd63cb5b…0757 | 5e232b0f…abd5 |
+| linked | 2024-11-18 18:02:39 | 2024-11-18 18:01:11 |
+| PDB | `d:\workspace\outrun\iw6-depot\iw6\game\pc\iw6mp64_MSStore_ship.pdb` {0A83874F-F6E2-4423-A596-766DECB765C4} age 4 | `...\iw6sp64_MSStore_ship.pdb` {6FCA2EAC-8BF1-4658-A6CA-C97D35615CA1} age 6 |
+| `.text` | 8.0 MB, entropy 6.10 | entropy 6.01 |
+
+- **No Arxan:** normal `.text` entropy, entry point in `.text`, ordinary relocations (31 KB), none of the Steam
+  builds' stub sections. **No Steam:** no `steam_api64.dll` import.
+- **Toolchain:** linker 14.29, objects from cl 19.29.30154 (VS2019 16.11), dynamic VC14 CRT (`MSVCP140`,
+  `VCRUNTIME140`, UCRT); a POGO debug record, so link-time code generation. Very different code generation from
+  the VS2012 reference servers.
+- **Platform:** `xgameruntime.dll` loaded at runtime (`XGameRuntimeInitialize`), Xbox sign-in (`XUserAddAsync`),
+  Xbox Live services (`XblInitialize`, `XblContext`), `XCurl`/`WinHTTP` for HTTP, `bcrypt`/`CRYPT32`, and the
+  process lifetime notification API (`api-ms-win-core-psm-appnotify`). A `.xbld` section marks a GDK build.
+- Version resource still says ProductVersion 3.15, OriginalFilename `iw6mp64_ship.exe`.
+- `GameLaunchHelper.exe` is not in the upload yet; it isn't needed for analysis.
 
 ## From the package (MicrosoftGame.config, appxmanifest.xml)
 
