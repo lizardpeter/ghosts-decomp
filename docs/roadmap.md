@@ -44,7 +44,10 @@ Approach:
 ## 8. FOV like MW2019
 
 MW2019's FOV slider is the **horizontal FOV at 16:9**; Ghosts' `cg_fov` is the horizontal FOV at 4:3
-(Hor+ on wider screens). Conversion: vertical = 2·atan(tan(h/2)·9/16), then cg_fov = 2·atan(tan(v/2)·4/3).
+(Hor+ on wider screens: the vertical FOV is kept and the image widens). The 4:3 definition is the IW-engine
+convention from CoD4 to MW3; confirm it in Ghosts' client FOV calculation once decompiled. The enhanced build
+switches the setting to MW2019 units (horizontal at 16:9) and converts internally; the menu can also show the
+actual horizontal FOV for the current aspect ratio. Conversion: vertical = 2·atan(tan(h/2)·9/16), then cg_fov = 2·atan(tan(v/2)·4/3).
 
 | MW2019 FOV | vertical | Ghosts cg_fov |
 |---:|---:|---:|
