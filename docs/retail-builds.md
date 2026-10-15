@@ -45,6 +45,17 @@ against its own PDB), as CoDMPServer_s was for BO1.
 - `pdb/locals.tsv` is empty for now: x64 locals are RSP-relative after the prologue and need the frame size
   from the unwind data to become Ghidra stack offsets. Ghidra's own PDB analyzer applies them meanwhile.
 
+### Ghidra pipeline on the PS4 server (first x64 run)
+
+- Analysis with the PDB applied: **2 h 36 min** (13 GB heap). Almost all of it is Ghidra rebuilding a few deep
+  PDB structs (`bgs_t` alone ~57 min per pass, ending in "exceeded maximum allowed depth"); the analyze step
+  allows 330 min. `pdb/types.h` (resymc) has those types complete regardless.
+- **17,913 functions**, 15,951 with their PDB name; **17,884 decompiled, 0 failures** (the other 29 are thunks),
+  in six shards of about a minute and a half each.
+- Call graph 77,981 edges, 18,392 strings, 75,860 other symbols; pseudocode and disassembly grouped into
+  1,576 original source files (`analysis/iw6_ds_ps4/pseudocode/<source path>.c`); saved Ghidra project committed.
+- Spot check: `AngleNormalize360` pseudocode agrees with the reconstruction in `src/universal/com_math.cpp`.
+
 ### Compared with BO1's servers
 
 These are **ship builds** (config `ServerDH_ORBIS_Ship`): optimized, unlike BO1's effectively unoptimized
