@@ -35,6 +35,8 @@ pdb_path = 'C:\trees\iw6-release\game\pc\iw6mp64_ship_retail.pdb'
 pdb_guid = "A71296AC-8D22-42C7-8BE4-A65C999273C3"
 pdb_age = 1
 exe = { key = "Downloads/plu_exes/iw6mp64_ship.exe", sha256 = "5a6a109ba846d83639cd7a146c46d936d4661c64ce9ef0c8a400e95458b31518" }
+# tools/unpack/arxan.py output (3 identical runs, ~2.5 min): .text and .interpr decrypted
+unpacked_sha256 = "6c668fd532482d1749c289e8cb35a79e7aad28dad526462a3cb51e1a715eb10c"
 
 # Steam SP exe, same set. An older build (2015-02-10, different tree c:\trees\iw6) and modified after release:
 # no signature, PE checksum zeroed, no .reloc section.
