@@ -11,20 +11,23 @@ compiler = "MSVC 2012 (VC11, cl 17.00, Update 4 = build 61030 in the MP Rich hea
 # symbol build or assert strings show the tree; the retail PDB paths only give the output dir c:\trees\iw6-release\game\pc\.
 source_roots = []
 
-# Reference builds (PDB/MAP, server or debug builds) are added once their R2 keys are known (docs/retail-builds.md).
-# Retail builds are the target. `analyze = true` puts a build in the next Ghidra pipeline run
-# (.github/workflows/ghidra.yml); a manual run can name any builds instead.
+# kind: "retail" = the final target (the Microsoft Store build, reportedly without Arxan; R2 key pending upload).
+#       "reference" = has symbols (PDB/MAP: the PC server build, Xbox 360 prototype MAPs), keys pending.
+#       "related" = no symbols, but helpful: the Steam builds, which the community clients (iw6x-client, iw6-mod)
+#       have named addresses for, so their names can be carried to the target by matching.
+# `analyze = true` puts a build in the next Ghidra pipeline run (.github/workflows/ghidra.yml); a manual run can
+# name any builds instead.
 #
 # `protection = "arxan"`: the code is encrypted on disk and decrypted by the entry stub at startup.
 # tools/unpack/arxan.py emulates that stub and writes the decrypted image; Ghidra analyses that, never the
 # raw file. `unpacked_sha256` pins the result, so the unpacked image is reproducible from the original.
 
-# Retail target: final Steam MP exe (2018-04-25, ProductVersion 3.15), as distributed in Plutonium's exe set.
+# Final Steam MP exe (2018-04-25, ProductVersion 3.15), as distributed in Plutonium's exe set.
 # Activision Authenticode signature verifies (digest matches): an unmodified original.
 [[build]]
 id = "iw6mp64_ship"
-kind = "retail"
-analyze = true
+kind = "related"
+analyze = false
 protection = "arxan"
 timestamp = "2018-04-25T15:49:15Z"
 original_name = "iw6mp64_ship.exe"
@@ -33,11 +36,11 @@ pdb_guid = "A71296AC-8D22-42C7-8BE4-A65C999273C3"
 pdb_age = 1
 exe = { key = "Downloads/plu_exes/iw6mp64_ship.exe", sha256 = "5a6a109ba846d83639cd7a146c46d936d4661c64ce9ef0c8a400e95458b31518" }
 
-# Retail SP exe, same set. An older build (2015-02-10, different tree c:\trees\iw6) and modified after release:
-# no signature, PE checksum zeroed, no .reloc section. Second priority.
+# Steam SP exe, same set. An older build (2015-02-10, different tree c:\trees\iw6) and modified after release:
+# no signature, PE checksum zeroed, no .reloc section.
 [[build]]
 id = "iw6sp64_ship"
-kind = "retail"
+kind = "related"
 analyze = false
 protection = "arxan"
 timestamp = "2015-02-10T20:11:46Z"

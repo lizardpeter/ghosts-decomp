@@ -1,11 +1,13 @@
 # ghosts-decomp
 
-Decompilation of **Call of Duty: Ghosts (IW6)**, PC x64, targeting the final retail multiplayer exe.
+Decompilation of **Call of Duty: Ghosts (IW6)**, PC x64. The final target is the Microsoft Store build
+(multiplayer first), reportedly without Arxan; it is being uploaded.
 
 | Build | Linked | Role |
 |---|---|---|
-| `iw6mp64_ship` (Steam MP, 3.15) | 2018-04-25 | **target**, Arxan-protected, original Activision signature |
-| `iw6sp64_ship` (Steam SP) | 2015-02-10 | second target, Arxan-protected, modified after release |
+| Microsoft Store MP/SP | (pending) | **target** |
+| `iw6mp64_ship` (Steam MP, 3.15) | 2018-04-25 | related: Arxan-protected, original Activision signature; community address maps exist for it |
+| `iw6sp64_ship` (Steam SP) | 2015-02-10 | related: Arxan-protected, modified after release |
 
 Compiler: MSVC 2012 (VC11) x64. Reference builds with symbols are being added (docs/prior-art.md).
 

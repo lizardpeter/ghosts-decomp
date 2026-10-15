@@ -1,6 +1,7 @@
 # Working in ghosts-decomp
 
-Decompilation of Call of Duty: Ghosts (IW6, PC, x64). Read this before changing anything.
+Decompilation of Call of Duty: Ghosts (IW6, PC, x64). The final target is the Microsoft Store build
+(`kind = "retail"` in target.toml); the Steam exes are `related` helpers. Read this before changing anything.
 
 The structure and method come from `lizardpeter/black-ops-1-decomp` (BO1). This repo owns its own copy of
 the tools and adapts them; there is no shared toolkit.
@@ -45,7 +46,7 @@ x64 virtual addresses at the image base 0x140000000, written as 9 upper-case hex
 
 ## Protected builds
 
-The retail exes are Arxan-protected: `.text` is encrypted on disk and the entry stub decrypts it at
+The Steam exes are Arxan-protected: `.text` is encrypted on disk and the entry stub decrypts it at
 startup. `tools/unpack/arxan.py` emulates the stub and writes the decrypted image, which is what Ghidra
 analyses. The unpacked image is generated, never stored: its sha256 is pinned in `target.toml`
 (`unpacked_sha256`) so anyone can reproduce it from the original. See `docs/arxan.md`.
