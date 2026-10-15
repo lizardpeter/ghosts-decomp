@@ -84,7 +84,7 @@ jobs:
             python3 tools/unpack/arxan.py ${{ matrix.build }} /tmp/in/${{ matrix.build }}.packed.exe /tmp/in/${{ matrix.build }}.exe /tmp/raw/unpack
           fi
       - name: Analyze (with the original PDB when the build has one) and export
-        timeout-minutes: 180  # a Ghidra that hit an error can hang instead of exiting
+        timeout-minutes: 330  # a Ghidra that hit an error can hang instead of exiting; the PS4 server PDB needs ~2 h of type rebuilding
         run: |
           mkdir -p /tmp/proj /tmp/raw
           pdbargs=()
@@ -98,7 +98,7 @@ jobs:
             -preScript PrepAnalysis.java \
             "${pdbargs[@]}" \
             -postScript ExportAll.java /tmp/raw \
-            -analysisTimeoutPerFile 9000 \
+            -analysisTimeoutPerFile 19000 \
             -log /tmp/raw/analyze.log -scriptlog /tmp/raw/analyze-scripts.log
           test -s /tmp/raw/functions.tsv || { echo "::error::Ghidra produced no export; see analyze.log"; tar -C /tmp/proj -czf /tmp/raw/project.tar.gz .; exit 1; }
           # the saved Ghidra project itself: reused by the decompile shards and committed to git
