@@ -38,7 +38,7 @@ exe = { key = "ghosts/DUMP/iw6mp64_MSStore_ship.exe", sha256 = "dd63cb5b81682f87
 [[build]]
 id = "iw6sp64_MSStore_ship"
 kind = "retail"
-analyze = true
+analyze = false  # analysed; set true only to redo it
 timestamp = "2024-11-18T18:01:11Z"
 pdb_path = 'd:\workspace\outrun\iw6-depot\iw6\game\pc\iw6sp64_MSStore_ship.pdb'
 pdb_guid = "6FCA2EAC-8BF1-4658-A6CA-C97D35615CA1"
@@ -106,7 +106,7 @@ map = { key = "ghosts/Ghosts/Call of Duty - Ghosts Xbox 360 Server/iw6_ds.map", 
 [[build]]
 id = "iw6mp64_ship"
 kind = "related"
-analyze = true
+analyze = false  # analysed; set true only to redo it
 protection = "arxan"
 timestamp = "2018-04-25T15:49:15Z"
 original_name = "iw6mp64_ship.exe"
