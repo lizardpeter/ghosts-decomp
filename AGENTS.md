@@ -47,12 +47,14 @@ Folder and file names describe *what*, never *when*. Dates belong in commit mess
 each recorded in `records/patches.tsv`; both are created with the first enhancement. Never fix a bug in `src/`.
 See docs/variants.md.
 
-**Bugs go in `records/bugs.tsv`.** Whenever a reconstruction reproduces something that is wrong in the original
-(crash, overflow, missing check, undefined behaviour, logic error, security hole), add a row: id (`B` + 4 digits),
-build, va, function, source, kind (`security`, `crash`, `hang`, `logic`, `ub`, `precision`), description, evidence (test or
-disasm), and `enhanced` (`planned`, `fixed` with the patch id, or `keep` when the original behaviour is wanted). The
-faithful code keeps the bug; the enhanced build fixes it. Security issues are explained in docs/security.md and
-listed here as well.
+**Everything worth fixing goes in `records/bugs.tsv`**, the enhanced build's fix queue: not only outright bugs,
+but anything in the original that should be fixed or improved. Columns: id (`B` + 4 digits), build, va, function,
+source, kind, priority (`high` for security, crashes and gameplay-visible problems, else `medium` or `low`),
+description, evidence (the reproducing test, or the code/disassembly; say whether a current caller can trigger
+it), enhanced (`planned`, `fixed <patch id>`, or `keep` when the original behaviour is wanted). Kinds: `security`,
+`crash`, `hang`, `logic`, `ub`, `robustness`, `limit`, `precision`, `performance`, `quality`. The faithful code
+keeps it all; security issues are also written up in docs/security.md. Plain float rounding that changes nothing
+visible isn't a finding.
 
 ## Addresses
 
