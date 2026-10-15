@@ -155,3 +155,6 @@ iw6mp64_MSStore_ship	14030BAD0	matches	src/client_mp/cl_input.cpp	differential t
 iw6mp64_MSStore_ship	14030D610	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
 iw6mp64_MSStore_ship	14030E710	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
 iw6mp64_MSStore_ship	14030E370	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030EB60	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030DF50	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030EED0	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)

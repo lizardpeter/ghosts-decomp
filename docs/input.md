@@ -69,6 +69,27 @@ acceleration (B0010); in fullscreen one frame can't move further than the cursor
 `IN_MouseMove`'s cursor arithmetic without touching the rest of the path. The community clients do this by
 hooking `IN_MouseMove`'s call site (iw6-mod `raw_mouse.cpp`, GPL; not used here).
 
+## Where cl_input.cpp stands
+
+Reconstructed and matching the Store build:
+
+- the mouse path above, and the key-button plumbing: `IN_KeyDown`, `IN_KeyUp`, `CL_KeyState`, `CL_UpdateCmdButton`,
+  `CL_KeyActiveOrPressed`, `CL_ClearKeys`, `CL_SetStance`, `IN_IsTalkKeyHeld`, `CL_IsGamepadEnabled`, the tap
+  handlers `CL_UseReload`/`CL_SpecNext`/`CL_SpecPrev`/`CL_ToggleSpec`;
+- building a command: `CL_CreateCmd` (with Black Ops' `CL_AdjustAngles` inlined), `CL_CmdButtons`, `CL_KeyMove`
+  (stance hold and stance bits inlined), `CL_GamepadMove`, the remote-control input path (`sub_14030DF50`) and
+  `CG_HandleLocationSelectionInput`;
+- sending: `CL_CreateNewCommands`, `CL_CreateCmdsDuringConnection`, `CL_Input`, `CL_SendCmd` (with
+  `CL_ReadyToSendPacket` inlined) and `CL_WritePacket`.
+
+Still to do: `CL_ExecBinding` (14030BC00, the 4 KB jump table from bindings to button handlers; an empty stub in the
+server build), `CL_FinishMove` (14030CDF0), and the small getters 14030EE20 and 1404633E0 (the frame time
+`CL_CreateCmd` passes to `CL_MouseMove` and `CL_GamepadMove`).
+
+Shared code doesn't always match the Store build either: the Store build computes `vectoyaw` (and probably the other
+`atan2` users in com_math.cpp) in double where the server uses float `atan2f`. Those need Store-specific versions;
+their Store tests fail, unclaimed, until then.
+
 ## Testing
 
 The Store build's functions are tested against the Store exe (`tests/differential/run.py --build

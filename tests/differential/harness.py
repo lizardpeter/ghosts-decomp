@@ -154,12 +154,25 @@ def _sqrt(single):
     return run
 
 
+def _atan2(single):
+    """atan2(y in xmm0, x in xmm1). Not bit-exact with the CRT, but deterministic: both runs reach the same stub,
+    so callers are compared on real angles instead of on whatever xmm0 held."""
+    def run(mu):
+        if single:
+            y, x = (struct.unpack("<f", struct.pack("<I", mu.reg_read(r) & 0xFFFFFFFF))[0] for r in XMM_REGS[:2])
+        else:
+            y, x = (struct.unpack("<d", struct.pack("<Q", mu.reg_read(r) & MASK64))[0] for r in XMM_REGS[:2])
+        (_ret_float if single else _ret_double)(mu, math.atan2(y, x))
+    return run
+
+
 # CRT routines a build imports (the Store build links the CRT dynamically): exact Python versions, so code that
 # rounds or takes square roots through an import gets real results. Both runs reach the same stub.
 CRT_IMPORTS = {
     "floor": _rounding(math.floor, False), "floorf": _rounding(math.floor, True),
     "ceil": _rounding(math.ceil, False), "ceilf": _rounding(math.ceil, True),
     "sqrt": _sqrt(False), "sqrtf": _sqrt(True),
+    "atan2": _atan2(False), "atan2f": _atan2(True),
 }
 
 

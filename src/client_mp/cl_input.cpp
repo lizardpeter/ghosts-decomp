@@ -984,3 +984,359 @@ void CL_SendCmd(LocalClientNum_t localClientNum)
 	CL_WritePacket(localClientNum);
 }
 // ==== END sendcmd ====
+
+// ==== BEGIN createcmd ====
+// CL_CreateCmd and the two input handlers that can take the whole command over from it: remote control
+// (sub_14030DF50) and location selection (CG_HandleLocationSelectionInput).
+
+#include "cgame_mp/cg_local_mp.h"
+#include "universal/com_math.h"
+
+// registered in CL_InitInput
+extern const dvar_t *cl_yawspeed;
+extern const dvar_t *cl_pitchspeed;
+extern const dvar_t *cl_anglespeedkey;
+extern const dvar_t *cl_dirSelConvergenceTime;
+extern const dvar_t *cg_mapLocationSelectionCursorSpeed;  // cgame_mp/cg_main_mp.cpp
+
+enum pmtype_t
+{
+	PM_NORMAL = 0x0,
+	PM_NORMAL_LINKED = 0x1,
+	PM_NOCLIP = 0x2,
+	PM_UFO = 0x3,
+	PM_MPVIEWER = 0x4,
+	PM_SPECTATOR = 0x5,
+	PM_INTERMISSION = 0x6,
+	PM_DEAD = 0x7,
+	PM_DEAD_LINKED = 0x8,
+};
+
+#define PMF_REMOTE_CONTROL 0x80000  // pm_flags bit: the player steers a remote vehicle or missile (name unknown)
+#define ENTITYNUM_NONE 0x7FF
+#define CL_STANCE_SLIDE ((StanceState)3)  // Store build only: a fourth client stance, sent as crouch (name unknown)
+
+void CL_CmdButtons(LocalClientNum_t localClientNum, usercmd_s *cmd);                         // Store 14030B7D0
+void CL_KeyMove(LocalClientNum_t localClientNum, usercmd_s *cmd);                            // Store 14030D6B0
+void CL_GamepadMove(LocalClientNum_t localClientNum, float frametime_base, usercmd_s *cmd);  // Store 14030CF10
+void CL_FinishMove(LocalClientNum_t localClientNum, usercmd_s *cmd);                         // Store 14030CDF0
+float CL_GamepadAxisValue(LocalClientNum_t localClientNum, GamepadVirtualAxis virtualAxis);  // client/cl_gamepad.cpp
+bool GPad_IsActive(int portIndex);                                                           // win32/win_gamepad.cpp
+float sub_1404633E0(float frametime_base);  // frametime_base scaled by the slow-motion timescale (name unknown)
+void sub_1402A9900(LocalClientNum_t localClientNum, usercmd_s *cmd);  // cgame: adjusts the command (name unknown)
+
+static_assert(__builtin_offsetof(clientActive_t, stanceHeld) == 0x3548, "clientActive_t layout (Store build)");
+static_assert(__builtin_offsetof(clientActive_t, stance) == 0x354C, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, cgameMaxPitchSpeed) == 0x356C, "clientActive_t layout");
+static_assert(__builtin_offsetof(usercmd_s, selectedLoc) == 0x23, "usercmd_s layout");
+static_assert(__builtin_offsetof(usercmd_s, remoteControlAngles) == 0x26, "usercmd_s layout");
+static_assert(__builtin_offsetof(usercmd_s, sightedClientsMask) == 0x2C, "usercmd_s layout");
+static_assert(__builtin_offsetof(usercmd_s, partialSightedSpawnsMask) == 0x38, "usercmd_s layout");
+static_assert(sizeof(usercmd_s) == 0x3C, "usercmd_s layout");
+static_assert(__builtin_offsetof(clientStatic_t, frametime) == 0x118, "clientStatic_t layout");
+static_assert(__builtin_offsetof(PlayerKeyState, locSelInputState) == 0xD24, "PlayerKeyState layout");
+static_assert(sizeof(PlayerKeyState) == 0xD28, "PlayerKeyState layout");
+static_assert(__builtin_offsetof(cg_s, ps_locationSelectionInfo) == 0x23C, "cg_s layout (Store build)");
+static_assert(__builtin_offsetof(cg_s, frametime) == 0x7188C, "cg_s layout");
+static_assert(__builtin_offsetof(cg_s, compassMapWorldSize) == 0xB52F0, "cg_s layout");
+static_assert(__builtin_offsetof(cg_s, selectedLocation) == 0xB5368, "cg_s layout");
+static_assert(__builtin_offsetof(cg_s, selectedDirectionPoint) == 0xB5374, "cg_s layout");
+static_assert(__builtin_offsetof(cg_s, sightedClientsMask) == 0x10F05C, "cg_s layout");
+static_assert(__builtin_offsetof(cg_s, spawnSight) == 0x10F880, "cg_s layout");
+static_assert(__builtin_offsetof(SpawnSightGlob, pointCount) == 0x8, "SpawnSightGlob layout");
+static_assert(__builtin_offsetof(SpawnSightGlob, points) == 0x18, "SpawnSightGlob layout");
+static_assert(sizeof(SpawnSightGlob) == 0x600, "SpawnSightGlob layout");
+static_assert(sizeof(SpawnSightPoint) == 0x14, "SpawnSightPoint layout");
+
+// The profile's look inversion
+static inline bool CL_ProfileInvertPitch(const GamerSettingState *settings)
+{
+	return settings->invertedPitch != 0;
+}
+
+static inline float I_fclamp(float val, float min, float max)
+{
+	return val < min ? min : (val > max ? max : val);
+}
+
+// universal/com_math.h's inline AngleNormalize180, with the floor made in double as in the original
+static inline float CL_AngleNormalize180(const float angle)
+{
+	const float scaled = angle * (1.0f / 360.0f);
+	return (scaled - (float)floor(scaled + 0.5f)) * 360.0f;
+}
+
+// Black Ops' CL_AddCurrentStanceToCmd (cl_input_mp.cpp:1545), inlined in the Store build
+static inline void CL_AddCurrentStanceToCmd(LocalClientNum_t localClientNum, usercmd_s *cmd)
+{
+	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+	switch (cl->stance)
+	{
+	case CL_STANCE_SLIDE:
+		cmd->buttons &= ~0x20000000;
+		if (cl->stanceHeld)
+			cmd->buttons |= 0x20000000;
+		// fall through: sent as crouch
+	case CL_STANCE_CROUCH:
+		cmd->buttons = (cmd->buttons & ~0x100) | 0x200;
+		break;
+	case CL_STANCE_PRONE:
+		cmd->buttons = (cmd->buttons & ~0x200) | 0x100;
+		break;
+	default:
+		cmd->buttons &= ~0x300;
+		break;
+	}
+	cmd->buttons &= ~0x1000;
+}
+
+// Black Ops' CL_AdjustAngles (cl_input_mp.cpp:1489), inlined in the Store build: the arrow keys turn the view,
+// capped by the cgame's maximum yaw and pitch speeds
+static inline void CL_AdjustAngles(LocalClientNum_t localClientNum)
+{
+	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+	kbutton_t *kb = playersKb[localClientNum];
+
+	if (cl->snap.ps_pm_flags & PMF_NO_MOUSE_LOOK)
+		return;
+
+	float speed = (float)cls.frametime * 0.001f;
+	if (kb[KB_SPEED].active)
+		speed *= cl_anglespeedkey->current.value;
+
+	if (!kb[KB_STRAFE].active)
+	{
+		float yawSpeed = cl_yawspeed->current.value;
+		if (cl->cgameMaxYawSpeed > 0.0f)
+			yawSpeed = yawSpeed < cl->cgameMaxYawSpeed ? yawSpeed : cl->cgameMaxYawSpeed;
+		yawSpeed *= speed;
+		cl->clViewangles[1] = cl->clViewangles[1] - CL_KeyState(&kb[KB_RIGHT]) * yawSpeed;
+		cl->clViewangles[1] = CL_KeyState(&kb[KB_LEFT]) * yawSpeed + cl->clViewangles[1];
+	}
+
+	float pitchSpeed = cl_pitchspeed->current.value;
+	if (cl->cgameMaxPitchSpeed > 0.0f)
+		pitchSpeed = pitchSpeed < cl->cgameMaxPitchSpeed ? pitchSpeed : cl->cgameMaxPitchSpeed;
+	pitchSpeed *= speed;
+	cl->clViewangles[0] = cl->clViewangles[0] - CL_KeyState(&kb[KB_LOOKUP]) * pitchSpeed;
+	cl->clViewangles[0] = CL_KeyState(&kb[KB_LOOKDOWN]) * pitchSpeed + cl->clViewangles[0];
+}
+
+// Store 14030DF50: the command while the player steers a remote vehicle or missile (name unknown; Black Ops has no
+// equivalent). Buttons, stance, and the steering as remoteControlAngles/remoteControlMove in [-127, 127]: from the
+// gamepad sticks when the profile has the gamepad enabled, otherwise from the mouse and the movement keys.
+void sub_14030DF50(LocalClientNum_t localClientNum, usercmd_s *cmd)
+{
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_ATTACK, 0x1);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_ACTIVATE, 0x8);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_USE_RELOAD, 0x20);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_FRAG, 0x4000);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_OFFHANDSECONDARY, 0x8000);
+	CL_AddCurrentStanceToCmd(localClientNum, cmd);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_ATTACK_ACCESSIBLE, 0x1);
+	cmd->buttons |= 0x100000;
+
+	float up = 0.0f;
+	float mx = 0.0f;
+	float my = 0.0f;
+	float pitch;
+	float yaw;
+	float forward;
+	float right;
+	if (GamerProfile_GetProfileSettings(CL_ControllerIndexFromClientNum(localClientNum))->gpadEnabled)
+	{
+		const float pitchAxis = CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_PITCH);
+		const float invert = CL_ProfileInvertPitch(GamerProfile_GetProfileSettings(
+			CL_ControllerIndexFromClientNum(localClientNum))) ? 1.0f : -1.0f;
+		yaw = -CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_YAW);
+		forward = CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_FORWARD);
+		right = CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_SIDE);
+		pitch = invert * pitchAxis;
+	}
+	else
+	{
+		kbutton_t *kb = playersKb[localClientNum];
+		sub_14030D4A0(CL_GetLocalClientGlobals(localClientNum), &mx, &my);
+		const float yawScale = m_yaw->current.value;
+		const float pitchScale = m_pitch->current.value;
+		forward = CL_KeyState(&kb[KB_FORWARD]);
+		forward -= CL_KeyState(&kb[KB_BACK]);
+		right = CL_KeyState(&kb[KB_MOVERIGHT]);
+		right -= CL_KeyState(&kb[KB_MOVELEFT]);
+		yaw = -yawScale * mx;
+		pitch = pitchScale * my;
+	}
+
+	if (cmd->buttons & 0x4000)
+		up = 1.0f;
+	if (cmd->buttons & 0x8000)
+		up += -1.0f;
+
+	cmd->remoteControlAngles[0] = (char)(int)floor(I_fclamp(pitch, -1.0f, 1.0f) * 127.0f + 0.5f);
+	cmd->remoteControlAngles[1] = (char)(int)floor(I_fclamp(yaw, -1.0f, 1.0f) * 127.0f + 0.5f);
+	cmd->remoteControlMove[0] = (char)(int)floor(I_fclamp(forward, -1.0f, 1.0f) * 127.0f + 0.5f);
+	cmd->remoteControlMove[1] = (char)(int)floor(I_fclamp(right, -1.0f, 1.0f) * 127.0f + 0.5f);
+	cmd->remoteControlMove[2] = (char)(int)floor(I_fclamp(up, -1.0f, 1.0f) * 127.0f + 0.5f);
+}
+
+// Store 14030EED0  (Black Ops' cl_input_mp.cpp:2461): moves the map cursor while a location is being selected, and
+// the direction (selectedLocationAngle) for selections that have one: right stick, or the mouse with key 201 held.
+// Sends the location (and confirm/cancel) in the command. False when no selection is active.
+bool CG_HandleLocationSelectionInput(LocalClientNum_t localClientNum, usercmd_s *cmd)
+{
+	cg_s *cgameGlob = CG_GetLocalClientGlobals(localClientNum);
+	if (!cgameGlob->ps_locationSelectionInfo)
+	{
+		Key_RemoveCatcher(localClientNum, ~KEYCATCH_LOCATION_SELECTION);
+		return false;
+	}
+
+	CL_AddCurrentStanceToCmd(localClientNum, cmd);
+	cmd->buttons |= 0x800000;
+	const float frametime = (float)cgameGlob->frametime * 0.001f;
+	const bool hasDirection = (cgameGlob->ps_locationSelectionInfo >> 7) & 1;
+	const float mapAspectRatio = cgameGlob->compassMapWorldSize[0] / cgameGlob->compassMapWorldSize[1];
+
+	if (GamerProfile_GetProfileSettings(CL_ControllerIndexFromClientNum(localClientNum))->gpadEnabled)
+	{
+		float right = CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_SIDE);
+		float up = CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_FORWARD);
+		float magnitude = up * up + right * right;
+		if (magnitude > 1.0f)
+		{
+			magnitude = sqrtf(magnitude);
+			right /= magnitude;
+			up /= magnitude;
+		}
+		cgameGlob->selectedLocation[0] =
+			cgameGlob->selectedLocation[0] + right * cg_mapLocationSelectionCursorSpeed->current.value * frametime;
+		cgameGlob->selectedLocation[1] = cgameGlob->selectedLocation[1]
+			- up * cg_mapLocationSelectionCursorSpeed->current.value * frametime * mapAspectRatio;
+
+		if (hasDirection)
+		{
+			float dir[2];
+			dir[0] = CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_PITCH);
+			dir[1] = -CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_YAW);
+			if (Vec2Normalize(dir) > 0.2f)
+			{
+				// turn towards the stick, at a rate set by cl_dirSelConvergenceTime
+				const float convergence = frametime / cl_dirSelConvergenceTime->current.value;
+				const float delta = CL_AngleNormalize180(vectoyaw(dir) - cgameGlob->selectedLocationAngle);
+				cgameGlob->selectedLocationAngle =
+					AngleNormalize360(delta * convergence + cgameGlob->selectedLocationAngle);
+			}
+		}
+	}
+
+	if (!GamerProfile_GetProfileSettings(CL_ControllerIndexFromClientNum(localClientNum))->gpadEnabled)
+	{
+		float mx;
+		float my;
+		CL_GetMouseMovement(CL_GetLocalClientGlobals(localClientNum), &mx, &my);
+		if (hasDirection && Key_IsDown(localClientNum, 201))
+		{
+			// the mouse moves the direction cursor; the direction points from it back to the location
+			cgameGlob->selectedDirectionPoint[0] = cgameGlob->selectedDirectionPoint[0]
+				+ mx * cg_mapLocationSelectionCursorSpeed->current.value * frametime * 0.1f;
+			const float dy = my * mapAspectRatio * cg_mapLocationSelectionCursorSpeed->current.value * frametime * 0.1f;
+			float dir[2];
+			dir[1] = -(cgameGlob->selectedDirectionPoint[0] - cgameGlob->selectedLocation[0]);
+			cgameGlob->selectedDirectionPoint[1] = cgameGlob->selectedDirectionPoint[1] + dy;
+			dir[0] = -(cgameGlob->selectedDirectionPoint[1] - cgameGlob->selectedLocation[1]);
+			cgameGlob->selectedLocationAngle = AngleNormalize360(vectoyaw(dir));
+			cgameGlob->selectedDirectionPoint[0] = I_fclamp(cgameGlob->selectedDirectionPoint[0], 0.0f, 1.0f);
+			cgameGlob->selectedDirectionPoint[1] = I_fclamp(cgameGlob->selectedDirectionPoint[1], 0.0f, 1.0f);
+		}
+		else
+		{
+			// the mouse moves the location, and the direction cursor goes with it
+			cgameGlob->selectedLocation[0] = cgameGlob->selectedLocation[0]
+				+ mx * cg_mapLocationSelectionCursorSpeed->current.value * frametime * 0.1f;
+			const float y = cgameGlob->selectedLocation[1]
+				+ my * mapAspectRatio * cg_mapLocationSelectionCursorSpeed->current.value * frametime * 0.1f;
+			cgameGlob->selectedDirectionPoint[0] = I_fclamp(cgameGlob->selectedLocation[0], 0.0f, 1.0f);
+			cgameGlob->selectedDirectionPoint[1] = I_fclamp(y, 0.0f, 1.0f);
+			cgameGlob->selectedLocation[1] = y;
+		}
+	}
+
+	cgameGlob->selectedLocation[0] = I_fclamp(cgameGlob->selectedLocation[0], 0.0f, 1.0f);
+	cgameGlob->selectedLocation[1] = I_fclamp(cgameGlob->selectedLocation[1], 0.0f, 1.0f);
+	cgameGlob->selectedLocationAngle = I_fclamp(cgameGlob->selectedLocationAngle, 0.0f, 360.0f);
+
+	const LocSelInputState locSelInputState = playerKeys[localClientNum].locSelInputState;
+	if (locSelInputState == LOC_SEL_INPUT_CONFIRM)
+	{
+		cmd->buttons |= 0x10000;
+		cmd->selectedLoc[0] = (char)((int)floor(cgameGlob->selectedLocation[0] * 255.0f + 0.5f) - 128);
+		cmd->selectedLoc[1] = (char)((int)floor(cgameGlob->selectedLocation[1] * 255.0f + 0.5f) - 128);
+		if (hasDirection)
+			cmd->selectedLocAngle =
+				(unsigned char)(int)floor(cgameGlob->selectedLocationAngle * (255.0f / 360.0f) + 0.5f);
+		else
+			cmd->selectedLocAngle = 0;
+	}
+	else if (locSelInputState == LOC_SEL_INPUT_CANCEL)
+	{
+		cmd->buttons |= 0x20000;
+	}
+	return true;
+}
+
+// Store 14030EB60  client_mp/cl_input.cpp (Black Ops' :2622): builds this frame's command from the keys, mouse and
+// gamepad. The keyboard turn (CL_AdjustAngles) comes first; remote control or an active location selection takes the
+// whole command; otherwise the view may not pitch more than 90 degrees in one command.
+usercmd_s CL_CreateCmd(LocalClientNum_t localClientNum)
+{
+	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+	const float oldPitch = cl->clViewangles[0];
+	CL_AdjustAngles(localClientNum);
+
+	usercmd_s cmd;
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.meleeChargeEnt = ENTITYNUM_NONE;
+	cg_s *cgameGlob = CG_GetLocalClientGlobals(localClientNum);
+	cmd.sightedClientsMask = cgameGlob->sightedClientsMask;
+	cmd.spawnTraceEntIndex = cgameGlob->spawnSight.traceEntIndex;
+	if (cl->snap.ps_pm_type == PM_NORMAL || cl->snap.ps_pm_type == PM_NORMAL_LINKED)
+	{
+		for (unsigned short i = 0; i < cgameGlob->spawnSight.pointCount; i++)
+		{
+			switch (cgameGlob->spawnSight.points[i].sightState)
+			{
+			case 1:
+				cmd.partialSightedSpawnsMask |= 1 << i;
+				break;
+			case 2:
+				cmd.sightedSpawnsMask |= 1 << i;
+				break;
+			}
+		}
+	}
+
+	if (cl->snap.ps_pm_flags & PMF_REMOTE_CONTROL)
+	{
+		sub_14030DF50(localClientNum, &cmd);
+	}
+	else if (!Key_IsCatcherActive(localClientNum, KEYCATCH_LOCATION_SELECTION)
+	         || !CG_HandleLocationSelectionInput(localClientNum, &cmd))
+	{
+		CL_CmdButtons(localClientNum, &cmd);
+		CL_KeyMove(localClientNum, &cmd);
+		const float frametime_base = sub_1404633E0(cls.frametime_base);
+		CL_MouseMove(localClientNum, &cmd, frametime_base);
+		if (GPad_IsActive(CL_ControllerIndexFromClientNum(localClientNum)))
+			CL_GamepadMove(localClientNum, frametime_base, &cmd);
+		sub_1402A9900(localClientNum, &cmd);
+
+		// never more than 90 degrees of pitch in one command
+		if (cl->clViewangles[0] - oldPitch > 90.0f)
+			cl->clViewangles[0] = oldPitch + 90.0f;
+		else if (oldPitch - cl->clViewangles[0] > 90.0f)
+			cl->clViewangles[0] = oldPitch - 90.0f;
+	}
+	CL_FinishMove(localClientNum, &cmd);
+	return cmd;
+}
+// ==== END createcmd ====
