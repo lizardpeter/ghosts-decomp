@@ -66,6 +66,21 @@ without giving up the bit-exact contract:
 Each new case is mutation-checked: a deliberate change in the reconstruction (a constant, a comparison, a
 dropped call) must make it fail. A function whose tests survive a mutation gets better inputs, not a pass.
 
+### Testing against the Store build
+
+The final target has no symbols. `tools/symbols.py` gives it a symbol table from `records/names.tsv` (hand
+identifications with method, evidence and confidence) and the matcher's pairs; `tools/build_recon.py --build
+iw6mp64_MSStore_ship` links the reconstruction against it (unidentified symbols link to a trap, imports go through
+the exe's import table, an import outranks a matcher pair), and `tests/differential/run.py --build
+iw6mp64_MSStore_ship` tests every function that has a Store address. Only functions records/ claims for the Store
+build must pass; a failure elsewhere is reported but doesn't fail the run (shared code that differs in the Store
+build, or that needs inputs and identifications nobody has written yet). The CRT is imported there, so the import
+stubs implement floor, ceil and sqrt exactly.
+
+Other harness rules that came up with the Store build: every call starts with all registers zeroed; global writes
+are compared as net changes (whole qwords, so stored pointers can be normalised); a fake or an observation on a
+function applies to its reconstructed copy too; struct padding is left out of compared structs.
+
 ## Byte matching
 
 Would need the VC11 (VS2012 Update 4) x64 compiler on a Windows runner. The retail builds are optimized

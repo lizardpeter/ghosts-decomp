@@ -31,6 +31,9 @@ analysis/<build>/    GENERATED per build
   match/               reference -> target identifications with evidence and confidence
   logs/                pipeline logs
 records/             AUTHORED small facts; the only input to the graph besides analysis/
+  functions.tsv        status of each reconstructed function, per build
+  names.tsv            identifications in builds without symbols (the Store build): name, method, evidence, confidence
+  bugs.tsv             everything worth fixing, for the enhanced build
 src/ include/        AUTHORED faithful reconstruction, mirroring the original source tree
 enhanced/            AUTHORED (once needed) overrides for the enhanced build, same layout as src/
 tests/               differential tests (x64 Unicorn harness)

@@ -24,12 +24,17 @@ jobs:
         run: |
           ref=$(python3 -c "import tomllib; print(next(b['id'] for b in tomllib.load(open('target.toml','rb'))['build'] if b.get('kind')=='reference' and 'map' in b))")
           python3 tools/fetch_originals.py "$ref" .work/originals --only exe
+          python3 tools/fetch_originals.py iw6mp64_MSStore_ship .work/originals --only exe
       - name: Compile reconstruction
         if: steps.recon.outputs.any == '1'
-        run: python3 tools/build_recon.py
+        run: |
+          python3 tools/build_recon.py
+          IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship
       - name: Differential tests
         if: steps.recon.outputs.any == '1'
-        run: IW6_ORIGINALS=.work/originals python3 tests/differential/run.py --check-records
+        run: |
+          IW6_ORIGINALS=.work/originals python3 tests/differential/run.py --check-records
+          IW6_ORIGINALS=.work/originals python3 tests/differential/run.py --build iw6mp64_MSStore_ship --check-records
       - name: Generated files are current
         run: |
           python3 tools/status.py >/dev/null

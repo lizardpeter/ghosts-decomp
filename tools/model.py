@@ -3,7 +3,8 @@
 Status ladder (see AGENTS.md):
     located -> named -> typed -> decompiled -> compiles -> matches -> integrated
 
-The first three come from analysis/ automatically. The rest come only from records/functions.tsv.
+The first three come from analysis/ automatically, plus records/names.tsv for identifications made by hand in a build
+without symbols (the Store build). The rest come only from records/functions.tsv.
 """
 import csv
 import tomllib
@@ -82,6 +83,16 @@ def load(build: str) -> dict[str, Fn]:
         f.name = f.name or r["pdb_name"] or r["ghidra_name"]
         f.extra["bytes_sha256"] = r["bytes_sha256"]
         f.extra["decompile"] = r["decompile"]
+    for r in read_tsv(ROOT / "records" / "names.tsv"):
+        if r["build"] != build or r["kind"] != "function" or r["va"] not in fns:
+            continue
+        f = fns[r["va"]]
+        if not r["name"].startswith("sub_"):  # sub_<va>: identified as a function, name unknown
+            f.name = r["name"]
+            f.symbol = f.symbol or (r["symbol"] if r["symbol"].startswith("?") else "")
+            f.source = f.source or r["source"]
+            if LADDER.index(f.status) < LADDER.index("named"):
+                f.status = "named"
     for r in read_tsv(ROOT / "records" / "functions.tsv"):
         if r["build"] != build or r["va"] not in fns:
             continue

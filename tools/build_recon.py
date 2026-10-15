@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Compile the reconstruction into one x64 Windows DLL, hybrid-linked against the original exe.
 
-    python3 tools/build_recon.py            # -> build/recon.dll, build/recon.symbols.tsv, build/hybrid.tsv
+    python3 tools/build_recon.py                 # -> build/recon.dll, build/recon.symbols.tsv, build/hybrid.tsv
+    python3 tools/build_recon.py --build <id>    # the same against another build -> build/<id>/
+
+  The default links against the reference build (MAP + PDB). Another build (the Store build) resolves names
+  through tools/symbols.py: records/names.tsv and the matcher's identifications.
 
 - Every file under src/ is compiled with clang targeting x86_64-pc-windows-msvc, so the Win64 calling convention
   and MSVC x64 C++ name mangling apply. tools/recon/include holds build-environment headers.
@@ -22,22 +26,27 @@ Ported from black-ops-1-decomp (x86). `-fms-compatibility-version=17.00` makes c
 compiler: no thread-safe statics or TLS guards, which VS2012 didn't have and the original binary doesn't link.
 """
 import csv
+import os
 import subprocess
 import tomllib
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILD = ROOT / "build"
-# The build the hybrid link resolves against: the first reference build with a MAP (target.toml).
-TARGET_BUILD = next((b["id"] for b in tomllib.loads((ROOT / "target.toml").read_text())["build"]
-                     if b.get("kind") == "reference" and "map" in b), None)
+sys.path.insert(0, str(ROOT / "tools"))
+import symbols  # noqa: E402
+
 TRIPLE = "--target=x86_64-pc-windows-msvc"
 CFLAGS = [TRIPLE, "-fms-compatibility-version=17.00", "-O0", "-ffp-contract=off", "-fno-exceptions",
           "-fms-extensions", "-fno-stack-protector", "-ffreestanding", "-fno-builtin", "-Wall", "-Werror",
           "-Wno-unused-function", "-Wno-unused-variable", f"-I{ROOT / 'include'}",
           f"-isystem{ROOT / 'tools' / 'recon' / 'include'}"]
 csv.field_size_limit(1 << 30)
+
+
+def out_dir(build: str) -> Path:
+    """build/ for the reference build (the default), build/<build>/ for any other."""
+    return ROOT / "build" if build == symbols.reference_build() else ROOT / "build" / build
 
 
 def run(*cmd):
@@ -49,25 +58,12 @@ def nm(obj, *flags):
     return [line.split() for line in out.splitlines() if line.strip()]
 
 
-def original_symbols():
-    with open(ROOT / "analysis" / TARGET_BUILD / "map" / "publics.tsv", newline="") as f:
-        rows = list(csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE))
-    syms = {}
-    for r in rows:
-        syms.setdefault(r["name"], (int(r["va"], 16), "f" in r["flags"]))
-    return syms
-
-
-def original_statics():
-    """'iw6s@<source>@<scope>@<name>' -> va, for IW6_STATIC declarations (tools/recon/include/iw6_static.h)."""
-    with open(ROOT / "analysis" / TARGET_BUILD / "pdb" / "statics.tsv", newline="") as f:
-        rows = list(csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE))
-    return {f"iw6s@{r['source']}@{r['scope']}@{r['name']}": int(r["va"], 16) for r in rows}
-
-
-def original_tls_section():
-    """[start, end) of the reference build's .tls section (analysis/<build>/pdb/sections.tsv)."""
-    with open(ROOT / "analysis" / TARGET_BUILD / "pdb" / "sections.tsv", newline="") as f:
+def original_tls_section(build):
+    """[start, end) of a symbol build's .tls section (analysis/<build>/pdb/sections.tsv)."""
+    path = ROOT / "analysis" / build / "pdb" / "sections.tsv"
+    if not path.exists():
+        return 0, 0
+    with open(path, newline="") as f:
         for r in csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE):
             if r["name"] == ".tls":
                 lo = int(r["va"], 16)
@@ -75,10 +71,24 @@ def original_tls_section():
     return 0, 0
 
 
+def import_slots(build):
+    """{import name: IAT slot va} of the build's exe (for CRT calls a build without a MAP makes through its
+    import table: the Store build links the CRT dynamically)."""
+    import pefile
+    path = Path(os.environ.get("IW6_ORIGINALS", ROOT / ".work" / "originals")) / f"{build}.exe"
+    if not path.exists():
+        return {}
+    pe = pefile.PE(str(path), fast_load=True)
+    pe.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_IMPORT"]])
+    return {imp.name.decode(): imp.address for d in getattr(pe, "DIRECTORY_ENTRY_IMPORT", [])
+            for imp in d.imports if imp.name}
+
+
 def main():
-    if TARGET_BUILD is None:
-        sys.exit("no reference build with a MAP in target.toml yet")
-    BUILD.mkdir(exist_ok=True)
+    build = sys.argv[sys.argv.index("--build") + 1] if "--build" in sys.argv else symbols.reference_build()
+    reference = symbols.has_map(build)
+    BUILD = out_dir(build)
+    BUILD.mkdir(parents=True, exist_ok=True)
     objs, sources = [], []
     for src in sorted((ROOT / "src").rglob("*.cpp")):
         rel = src.relative_to(ROOT / "src")
@@ -107,8 +117,9 @@ def main():
         defined |= {p[2] for p in nm(obj, "--defined-only", "--extern-only") if len(p) == 3}
     undefined = sorted({p[-1] for o in objs + env_objs for p in nm(o, "--undefined-only")} - defined)
 
-    orig = original_symbols()
-    statics = original_statics()
+    table = symbols.table(build)
+    orig = {k: (va, kind == "function") for k, (va, kind) in table.items() if not k.startswith("iw6s@")}
+    statics = {k: va for k, (va, kind) in table.items() if k.startswith("iw6s@")}
     # Only functions that exist in the original are exported (and tested). Anything else defined in src/
     # is an inline helper from a header; flag it so new names do not slip in unnoticed.
     stray = [e for e in exports if e not in orig and e not in ("_fltused",)]
@@ -124,19 +135,44 @@ def main():
     mismatched = [f"{e}  (original: {', '.join(orig_names[base_name(e)])})" for e in stray if base_name(e) in orig_names]
     if mismatched:
         sys.exit("prototype differs from the original's decorated name:\n  " + "\n  ".join(mismatched))
-    if stray:
+    if stray and reference:
         print("note: defined in src/ but not in the original MAP (not exported):", ", ".join(stray))
-    missing = [u for u in undefined if u not in orig and u not in statics]
-    if missing:
-        sys.exit("reconstruction uses symbols the original binary does not have:\n  " + "\n  ".join(missing))
+    elif stray:
+        print(f"note: {len(stray)} function(s) in src/ are not identified in {build} yet (not exported)")
+    # Anything the reconstruction uses that this build doesn't have (a build without a MAP knows only what is
+    # identified: records/names.tsv and the matcher; code for another build, such as client code against the
+    # server) links to a trap: a function to ud2, data to address 0. A test that reaches it fails instead of
+    # running the wrong code. Imports (Win32, and the CRT for a build that links it dynamically) go through the
+    # exe's import address table.
+    slots = import_slots(build)
     asm = ["\t.text"]
     hybrid = ["symbol\tkind\tva"]
-    tls_lo, tls_hi = original_tls_section()
+    ref_build = symbols.reference_build()
+    tls_lo, tls_hi = original_tls_section(build if reference else ref_build)
+    ref_table = symbols.table(ref_build)
     tls = []
     for u in undefined:
-        va, is_func = orig[u] if u in orig else (statics[u], False)
         q = '"' + u + '"'
-        if tls_lo <= va < tls_hi:
+        if u in slots and not reference:
+            # an import of this build is authoritative: a matcher pair for a CRT name (statically linked in the
+            # reference) can point at the wrong function in a build that imports it
+            orig.pop(u, None)
+        if u not in orig and u not in statics:
+            if u in slots:
+                asm += [f"\t.globl {q}", f"{q}:", f"\tmovabsq ${slots[u]:#x}, %rax", "\tjmpq *(%rax)"]
+                hybrid.append(f"{u}\timport\t{slots[u]:09X}")
+            elif u in ref_table and tls_lo <= ref_table[u][0] < tls_hi:
+                tls.append((ref_table[u][0] - tls_lo, q))  # keeps the link valid; not this build's offset
+                hybrid.append(f"{u}\tunresolved-tls\t")
+            elif u in ref_table and ref_table[u][1] == "data" or u.startswith("iw6s@"):
+                asm += [f"\t.globl {q}", f"\t.set {q}, 0"]
+                hybrid.append(f"{u}\tunresolved-data\t")
+            else:
+                asm += [f"\t.globl {q}", f"{q}:", "\tud2"]
+                hybrid.append(f"{u}\tunresolved-function\t")
+            continue
+        va, is_func = orig[u] if u in orig else (statics[u], False)
+        if reference and tls_lo <= va < tls_hi:
             tls.append((va - tls_lo, q))
             hybrid.append(f"{u}\ttls\t{va:09X}")
             continue
@@ -159,8 +195,13 @@ def main():
         *[f"/export:{e}" for e in exports],  # x64: no leading underscore on C names
         *objs, *env_objs, BUILD / "hybrid.obj")
     (BUILD / "recon.symbols.tsv").write_text("symbol\tsource\n" + "\n".join(rows) + "\n")
+    unresolved = sum(1 for h in hybrid if "\tunresolved" in h)
+    if unresolved and reference:
+        print(f"note: {unresolved} symbol(s) not in {build} (trap; build/hybrid.tsv):",
+              ", ".join(h.split("\t")[0] for h in hybrid if "\tunresolved" in h))
     print(f"{dll}: {len(exports)} functions from {len(sources)} files; "
-          f"{len(undefined)} symbols resolved to the original binary")
+          f"{len(undefined) - unresolved} symbols resolved to {build}" +
+          (f", {unresolved} not identified there yet (trap)" if unresolved else ""))
 
 
 if __name__ == "__main__":

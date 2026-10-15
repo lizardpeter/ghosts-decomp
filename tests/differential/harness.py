@@ -27,6 +27,7 @@ Ported from black-ops-1-decomp's x86-32 harness. What changed for x64 (docs/veri
   (fn(mu) -> return value) for state the emulator lacks (dvars that were never registered, error state).
 """
 import hashlib
+import math
 import os
 import struct
 import tomllib
@@ -36,6 +37,7 @@ import pefile
 from unicorn.unicorn_py3.arch.intel import HOOK_INSN_CPUID_CFUNC  # rdtsc hooks share the cpuid callback type
 from unicorn.unicorn_py3.unicorn import uccallback
 from unicorn import UC_ARCH_X86, UC_HOOK_CODE, UC_HOOK_INSN, UC_HOOK_MEM_WRITE, UC_MODE_64, Uc, UcError
+from unicorn import x86_const
 from unicorn.x86_const import (UC_X86_REG_RIP, UC_X86_INS_RDTSC, UC_X86_INS_RDTSCP, UC_X86_REG_MXCSR, UC_X86_REG_R8, UC_X86_REG_R9, UC_X86_REG_RAX, UC_X86_REG_RBP,
                                UC_X86_REG_RCX, UC_X86_REG_RDX, UC_X86_REG_RSP, UC_X86_REG_XMM0,
                                UC_X86_REG_XMM1, UC_X86_REG_XMM2, UC_X86_REG_XMM3)
@@ -49,6 +51,9 @@ TLS_BLOCK = 0x00410000
 STUBS, STUBS_SIZE = 0x00420000, 0x00010000
 SCRATCH, SCRATCH_SIZE = 0x00500000, 0x00100000
 INT_REGS = (UC_X86_REG_RCX, UC_X86_REG_RDX, UC_X86_REG_R8, UC_X86_REG_R9)
+RESET_REGS = [getattr(x86_const, f"UC_X86_REG_{n}") for n in (
+    "RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
+    *(f"XMM{i}" for i in range(16)))]
 XMM_REGS = (UC_X86_REG_XMM0, UC_X86_REG_XMM1, UC_X86_REG_XMM2, UC_X86_REG_XMM3)
 MASK64 = (1 << 64) - 1
 
@@ -113,6 +118,51 @@ def _float_bits(a) -> int:
     return struct.unpack("<I", struct.pack("<f", a[1]))[0] if a[0] == "f" else struct.unpack("<Q", struct.pack("<d", a[1]))[0]
 
 
+def _xmm_double(mu):
+    return struct.unpack("<d", struct.pack("<Q", mu.reg_read(UC_X86_REG_XMM0) & MASK64))[0]
+
+
+def _xmm_float(mu):
+    return struct.unpack("<f", struct.pack("<I", mu.reg_read(UC_X86_REG_XMM0) & 0xFFFFFFFF))[0]
+
+
+def _ret_double(mu, x):
+    mu.reg_write(UC_X86_REG_XMM0, struct.unpack("<Q", struct.pack("<d", x))[0])
+
+
+def _ret_float(mu, x):
+    mu.reg_write(UC_X86_REG_XMM0, struct.unpack("<I", struct.pack("<f", x))[0])
+
+
+def _rounding(fn, single):
+    """A CRT rounding function: exact, and NaN/inf/huge values pass through as in the CRT."""
+    def run(mu):
+        x = _xmm_float(mu) if single else _xmm_double(mu)
+        y = x if (math.isnan(x) or math.isinf(x) or abs(x) >= 2.0 ** 52) else float(fn(x))
+        if y == 0.0:
+            y = math.copysign(0.0, x)
+        (_ret_float if single else _ret_double)(mu, y)
+    return run
+
+
+def _sqrt(single):
+    def run(mu):
+        x = _xmm_float(mu) if single else _xmm_double(mu)
+        # a negative input gives the x64 default NaN (sign set), as sqrtss/sqrtsd and the CRT do
+        y = math.sqrt(x) if x >= 0 or math.isnan(x) else -float("nan")
+        (_ret_float if single else _ret_double)(mu, y)
+    return run
+
+
+# CRT routines a build imports (the Store build links the CRT dynamically): exact Python versions, so code that
+# rounds or takes square roots through an import gets real results. Both runs reach the same stub.
+CRT_IMPORTS = {
+    "floor": _rounding(math.floor, False), "floorf": _rounding(math.floor, True),
+    "ceil": _rounding(math.ceil, False), "ceilf": _rounding(math.ceil, True),
+    "sqrt": _sqrt(False), "sqrtf": _sqrt(True),
+}
+
+
 class Writer:
     """Sets up state for one call: writes into the images are undone afterwards, and scratch memory
     (strings, argv arrays) is handed out from a region cleared before every call."""
@@ -174,6 +224,9 @@ class Machine:
                 self.mu.mem_write(stub, b"\x31\xc0\xc3")
                 self.mu.mem_write(slot, struct.pack("<Q", stub))
         self.mu.hook_add(UC_HOOK_CODE, self._on_stub, begin=STUBS, end=STUBS + STUBS_SIZE - 1)
+        for name in self._stub_names.values():
+            if name.split("!", 1)[1] in CRT_IMPORTS and name.startswith("api-ms-win-crt-math"):
+                self._import_fns[name.lower()] = CRT_IMPORTS[name.split("!", 1)[1]]
         self.imports_called = []
         # Writes into any mapped image (the original's globals) are journaled so each call can be
         # rolled back and its side effects compared: see call().
@@ -240,7 +293,8 @@ class Machine:
     def _on_hooked(self, mu, address, size, user):
         spec = self._observe.get(address)
         if spec is not None:
-            # spec: one letter per argument: i = 32-bit integer, q = 64-bit, f = float, s = C string pointer
+            # spec: one letter per argument: b = bool/char (low byte; the rest of the register is undefined),
+            # i = 32-bit integer, q = 64-bit, f = float, s = C string pointer
             got = []
             for i, kind in enumerate(spec[:4]):
                 if kind == "f":
@@ -248,7 +302,7 @@ class Machine:
                 elif kind == "s":
                     got.append(self.read_cstr(mu.reg_read(INT_REGS[i])))
                 else:
-                    got.append(mu.reg_read(INT_REGS[i]) & (MASK64 if kind == "q" else 0xFFFFFFFF))
+                    got.append(mu.reg_read(INT_REGS[i]) & {"q": MASK64, "b": 0xFF}.get(kind, 0xFFFFFFFF))
             self.observed.append((address, *got))
         fn = self._fakes.get(address)
         if fn:
@@ -293,6 +347,9 @@ class Machine:
                 slots.append((True, _float_bits(a)))
             else:
                 slots.append((False, a & MASK64))
+        # every call starts from the same registers, so nothing left over from an earlier call can differ
+        for r in RESET_REGS:
+            mu.reg_write(r, 0)
         # stack: [ret][shadow 4x8][arg5][arg6]... ; RSP % 16 == 8 at entry
         nstack = max(0, len(slots) - 4)
         top = STACK + STACK_SIZE - 0x100
@@ -314,8 +371,11 @@ class Machine:
             mu.emu_start(va, SENTINEL, count=2_000_000)
             fault = None
         except UcError as e:
-            fault = f"fault: {e}"
-        globals_written = {a: bytes(mu.mem_read(a, 1)) for a in sorted(self._journal)}
+            fault = f"fault: {e} at {mu.reg_read(UC_X86_REG_RIP):#x}"
+        # Net changes only (storing the value a byte already had is not a behavioural difference), reported as
+        # whole aligned qwords, so a stored pointer can be recognised (run.py normalize_writes).
+        changed = {a & ~7 for a in self._journal if bytes(mu.mem_read(a, 1)) != self._journal[a]}
+        globals_written = {a + i: bytes(mu.mem_read(a + i, 1)) for a in sorted(changed) for i in range(8)}
         returned_str = None
         if ret == "cstr" and not fault:
             ptr = mu.reg_read(UC_X86_REG_RAX)

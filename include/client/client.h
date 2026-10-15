@@ -233,7 +233,28 @@ struct clientUIActive_t
 #define KEYCATCH_UI 0x10
 #define KEYCATCH_UNKNOWN_40 0x40  // also stops menu-scroll repeat (CL_CheckForIgnoreDueToRepeat); name unknown
 
-// Only the leading fields of clientStatic_t (0xE9B00 bytes); the rest is in the PDB.
+struct vidConfig_t
+{
+	unsigned int sceneWidth;
+	unsigned int sceneHeight;
+	unsigned int displayWidth;
+	unsigned int displayHeight;
+	unsigned char omitRTFlags;
+	unsigned short shadowTileResSmall;
+	unsigned short shadowTileResLarge;
+	unsigned int displayFrequency[2];  // displayFreq_t: numerator, denominator
+	unsigned int monitorWidth;
+	unsigned int monitorHeight;
+	int displayMode;
+	float windowAspectRatio;
+	float displayAspectRatio;
+	float sceneAspectRatio;
+	float aspectRatioScenePixel;
+	float aspectRatioDisplayPixel;
+};
+
+// Only the leading fields of clientStatic_t (0xE9B00 bytes in the PS4 server; the Store build has the same offsets up
+// to vidConfig). The rest is in the PDB.
 struct clientStatic_t
 {
 	int quit;
@@ -243,6 +264,29 @@ struct clientStatic_t
 	int soundStarted;
 	int inUpdateSound;
 	int uiStarted;
+	int frametime;
+	float frametime_base;
+	int realtime;
+	bool gpuSyncedPrevFrame;
+	bool inputUpdatedPrevFrame;
+	unsigned char logo[0x20];       // clientLogo_t
+	float mapCenter[3];
+	int lastServerPinged;
+	int pingedServerCount;
+	int totalServersParsed;
+	int pingUpdateSource;
+	struct Material *whiteMaterial;
+	struct Material *consoleMaterial;
+	struct Font_s *consoleFont;
+	vidConfig_t vidConfig;
+};
+
+// A controller's profile settings (GamerProfile_GetProfileSettings). Only the field the input code reads; 0xF2C
+// bytes in the Store build, absent from the server PDB.
+struct GamerSettingState
+{
+	unsigned char unknown0[0x2BC];
+	bool gpadEnabled;  // the profile's "gpadEnabled": mouse movement is ignored while it is set
 };
 
 struct kbutton_t
@@ -407,6 +451,9 @@ void CL_ToggleSpec(LocalClientNum_t localClientNum, int key);
 void CL_ExecBinding(LocalClientNum_t localClientNum, int binding, int key, int prevDown);  // empty in the server build
 
 // elsewhere
+int CL_GetFirstActiveControllerIndex();                             // client/splitscreen.cpp
+GamerSettingState *GamerProfile_GetProfileSettings(int controllerIndex); // win32/win_gamerprofile.cpp
+void UI_MouseEvent(LocalClientNum_t localClientNum, int x, int y);   // ui_mp/ui_main_mp.cpp
 int CL_ControllerIndexFromClientNum(LocalClientNum_t clientNum);   // client/splitscreen.cpp
 void Key_KeynumToStringBuf(int keynum, char *buf, int buflen, int gamePadOnly);  // client_mp/cl_ui_mp.cpp
 uiMenuCommand_t UI_GetActiveMenu(LocalClientNum_t localClientNum); // ui_mp/ui_main_mp.cpp

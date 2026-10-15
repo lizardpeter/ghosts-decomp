@@ -20,6 +20,7 @@ Compilers: Store build VS2019 (x64, LTCG); servers and Steam exes VS2012 (x64).
 - Planned enhancements and the maths behind them: [docs/roadmap.md](docs/roadmap.md)
 - The Store build (final target) and how it is run for testing: [docs/store-build.md](docs/store-build.md)
 - Decrypting the Arxan-protected Steam exes: [docs/arxan.md](docs/arxan.md)
+- Input (keys, gamepad, mouse) and how the mouse reaches the view angles: [docs/input.md](docs/input.md)
 
 ## Pipeline
 

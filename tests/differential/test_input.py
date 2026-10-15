@@ -252,3 +252,7 @@ CASES = [
     {"symbol": "?CL_ToggleSpec@@YAXW4LocalClientNum_t@@H@Z", "ret": "void",
      "inputs": inputs(496, _plain(lambda r: [0, r.choice([0, 5, 7, 9, -1, r.randint(0, 255)])]))},
 ]
+
+# The state set up above uses the PS4 server's globals; the Store build doesn't have them all identified yet.
+for _case in CASES:
+    _case.setdefault("build", "iw6_ds_ps4")

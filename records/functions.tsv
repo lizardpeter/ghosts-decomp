@@ -115,3 +115,18 @@ iw6_ds_ps4	1400ACBF0	matches	src/client_mp/cl_input.cpp	differential test (emula
 iw6_ds_ps4	1400ACB70	matches	src/client_mp/cl_input.cpp	differential test (emulated, original vs recon)
 iw6_ds_ps4	1400ACC70	matches	src/client_mp/cl_input.cpp	differential test (emulated, original vs recon)
 iw6_ds_ps4	140008E10	matches	include/qcommon/cmd.h	differential test (emulated, original vs recon); header inline, the linker kept one out-of-line copy
+iw6mp64_MSStore_ship	14054ADF0	matches	src/win32/win_input.cpp	differential test against the Store build (emulated, Win32 model)
+iw6mp64_MSStore_ship	14054A710	matches	src/win32/win_input.cpp	differential test against the Store build (emulated, Win32 model)
+iw6mp64_MSStore_ship	14054AD50	matches	src/win32/win_input.cpp	differential test against the Store build (emulated, Win32 model)
+iw6mp64_MSStore_ship	14054AE40	matches	src/win32/win_input.cpp	differential test against the Store build (emulated, Win32 model)
+iw6mp64_MSStore_ship	14054AE80	matches	src/win32/win_input.cpp	differential test against the Store build (emulated, Win32 model)
+iw6mp64_MSStore_ship	14054AEC0	matches	src/win32/win_input.cpp	differential test against the Store build (emulated, Win32 model)
+iw6mp64_MSStore_ship	14054ACD0	matches	src/win32/win_input.cpp	differential test against the Store build (emulated, Win32 model)
+iw6mp64_MSStore_ship	14054A650	matches	src/win32/win_input.cpp	differential test against the Store build (emulated, Win32 model)
+iw6mp64_MSStore_ship	14054A790	matches	src/win32/win_input.cpp	differential test against the Store build (emulated, Win32 model)
+iw6mp64_MSStore_ship	14030DB00	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030E450	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030D3C0	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030D4A0	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030DC20	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6_ds_ps4	140243790	compiles	src/win32/win_input.cpp	the server build compiles the cursor code out of IN_Shutdown (no IN_ShowSystemCursor, no gamepad shutdown call); src follows the Store build and matches there
