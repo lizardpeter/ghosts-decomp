@@ -9,3 +9,6 @@
 /.work/
 __pycache__/
 *.pyc
+
+# agent worktrees and local Claude state
+/.claude/
