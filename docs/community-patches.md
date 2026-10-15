@@ -86,6 +86,5 @@ symbols.hpp` and checked against our own analysis.
 
 ## Still to check
 
-- Known exploits from public reports (separate survey in progress): what else has been exploited in Ghosts or
-  shared IW code that neither client patches.
+- Public exploit reports and the full fix list: docs/security.md.
 - Whether each fix's bug exists in the server reference and in the Store build at the matched function.

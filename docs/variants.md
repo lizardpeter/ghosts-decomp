@@ -31,7 +31,7 @@ The repo produces two builds from one source tree.
 
 ## Starting list (patched)
 
-- Security: docs/community-patches.md section 1, plus publicly reported exploits once surveyed.
+- Security: docs/security.md (community fixes, CVE-2018-20817 and related public reports, audit targets).
 - Replacements for disabled online protections (section 2): identity and connection security against our own
   backend instead of Demonware/Steam, fastfile signature checking kept or replaced with our own signing.
 - Arxan/DRM: absent from both variants. It isn't game source, so the faithful build doesn't reproduce it either.
