@@ -110,7 +110,7 @@ iw6_ds_ps4	1400AC560	matches	src/client/cl_gamepad.cpp	differential test (emulat
 iw6_ds_ps4	1400AC770	matches	src/client/cl_gamepad.cpp	differential test (emulated, original vs recon)
 iw6_ds_ps4	1400AC7B0	matches	src/client/cl_gamepad.cpp	differential test (emulated, original vs recon)
 iw6_ds_ps4	1400AC8B0	matches	src/client/cl_gamepad.cpp	differential test (emulated, original vs recon)
-iw6_ds_ps4	1400ACCF0	matches	src/client_mp/cl_input.cpp	differential test (emulated, original vs recon)
+iw6_ds_ps4	1400ACCF0	compiles	src/client_mp/cl_input.cpp	the server build doesn't queue the reliable command the Store build's CL_UseReload sends first; src follows the Store build and matches there
 iw6_ds_ps4	1400ACBF0	matches	src/client_mp/cl_input.cpp	differential test (emulated, original vs recon)
 iw6_ds_ps4	1400ACB70	matches	src/client_mp/cl_input.cpp	differential test (emulated, original vs recon)
 iw6_ds_ps4	1400ACC70	matches	src/client_mp/cl_input.cpp	differential test (emulated, original vs recon)
@@ -130,3 +130,17 @@ iw6mp64_MSStore_ship	14030D3C0	matches	src/client_mp/cl_input.cpp	differential t
 iw6mp64_MSStore_ship	14030D4A0	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
 iw6mp64_MSStore_ship	14030DC20	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
 iw6_ds_ps4	140243790	compiles	src/win32/win_input.cpp	the server build compiles the cursor code out of IN_Shutdown (no IN_ShowSystemCursor, no gamepad shutdown call); src follows the Store build and matches there
+iw6_ds_ps4	1402B4900	compiles	src/client_mp/cl_input.cpp	a `return true` stub in the server build (folded with Session_ShouldAdvertise); src follows the Store build and matches there
+iw6mp64_MSStore_ship	14030D650	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030EE50	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030EE80	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030DAA0	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030E410	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030E660	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030E500	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030E470	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030E590	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030EE10	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030D670	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030E620	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030B6B0	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)

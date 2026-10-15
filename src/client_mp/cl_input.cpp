@@ -13,6 +13,7 @@
 // m_pitch (0.022 by default) and adds that to the view angles, then lets aim assist adjust them.
 
 #include <math.h>
+#include <string.h>
 #include <windows.h>
 
 #include <iw6_static.h>
@@ -56,9 +57,25 @@ static_assert(sizeof(AimInput) == 0x34, "AimInput layout");
 static_assert(__builtin_offsetof(clientStatic_t, vidConfig) == 0x180, "clientStatic_t layout");
 static_assert(__builtin_offsetof(GamerSettingState, gpadEnabled) == 0x2BC, "GamerSettingState layout");
 
-// Quake 3's IN_KeyDown / IN_KeyUp with the key and time passed in rather than read from the command line
-// (inlined into every handler below).
-static inline void IN_KeyDown(kbutton_t *b, int k, unsigned int downtime)
+void sub_140311D60(LocalClientNum_t localClientNum, int value, int force);  // queues a reliable client command (name unknown)
+
+enum StanceState
+{
+	CL_STANCE_STAND = 0x0,
+	CL_STANCE_CROUCH = 0x1,
+	CL_STANCE_PRONE = 0x2,
+};
+
+extern int com_frameTime;  // qcommon/common.cpp
+
+// Store 14030D650  client_mp/cl_input.cpp:109 (a `return true` stub in the server build)
+bool CL_IsGamepadEnabled(LocalClientNum_t localClientNum)
+{
+	return GamerProfile_GetProfileSettings(CL_GetFirstActiveControllerIndex())->gpadEnabled;
+}
+
+// Store 14030EE50: Quake 3's IN_KeyDown with the key and time passed in rather than read from the command line
+void IN_KeyDown(kbutton_t *b, int k, unsigned int downtime)
 {
 	if (k == b->down[0] || k == b->down[1])
 		return;  // repeating key
@@ -77,7 +94,8 @@ static inline void IN_KeyDown(kbutton_t *b, int k, unsigned int downtime)
 	b->wasPressed = true;
 }
 
-static inline void IN_KeyUp(kbutton_t *b, int k, unsigned int uptime)
+// Store 14030EE80
+void IN_KeyUp(kbutton_t *b, int k, unsigned int uptime)
 {
 	if (b->down[0] == k)
 		b->down[0] = 0;
@@ -97,35 +115,72 @@ static inline void IN_KeyUp(kbutton_t *b, int k, unsigned int uptime)
 		b->msec += frame_msec / 2;
 }
 
-// A tap: press and release in the same frame.
-static inline void IN_KeyTap(kbutton_t *b, int k)
+// Store 14030DAA0: the fraction of the frame the key was down
+float CL_KeyState(kbutton_t *key)
 {
-	IN_KeyDown(b, k, 0);
-	IN_KeyUp(b, k, 0);
+	int msec = key->msec;
+	key->msec = 0;
+
+	if (key->active)
+	{
+		// still down
+		if (!key->downtime)
+			msec = com_frameTime;
+		else
+			msec += com_frameTime - key->downtime;
+		key->downtime = com_frameTime;
+	}
+
+	if (msec <= 0)
+		return 0.0f;
+	if (msec >= frame_msec)
+		return 1.0f;
+	return (float)msec / frame_msec;
 }
 
-// 1400ACCF0  client_mp/cl_input.cpp:469
+// Store 14030E410
+void CL_SetStance(LocalClientNum_t localClientNum, StanceState stance)
+{
+	if (playersKb[localClientNum][KB_PRONE].active || playersKb[localClientNum][KB_DOWN].active)
+		return;
+	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+	cl->stance = stance;
+	cl->stanceHeld = false;
+}
+
+// Store 14030E660  client_mp/cl_input.cpp:469 (the server build has no reliable command: 1400ACCF0)
 void CL_UseReload(LocalClientNum_t localClientNum, int key)
 {
-	IN_KeyTap(&playersKb[localClientNum][KB_USE_RELOAD], key);
+	sub_140311D60(localClientNum, 11, 0);
+	IN_KeyDown(&playersKb[localClientNum][KB_USE_RELOAD], key, 0);
+	IN_KeyUp(&playersKb[localClientNum][KB_USE_RELOAD], key, 0);
 }
 
-// 1400ACBF0  client_mp/cl_input.cpp:482
+// 1400ACBF0  client_mp/cl_input.cpp:482  (Store 14030E500)
 void CL_SpecPrev(LocalClientNum_t localClientNum, int key)
 {
-	IN_KeyTap(&playersKb[localClientNum][KB_SPECPREV], key);
+	IN_KeyDown(&playersKb[localClientNum][KB_SPECPREV], key, 0);
+	IN_KeyUp(&playersKb[localClientNum][KB_SPECPREV], key, 0);
 }
 
-// 1400ACB70  client_mp/cl_input.cpp:489
+// 1400ACB70  client_mp/cl_input.cpp:489  (Store 14030E470)
 void CL_SpecNext(LocalClientNum_t localClientNum, int key)
 {
-	IN_KeyTap(&playersKb[localClientNum][KB_SPECNEXT], key);
+	IN_KeyDown(&playersKb[localClientNum][KB_SPECNEXT], key, 0);
+	IN_KeyUp(&playersKb[localClientNum][KB_SPECNEXT], key, 0);
 }
 
-// 1400ACC70  client_mp/cl_input.cpp:496
+// 1400ACC70  client_mp/cl_input.cpp:496  (Store 14030E590)
 void CL_ToggleSpec(LocalClientNum_t localClientNum, int key)
 {
-	IN_KeyTap(&playersKb[localClientNum][KB_SPECTATE], key);
+	IN_KeyDown(&playersKb[localClientNum][KB_SPECTATE], key, 0);
+	IN_KeyUp(&playersKb[localClientNum][KB_SPECTATE], key, 0);
+}
+
+// Store 14030EE10
+bool IN_IsTalkKeyHeld()
+{
+	return playersKb[0][KB_TALK].active;
 }
 
 // Q3's ClampChar (inlined)
@@ -321,4 +376,24 @@ void CL_MouseMove(LocalClientNum_t localClientNum, usercmd_s *cmd, float frameti
 	cl->clViewangles[0] = aimOutput.pitch;
 	cl->clViewangles[1] = aimOutput.yaw;
 	sub_14027B800(&aimOutput, cmd);
+}
+
+// Store 14030D670
+bool CL_KeyActiveOrPressed(LocalClientNum_t localClientNum, int keyIndex)
+{
+	return playersKb[localClientNum][keyIndex].active || playersKb[localClientNum][keyIndex].wasPressed;
+}
+
+// Store 14030E620: sets the command button for a key that is down or was pressed this frame
+void CL_UpdateCmdButton(LocalClientNum_t localClientNum, unsigned int *cmdButtons, int keyIndex, unsigned int buttonFlag)
+{
+	if (playersKb[localClientNum][keyIndex].active || playersKb[localClientNum][keyIndex].wasPressed)
+		*cmdButtons |= buttonFlag;
+	playersKb[localClientNum][keyIndex].wasPressed = false;
+}
+
+// Store 14030B6B0
+void CL_ClearKeys(LocalClientNum_t localClientNum)
+{
+	memset(playersKb[localClientNum], 0, sizeof(playersKb[localClientNum]));
 }
