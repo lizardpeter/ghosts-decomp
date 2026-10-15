@@ -81,3 +81,22 @@ zoom, "Monitor Distance Coefficient" (default 1.33) and "Affected FOV". With a m
 ADS sensitivity ratio is atan(c·tan(adsFOV/2)) / atan(c·tan(hipFOV/2)), so a coefficient matches the mouse
 movement for the same on-screen distance at that fraction of the screen. Which FOV (horizontal or vertical) MW2019
 feeds into this and how "Affected FOV" changes it still needs checking against MW2019 itself before it is final.
+
+## Candidates (suggested, not yet agreed)
+
+- **Security hardening:** fuzz the network, snapshot/gamestate and fastfile parsers against the reconstructed code
+  natively; AddressSanitizer test builds; server-side validation of everything a client sends (usercmds, menu
+  responses, LUI notifies). The known fixes are in docs/security.md.
+- **Performance:** pipeline/shader precompilation against stutter; job-system scaling to all cores; audit
+  animation, particle, sway and physics-prop behaviour at uncapped FPS; built-in frame-time and latency overlay.
+- **Visuals:** native internal resolution by default (upscaling opt-in); HUD scaling and safe area for 4K and
+  ultrawide; toggles for motion blur, film grain, depth of field and chromatic effects; optional sharpening; higher
+  shadow, draw-distance and LOD limits.
+- **Input:** MW2019 controller options (deadzone shapes, response curves, per-zoom sensitivity); DualSense gyro and
+  native prompts; full rebinding with profiles.
+- **Online:** our own backend replacing Demonware (accounts, stats and progression, matchmaking, server browser,
+  private servers with rcon); Linux dedicated server; higher tick/snapshot rates, interpolation setting, net graph.
+- **Platform and quality:** launch without the Xbox app (no GDK dependency); crash minidumps symbolised against our
+  build; faster fastfile loading; native modding (scripts, asset overrides); colour-blind filters and subtitle
+  options; HRTF/spatial audio and loudness normalisation; native Linux once on Vulkan + SDL; Extinction and Squads
+  offline with bots.

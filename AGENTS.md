@@ -33,7 +33,7 @@ analysis/<build>/    GENERATED per build
 records/             AUTHORED small facts; the only input to the graph besides analysis/
 src/ include/        AUTHORED faithful reconstruction, mirroring the original source tree
 enhanced/            AUTHORED (once needed) overrides for the enhanced build, same layout as src/
-tests/               differential tests (harness not yet ported to x64)
+tests/               differential tests (x64 Unicorn harness)
 docs/<topic>.md      method notes and per-build findings. Topic names, never dates.
 tools/               pipeline scripts (unpack/, ghidra/, pdb/, match/, graph/, recon/)
 ```
