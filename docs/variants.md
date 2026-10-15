@@ -29,6 +29,11 @@ The repo produces two builds from one source tree (decomp-project skill, princip
 
 Arxan and DRM are in neither build: they aren't game source.
 
+## Known bugs
+
+Every bug found in the original is listed in `records/bugs.tsv` (security issues too, with the detail in
+docs/security.md). That list is the work queue for `bugfix` and `security` changes in the enhanced build.
+
 ## Planned enhancements
 
 - `security`: docs/security.md (community fixes, CVE-2018-20817 and related public reports, audit targets).

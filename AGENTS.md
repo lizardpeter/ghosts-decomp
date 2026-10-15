@@ -47,6 +47,13 @@ Folder and file names describe *what*, never *when*. Dates belong in commit mess
 each recorded in `records/patches.tsv`; both are created with the first enhancement. Never fix a bug in `src/`.
 See docs/variants.md.
 
+**Bugs go in `records/bugs.tsv`.** Whenever a reconstruction reproduces something that is wrong in the original
+(crash, overflow, missing check, undefined behaviour, logic error, security hole), add a row: id (`B` + 4 digits),
+build, va, function, source, kind (`security`, `crash`, `logic`, `ub`, `precision`), description, evidence (test or
+disasm), and `enhanced` (`planned`, `fixed` with the patch id, or `keep` when the original behaviour is wanted). The
+faithful code keeps the bug; the enhanced build fixes it. Security issues are explained in docs/security.md and
+listed here as well.
+
 ## Addresses
 
 x64 virtual addresses at the image base 0x140000000, written as 9 upper-case hex digits without `0x`

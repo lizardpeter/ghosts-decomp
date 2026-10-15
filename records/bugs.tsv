@@ -1,0 +1,6 @@
+id	build	va	function	source	kind	description	evidence	enhanced
+B0001	iw6_ds_ps4	14022E680	MatrixInverse	universal/com_math.cpp	logic	No check for a zero determinant: a singular matrix gives inf/NaN in every element instead of an error or identity.	reconstruction reproduces it (differential test, 300 cases); disasm has no determinant comparison	planned
+B0002	iw6_ds_ps4	1401A11D0	NET_DeferPacketToClient	qcommon/net_chan_mp.cpp:1615	security	Deferred packet copied without clamping its length to the destination buffer (buffer overflow from a network peer).	docs/security.md S3 (iw6-mod clamps to 1262 bytes); to confirm in our reconstruction	planned
+B0003	iw6_ds_ps4	1401F3680	SV_ExecuteClientMessage	server_mp/sv_client_mp.cpp:5068	security	A negative reliableSequence - reliableAcknowledge from a client hangs the server.	docs/security.md S4 (iw6-mod security.cpp); to confirm in our reconstruction	planned
+B0004	iw6_ds_ps4	1401F1890	SV_AddBot	server_mp/sv_client_mp.cpp:5458	security	Bot name formatted with sprintf into a fixed 0x400 buffer.	docs/security.md S5 (iw6-mod security.cpp); to confirm in our reconstruction	planned
+B0005	iw6_ds_ps4	1401F1AF0	SV_AddTestClient	server_mp/sv_client_mp.cpp:5276	security	Test-client name formatted with sprintf into a fixed 0x400 buffer.	docs/security.md S5 (iw6-mod security.cpp); to confirm in our reconstruction	planned
