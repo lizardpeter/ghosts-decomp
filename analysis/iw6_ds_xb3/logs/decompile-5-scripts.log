@@ -1,0 +1,4 @@
+2026-10-15 18:37:41 INFO  Decompile.java> shard 5: 1000 ok, 0 failed, 12s  
+2026-10-15 18:37:56 INFO  Decompile.java> shard 5: 2000 ok, 0 failed, 27s  
+2026-10-15 18:38:02 INFO  Decompile.java> shard 5: 3000 ok, 0 failed, 33s  
+2026-10-15 18:38:02 INFO  Decompile.java> shard 5 done: 3015 ok, 0 failed  

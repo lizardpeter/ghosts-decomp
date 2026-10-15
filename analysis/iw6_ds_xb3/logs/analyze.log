@@ -1,0 +1,589 @@
+2026-10-15 18:32:43 INFO  (LoggingInitialization) Using log config file: jar:file:/opt/ghidra/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml  
+2026-10-15 18:32:43 INFO  (LoggingInitialization) Using log file: /tmp/raw/analyze.log  
+2026-10-15 18:32:43 DEBUG (GhidraObjectInputFilter) Including serial input filter: FileSystem/data/client.rmi.serial.filter  
+2026-10-15 18:32:43 INFO  (Preferences) Loading user preferences: /home/runner/.config/ghidra/ghidra_12.1.4_PUBLIC/preferences  
+2026-10-15 18:32:43 INFO  (ClassSearcher) Searching for classes...  
+2026-10-15 18:32:44 INFO  (ClassSearcher) Class search complete (906 ms)  
+2026-10-15 18:32:45 INFO  (DefaultSSLContextInitializer) Initializing SSL Context  
+2026-10-15 18:32:45 INFO  (SecureRandomFactory) Initializing Random Number Generator...  
+2026-10-15 18:32:45 INFO  (SecureRandomFactory) Random Number Generator initialization complete: NativePRNGNonBlocking  
+2026-10-15 18:32:45 INFO  (DefaultTrustManagerFactory) Trust manager disabled, cacerts have not been set  
+2026-10-15 18:32:45 INFO  (FileCacheMaintenanceDaemon) Starting cache cleanup: /var/tmp/runner-ghidra/fscache2  
+2026-10-15 18:32:45 INFO  (FileCacheMaintenanceDaemon) Finished cache cleanup, estimated storage used: 0  
+2026-10-15 18:32:46 INFO  (AnalyzeHeadless) Headless startup complete (3740 ms)  
+2026-10-15 18:32:46 INFO  (ClassSearcher) Class searcher loaded 59 extension points (20 false positives)  
+2026-10-15 18:32:46 INFO  (HeadlessAnalyzer) HEADLESS Script Paths:
+    /opt/ghidra/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /home/runner/work/ghosts-decomp/ghosts-decomp/tools/ghidra
+    /opt/ghidra/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /opt/ghidra/Ghidra/Processors/DATA/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /opt/ghidra/Ghidra/Processors/JVM/ghidra_scripts
+    /opt/ghidra/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/VersionTracking/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/PyGhidra/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/Base/ghidra_scripts
+    /opt/ghidra/Ghidra/Processors/Atmel/ghidra_scripts
+    /opt/ghidra/Ghidra/Debug/Debugger/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/Decompiler/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/FunctionID/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/PDB/ghidra_scripts
+    /opt/ghidra/Ghidra/Processors/8051/ghidra_scripts
+    /opt/ghidra/Ghidra/Processors/PIC/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/FileFormats/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/BSim/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/BytePatterns/ghidra_scripts  
+2026-10-15 18:32:46 INFO  (HeadlessAnalyzer) HEADLESS: execution starts  
+2026-10-15 18:32:46 INFO  (HeadlessAnalyzer) Creating project: /tmp/proj/iw6  
+2026-10-15 18:32:46 DEBUG (DefaultProjectManager) No tools found; Installing default tools  
+2026-10-15 18:32:46 DEBUG (DefaultProjectManager) 	no recent project directories found  
+2026-10-15 18:32:47 INFO  (DefaultProject) Creating project: /tmp/proj/iw6  
+2026-10-15 18:32:47 INFO  (HeadlessAnalyzer) REPORT: Processing input files:   
+2026-10-15 18:32:47 INFO  (HeadlessAnalyzer)      project: /tmp/proj/iw6  
+2026-10-15 18:32:47 INFO  (HeadlessAnalyzer) IMPORTING: file:///tmp/in/iw6_ds_xb3.exe  
+2026-10-15 18:32:48 INFO  (ProgramLoader) Using Loader: Portable Executable (PE)  
+2026-10-15 18:32:48 INFO  (ProgramLoader) Using Language/Compiler: x86:LE:64:default:windows  
+2026-10-15 18:32:48 INFO  (ProgramLoader) Using Library Search Path: [., /bin, /lib, /lib64, /lib/x86_64-linux-gnu, /lib/aarch64-linux-gnu, /usr/bin, /usr/lib, /usr/X11R6/bin, /usr/X11R6/lib, /usr/java/packages/lib, /usr/lib64]  
+2026-10-15 18:32:48 INFO  (TLSDirectory) TLS callbacks at 140495ae0  
+2026-10-15 18:32:51 INFO  (ProgramLoader) Additional info:
+Loading file:///tmp/in/iw6_ds_xb3.exe?MD5=c30353b12ba30c26d1b4c8ddd69ad82a...
+------------------------------------------------
+
+Searching 8 paths for library ADVAPI32.DLL...
+Library not found.
+------------------------------------------------
+
+Searching 8 paths for library GDI32.DLL...
+Library not found.
+------------------------------------------------
+
+Searching 8 paths for library KERNEL32.DLL...
+Library not found.
+------------------------------------------------
+
+Searching 8 paths for library POWRPROF.DLL...
+Library not found.
+------------------------------------------------
+
+Searching 8 paths for library PSAPI.DLL...
+Library not found.
+------------------------------------------------
+
+Searching 8 paths for library RPCRT4.DLL...
+Library not found.
+------------------------------------------------
+
+Searching 8 paths for library SHELL32.DLL...
+Library not found.
+------------------------------------------------
+
+Searching 8 paths for library USER32.DLL...
+Library not found.
+------------------------------------------------
+
+Searching 8 paths for library WINMM.DLL...
+Library not found.
+------------------------------------------------
+
+Searching 8 paths for library WS2_32.DLL...
+Library not found.
+------------------------------------------------
+
+Linking the External Programs of 'iw6_ds_xb3.exe' to imported libraries...
+  [WINMM.DLL] -> not found in project
+  [POWRPROF.DLL] -> not found in project
+  [WS2_32.DLL] -> not found in project
+  [KERNEL32.DLL] -> not found in project
+  [USER32.DLL] -> not found in project
+  [GDI32.DLL] -> not found in project
+  [ADVAPI32.DLL] -> not found in project
+  [SHELL32.DLL] -> not found in project
+  [PSAPI.DLL] -> not found in project
+  [RPCRT4.DLL] -> not found in project
+------------------------------------------------
+
+  
+2026-10-15 18:32:51 INFO  (HeadlessAnalyzer) IMPORTING: Loaded 0 additional files  
+2026-10-15 18:32:52 INFO  (HeadlessAnalyzer) REPORT: Execute script: PrepAnalysis.java   
+2026-10-15 18:32:53 INFO  (HeadlessAnalyzer) SCRIPT: /home/runner/work/ghosts-decomp/ghosts-decomp/tools/ghidra/PrepAnalysis.java  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> JVM max heap: 13312 MB, processors: 4  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: x86 Constant Reference Analyzer = true  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: Stack.Max Threads = 2  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: x86 Constant Reference Analyzer.Min absolute reference = 4  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: x86 Constant Reference Analyzer.Function parameter/return Pointer analysis = true  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: x86 Constant Reference Analyzer.Create Data from pointer = false  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: Stack.Create Local Variables = true  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: Decompiler Switch Analysis.Analysis Decompiler Timeout (sec) = 60  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: x86 Constant Reference Analyzer.Trust values read from writable memory = true  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: x86 Constant Reference Analyzer.Require pointer param data type = false  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: x86 Constant Reference Analyzer.Stored Value Pointer analysis = true  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: Stack = true  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: x86 Constant Reference Analyzer.Speculative reference max = 256  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: x86 Constant Reference Analyzer.Max Threads = 2  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> set x86 Constant Reference Analyzer.Max Threads = 1  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: Decompiler Switch Analysis = true  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: x86 Constant Reference Analyzer.Speculative reference min = 1024  
+2026-10-15 18:32:53 INFO  (GhidraScript) PrepAnalysis.java> option: Stack.Create Param Variables = false  
+2026-10-15 18:32:53 INFO  (HeadlessAnalyzer) ANALYZING all memory and code: file:///tmp/in/iw6_ds_xb3.exe  
+2026-10-15 18:32:53 WARN  (NoReturnFunctionAnalyzer) Ignoring leading '_' chars on no-return name '___raise_securityfailure' specified in file: /opt/ghidra/Ghidra/Features/Base/data/PEFunctionsThatDoNotReturn  
+2026-10-15 18:32:53 WARN  (NoReturnFunctionAnalyzer) Ignoring leading '_' chars on no-return name '___report_rangecheckfailure' specified in file: /opt/ghidra/Ghidra/Features/Base/data/PEFunctionsThatDoNotReturn  
+2026-10-15 18:32:53 DEBUG (SymbolServerService) SymbolServerService: querying Program's Import Location - /tmp/in for iw6mp64_dh_server_durango.pdb, e0577a5d-76bf-4896-8155-d21fb4d05842, 42, 0, ???  
+2026-10-15 18:32:53 DEBUG (SymbolServerService) SymbolServerService: got 1 results from Program's Import Location - /tmp/in  
+2026-10-15 18:32:53 DEBUG (SymbolServerService) SymbolServerService: found 1 matches  
+2026-10-15 18:32:53 DEBUG (SymbolServerService) SymbolServerService: getting symbol file: /tmp/in/iw6_ds_xb3.pdb  
+2026-10-15 18:32:53 DEBUG (SymbolServerService) SymbolServerService: local file now: /tmp/in/iw6_ds_xb3.pdb  
+2026-10-15 18:32:53 INFO  (PdbUniversalAnalyzer) PDB analyzer parsing file: /tmp/in/iw6_ds_xb3.pdb  
+2026-10-15 18:32:54 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/dxSpace  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxFog  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/workerTrace_t  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/SpawnWorkerTrace  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/cg_s  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/serverArchive_t  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/serverStatic_t  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/clipMap_t  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/r_global_permanent_t  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxCmdBufState  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxSpotShadowSceneLight  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxViewInfo  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxReactiveMotionBufferState  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxBackEndData  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxCmdBufInput  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/huff_entropy_decoder  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxBuffers  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/materialCommands_t  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/r_globals_t  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/FxElem  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/TraceWorkerCmd  
+2026-10-15 18:32:55 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxScene  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/std/basic_istream<char,std::char_traits<char>_>  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/SaveGame  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/gameserveritem_t  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/dxUserGeom  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/dxGeomTransform  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/_MINIDUMP_THREAD_CALLBACK  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/_MINIDUMP_THREAD_EX_CALLBACK  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/_MINIDUMP_CALLBACK_OUTPUT  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/serverStaticHeader_t  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/scrStringGlob_t  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/scrMemTreeGlob_t  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/staticmodeltrace_t  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/tagARRAYDESC  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/_s__RTTIBaseClassArray  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/_SLIST_ENTRY  
+2026-10-15 18:32:56 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/_wireSAFEARRAY_UNION  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/_STORAGE_QUERY_DEPENDENT_VOLUME_RESPONSE  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/pathlocal_t  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/FxGlassDrawState  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/ClientSideVisionAndFogSet  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/OverheadFadeGlob  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/CrosshairTrace_t  
+2026-10-15 18:32:57 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 64 % 56  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/hks/CallSite  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/ReactiveTurbulenceEffectorEntry  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/AimVis  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/AimAssistGlobals  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/tagARRAYDESC  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/$_s__RTTIBaseClassArray$_extraBytes_16  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/$_s__RTTIBaseClassArray$_extraBytes_24  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/$_s__RTTIBaseClassArray$_extraBytes_8  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/$_s__RTTIBaseClassArray$_extraBytes_32  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/$_s__RTTIBaseClassArray$_extraBytes_40  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-type-buffer>@?1?_output_l@`50085bdd  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-type-text>@?1?_output_l@`50085bdd  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AU_count_string@?EN@?_output_l@`50085bdd  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-type-buffer>@?1?_output_s_l@`f7c757ba  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-type-text>@?1?_output_s_l@`f7c757ba  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AU_count_string@?FD@?_output_s_l@`f7c757ba  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-type-buffer>@?1?_woutput_l@`32cffa7e  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-type-text>@?1?_woutput_l@`32cffa7e  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AU_count_string@?EC@?_woutput_l@`32cffa7e  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@_copysign::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@_copysign::4@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@_copysign::5@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@tanhf::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@tanhf::6@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@scaleFloat_2::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@scaleFloat_2::4@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@__remainder_piby2f_inline::9@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@tanf::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@tanf::9@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@tanf::14@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@sqrtf::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@sqrt::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@sinhf::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@sinhf::7@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@scaleDouble_1::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@__remainder_piby2f::9@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@__remainder_piby2::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@__remainder_piby2::9@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@__remainder_piby2::10@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@__remainder_piby2::11@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@__remainder_piby2::13@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@__remainder_piby2::14@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@modff::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@modff::5@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@modff::7@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@modff::10@  
+2026-10-15 18:32:57 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/_FPIEEE_VALUE  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@_handle_error::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@_handle_errorf::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@fmodf::3@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@fmodf::4@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@fmodf::8@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@fmodf::12@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@fmodf::18@  
+2026-10-15 18:32:57 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@fmodf::19@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@fmodf::20@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@fmodf::24@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@fmodf::25@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@floorf::3@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@floorf::7@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@floor::3@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@floor::7@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@coshf::3@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@coshf::6@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@infinityf_with_flags::3@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@ceilf::3@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@ceilf::7@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@ceilf::9@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@atanf::3@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@atanf::10@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@atan2f::3@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@atan2f::4@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@atan2f::6@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@atan2f::8@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@atan2f::17@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@atan2f::18@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@asinf::3@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@asinf::8@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@asinf::9@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@acosf::3@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@acosf::9@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@acosf::10@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@acos::3@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@acos::10@  
+2026-10-15 18:32:58 INFO  (AbstractComplexTypeApplier) PDB issue dmangling type name: null for : .?AT<unnamed-tag>@acos::11@  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 94312 % 75800  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 9606960 % 524472  
+2026-10-15 18:32:58 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/serverStatic_t  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 398856 % 398824  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 17712 % 400  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 496 % 240  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 4368 % 96  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 212352 % 13240  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 452240 % 226080  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 212352 % 13232  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 9618480 % 524472  
+2026-10-15 18:32:58 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/serverStatic_t  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 2966248 % 2965704  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 324 % 16  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 215296 % 13240  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 452608 % 226080  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 887168 % 886528  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 215296 % 13232  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 9671472 % 524472  
+2026-10-15 18:32:58 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 4310496 % 13120  
+2026-10-15 18:32:58 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/serverStatic_t  
+2026-10-15 18:32:58 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/r_global_permanent_t  
+2026-10-15 18:32:58 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxCmdBufState  
+2026-10-15 18:32:58 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxCmdBufInput  
+2026-10-15 18:33:07 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxBackEndData  
+2026-10-15 18:33:07 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxViewInfo  
+2026-10-15 18:33:07 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxCachedSunShadow  
+2026-10-15 18:33:07 WARN  (CppCompositeType) PDB STRUCTURE reconstruction failed to align /iw6_ds_xb3.pdb/GfxSunShadowPartition  
+2026-10-15 18:33:07 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 591136 % 352  
+2026-10-15 18:33:07 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 885504 % 294656  
+2026-10-15 18:33:07 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 105120 % 13344  
+2026-10-15 18:33:07 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 512 % 240  
+2026-10-15 18:33:07 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 2969376 % 2965704  
+2026-10-15 18:33:07 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 270144 % 14824  
+2026-10-15 18:33:07 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 327936 % 13480  
+2026-10-15 18:33:07 WARN  (ArrayTypeApplier) PDB ArrayMsType: Array num elements calculation error underlying type 256 % 24  
+2026-10-15 18:33:07 INFO  (DefaultPdbApplicator) resolveCount: 49986  
+2026-10-15 18:33:07 INFO  (DefaultPdbApplicator) conflictCount: 184  
+2026-10-15 18:33:13 INFO  (DefaultPdbApplicator) PDB Types and Main Symbols Processing Terminated Normally  
+2026-10-15 18:33:13 INFO  (PdbUniversalAnalyzer) PDB Universal: scheduling PDB Function Internals Analysis  
+2026-10-15 18:33:13 INFO  (PackedDatabaseCache) Packed database cache: /var/tmp/runner-ghidra/packed-db-cache  
+2026-10-15 18:33:13 DEBUG (PackedDatabaseCache) Caching packed database: /opt/ghidra/Ghidra/Features/Base/data/typeinfo/win32/windows_vs12_64.gdt  
+2026-10-15 18:33:13 DEBUG (PackedDatabase) Unpacking database /opt/ghidra/Ghidra/Features/Base/data/typeinfo/win32/windows_vs12_64.gdt -> /var/tmp/runner-ghidra/packed-db-cache/pdb0588EBA4/db.1.gbf  
+2026-10-15 18:33:13 DEBUG (PackedDatabaseCache) Cache update completed: /opt/ghidra/Ghidra/Features/Base/data/typeinfo/win32/windows_vs12_64.gdt  
+2026-10-15 18:33:31 ERROR (PngDataType) Invalid PNG data at 1405f3058  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0: Unable to read bytes at ram:3dcccccd3e99999a  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a99da: Unable to resolve constructor at 1404a99da  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9a45: Unable to resolve constructor at 1404a9a45  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9a42: Unable to resolve constructor at 1404a9a42  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bb7e: Unable to resolve constructor at 14049bb7e  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bbe5: Unable to resolve constructor at 14049bbe5  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bc04: Unable to resolve constructor at 14049bc04  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bc53: Unable to resolve constructor at 14049bc53  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bc60: Unable to resolve constructor at 14049bc60  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bbe0: Unable to resolve constructor at 14049bbe0  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bc40: Unable to resolve constructor at 14049bc40  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bccf: Unable to resolve constructor at 14049bccf  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bd48: Unable to resolve constructor at 14049bd48  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bda5: Unable to resolve constructor at 14049bda5  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049be28: Unable to resolve constructor at 14049be28  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bea4: Unable to resolve constructor at 14049bea4  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bf0b: Unable to resolve constructor at 14049bf0b  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bf15: Unable to resolve constructor at 14049bf15  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bf99: Unable to resolve constructor at 14049bf99  
+2026-10-15 18:33:47 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c034: Unable to resolve constructor at 14049c034  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c0bd: Unable to resolve constructor at 14049c0bd  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c126: Unable to resolve constructor at 14049c126  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c186: Unable to resolve constructor at 14049c186  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c132: Unable to resolve constructor at 14049c132  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c122: Unable to resolve constructor at 14049c122  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c194: Unable to resolve constructor at 14049c194  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c116: Unable to resolve constructor at 14049c116  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c218: Unable to resolve constructor at 14049c218  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c2a8: Unable to resolve constructor at 14049c2a8  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c329: Unable to resolve constructor at 14049c329  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c3ac: Unable to resolve constructor at 14049c3ac  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c43c: Unable to resolve constructor at 14049c43c  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c4cc: Unable to resolve constructor at 14049c4cc  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c629: Unable to resolve constructor at 14049c629  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c522: Unable to resolve constructor at 14049c522  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c484: Unable to resolve constructor at 14049c484  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c4f4: Unable to resolve constructor at 14049c4f4  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c407: Unable to resolve constructor at 14049c407  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c389: Unable to resolve constructor at 14049c389  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c37c: Unable to resolve constructor at 14049c37c  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c3e6: Unable to resolve constructor at 14049c3e6  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c406: Unable to resolve constructor at 14049c406  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c306: Unable to resolve constructor at 14049c306  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c365: Unable to resolve constructor at 14049c365  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c3cc: Unable to resolve constructor at 14049c3cc  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c43b: Unable to resolve constructor at 14049c43b  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c3cb: Unable to resolve constructor at 14049c3cb  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c2e5: Unable to resolve constructor at 14049c2e5  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c34c: Unable to resolve constructor at 14049c34c  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c2e0: Unable to resolve constructor at 14049c2e0  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c273: Unable to resolve constructor at 14049c273  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c33a: Unable to resolve constructor at 14049c33a  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c2d2: Unable to resolve constructor at 14049c2d2  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c258: Unable to resolve constructor at 14049c258  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c333: Unable to resolve constructor at 14049c333  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c23a: Unable to resolve constructor at 14049c23a  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c228: Unable to resolve constructor at 14049c228  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c09c: Unable to resolve constructor at 14049c09c  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c098: Unable to resolve constructor at 14049c098  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c0f7: Unable to resolve constructor at 14049c0f7  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c172: Unable to resolve constructor at 14049c172  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c153: Unable to resolve constructor at 14049c153  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c06d: Unable to resolve constructor at 14049c06d  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c0de: Unable to resolve constructor at 14049c0de  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049c154: Unable to resolve constructor at 14049c154  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bfe3: Unable to resolve constructor at 14049bfe3  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049be80: Unable to resolve constructor at 14049be80  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bef2: Unable to resolve constructor at 14049bef2  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bd38: Unable to resolve constructor at 14049bd38  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bd8d: Unable to resolve constructor at 14049bd8d  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bc99: Unable to resolve constructor at 14049bc99  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bc36: Unable to resolve constructor at 14049bc36  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 14049bbb7: Unable to resolve constructor at 14049bbb7  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a990f: Unable to resolve constructor at 1404a990f  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9ae0: Unable to resolve constructor at 1404a9ae0  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9b4c: Unable to resolve constructor at 1404a9b4c  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9afc: Unable to resolve constructor at 1404a9afc  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9b70: Unable to resolve constructor at 1404a9b70  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9bb7: Unable to resolve constructor at 1404a9bb7  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9bec: Unable to resolve constructor at 1404a9bec  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9c70: Unable to resolve constructor at 1404a9c70  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9c8e: Unable to resolve constructor at 1404a9c8e  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9bfd: Unable to resolve constructor at 1404a9bfd  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9bc4: Unable to resolve constructor at 1404a9bc4  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9b18: Unable to resolve constructor at 1404a9b18  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9b28: Unable to resolve constructor at 1404a9b28  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9a73: Unable to resolve constructor at 1404a9a73  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a996a: Unable to resolve constructor at 1404a996a  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a98bc: Unable to resolve constructor at 1404a98bc  
+2026-10-15 18:33:48 WARN  (DecompileCallback) Decompiling 1400762d0, pcode error at 1404a9950: Unable to resolve constructor at 1404a9950  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa058: Unable to resolve constructor at 1404aa058  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa0ea: Unable to resolve constructor at 1404aa0ea  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa155: Unable to resolve constructor at 1404aa155  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa159: Unable to resolve constructor at 1404aa159  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa1da: Unable to resolve constructor at 1404aa1da  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa193: Unable to resolve constructor at 1404aa193  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa1bc: Unable to resolve constructor at 1404aa1bc  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa248: Unable to resolve constructor at 1404aa248  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa2bc: Unable to resolve constructor at 1404aa2bc  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa2de: Unable to resolve constructor at 1404aa2de  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa37d: Unable to resolve constructor at 1404aa37d  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa3a1: Unable to resolve constructor at 1404aa3a1  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa3e2: Unable to resolve constructor at 1404aa3e2  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa39a: Unable to resolve constructor at 1404aa39a  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa3be: Unable to resolve constructor at 1404aa3be  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa31a: Unable to resolve constructor at 1404aa31a  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa291: Unable to resolve constructor at 1404aa291  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa2fa: Unable to resolve constructor at 1404aa2fa  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa405: Unable to resolve constructor at 1404aa405  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa46a: Unable to resolve constructor at 1404aa46a  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa269: Unable to resolve constructor at 1404aa269  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa2cd: Unable to resolve constructor at 1404aa2cd  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa2d9: Unable to resolve constructor at 1404aa2d9  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa1c5: Unable to resolve constructor at 1404aa1c5  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa158: Unable to resolve constructor at 1404aa158  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa0b2: Unable to resolve constructor at 1404aa0b2  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa10d: Unable to resolve constructor at 1404aa10d  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404aa09b: Unable to resolve constructor at 1404aa09b  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404a9c70: Unable to resolve constructor at 1404a9c70  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404a9c8e: Unable to resolve constructor at 1404a9c8e  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404a99da: Unable to resolve constructor at 1404a99da  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404a9a45: Unable to resolve constructor at 1404a9a45  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404a9a42: Unable to resolve constructor at 1404a9a42  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404a9950: Unable to resolve constructor at 1404a9950  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404a98f8: Unable to resolve constructor at 1404a98f8  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404a996a: Unable to resolve constructor at 1404a996a  
+2026-10-15 18:33:57 WARN  (DecompileCallback) Decompiling 140076230, pcode error at 1404a98ac: Unable to resolve constructor at 1404a98ac  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260: Unable to read bytes at ram:10000000100  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa953: Unable to resolve constructor at 1404aa953  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa9bd: Unable to resolve constructor at 1404aa9bd  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aaa60: Unable to resolve constructor at 1404aaa60  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aab07: Unable to resolve constructor at 1404aab07  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aaafb: Unable to resolve constructor at 1404aaafb  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aaa78: Unable to resolve constructor at 1404aaa78  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aab19: Unable to resolve constructor at 1404aab19  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aab15: Unable to resolve constructor at 1404aab15  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aaa94: Unable to resolve constructor at 1404aaa94  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa9f7: Unable to resolve constructor at 1404aa9f7  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aaa10: Unable to resolve constructor at 1404aaa10  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 14049666c: Unable to resolve constructor at 14049666c  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa058: Unable to resolve constructor at 1404aa058  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa0ea: Unable to resolve constructor at 1404aa0ea  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa155: Unable to resolve constructor at 1404aa155  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa159: Unable to resolve constructor at 1404aa159  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa1da: Unable to resolve constructor at 1404aa1da  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa193: Unable to resolve constructor at 1404aa193  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa1bc: Unable to resolve constructor at 1404aa1bc  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa248: Unable to resolve constructor at 1404aa248  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa2bc: Unable to resolve constructor at 1404aa2bc  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa2de: Unable to resolve constructor at 1404aa2de  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa37d: Unable to resolve constructor at 1404aa37d  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa3a1: Unable to resolve constructor at 1404aa3a1  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa3e2: Unable to resolve constructor at 1404aa3e2  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa39a: Unable to resolve constructor at 1404aa39a  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa3be: Unable to resolve constructor at 1404aa3be  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa31a: Unable to resolve constructor at 1404aa31a  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa291: Unable to resolve constructor at 1404aa291  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa2fa: Unable to resolve constructor at 1404aa2fa  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa405: Unable to resolve constructor at 1404aa405  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa46a: Unable to resolve constructor at 1404aa46a  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa269: Unable to resolve constructor at 1404aa269  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa2cd: Unable to resolve constructor at 1404aa2cd  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa2d9: Unable to resolve constructor at 1404aa2d9  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa1c5: Unable to resolve constructor at 1404aa1c5  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa158: Unable to resolve constructor at 1404aa158  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa0b2: Unable to resolve constructor at 1404aa0b2  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404aa10d: Unable to resolve constructor at 1404aa10d  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9fd7: Unable to resolve constructor at 1404a9fd7  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a99e9: Unable to resolve constructor at 1404a99e9  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a99da: Unable to resolve constructor at 1404a99da  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9a45: Unable to resolve constructor at 1404a9a45  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9a42: Unable to resolve constructor at 1404a9a42  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9ae0: Unable to resolve constructor at 1404a9ae0  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9b4c: Unable to resolve constructor at 1404a9b4c  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9afc: Unable to resolve constructor at 1404a9afc  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9b70: Unable to resolve constructor at 1404a9b70  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9bb7: Unable to resolve constructor at 1404a9bb7  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9bec: Unable to resolve constructor at 1404a9bec  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9c70: Unable to resolve constructor at 1404a9c70  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9c8e: Unable to resolve constructor at 1404a9c8e  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9bfd: Unable to resolve constructor at 1404a9bfd  
+2026-10-15 18:33:58 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9bc4: Unable to resolve constructor at 1404a9bc4  
+2026-10-15 18:33:59 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9b18: Unable to resolve constructor at 1404a9b18  
+2026-10-15 18:33:59 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9b28: Unable to resolve constructor at 1404a9b28  
+2026-10-15 18:33:59 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9a73: Unable to resolve constructor at 1404a9a73  
+2026-10-15 18:33:59 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a9950: Unable to resolve constructor at 1404a9950  
+2026-10-15 18:33:59 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a98f8: Unable to resolve constructor at 1404a98f8  
+2026-10-15 18:33:59 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a996a: Unable to resolve constructor at 1404a996a  
+2026-10-15 18:33:59 WARN  (DecompileCallback) Decompiling 140076260, pcode error at 1404a99cb: Unable to resolve constructor at 1404a99cb  
+2026-10-15 18:35:01 INFO  (ApplyDataArchiveAnalyzer) Applied data type archive: windows_vs12_64  
+2026-10-15 18:35:01 INFO  (ApplyDataArchiveAnalyzer) Applied data type archive: windows_vs12_64  
+2026-10-15 18:35:17 DEBUG (NewFunctionStackAnalysisCmd) Failed to create variable (instruction at 14049bccd, stack-offset=-6, size=8): Data type does not fit within stack frame constraints (stack offset=-6, size=8  
+2026-10-15 18:35:44 INFO  (DefaultPdbApplicator) PDB Function Internals Processing Terminated Normally  
+2026-10-15 18:35:44 INFO  (DefaultPdbApplicator) PDB Applicator Reporting  
+2026-10-15 18:35:44 INFO  (PdbApplicatorMetrics) ===Begin PdbApplicatorMetrics Report===
+Could not apply one or more instances of an unsupported PDB data type: SubstringListMsType
+Could not apply one or more instances of an unsupported PDB data type: FunctionIdMsType
+Could not apply one or more instances of an unsupported PDB data type: MemberFunctionIdMsType
+Could not apply one or more instances of an unsupported PDB data type: StringIdMsType
+Could not apply one or more instances of an unsupported PDB data type: MethodListMsType
+Could not apply one or more instances of an unsupported PDB data type: BuildInfoMsType
+Could not apply one or more instances of an unsupported PDB symbol type: FrameSecurityCookieMsSymbol
+Could not apply one or more instances of an unsupported PDB symbol type: IndirectCallSiteInfoMsSymbol
+Could not apply one or more instances of an unsupported PDB symbol type: Compile2MsSymbol
+Could not apply one or more instances of an unsupported PDB symbol type: Compile3MsSymbol
+Could not apply one or more instances of an unsupported PDB symbol type: LocalThreadStorage32MsSymbol
+Could not apply one or more instances of an unsupported PDB symbol type: ConstantMsSymbol
+Could not apply one or more instances of an unsupported PDB symbol type: FileStaticMsSymbol
+Could not apply one or more instances of an unsupported PDB symbol type: GlobalThreadStorage32MsSymbol
+Could not apply one or more instances of an unsupported PDB symbol type: BuildInformationMsSymbol
+Could not apply one or more instances of an unsupported PDB symbol type: ObjectNameMsSymbol
+Could not apply one or more instances of an unsupported PDB symbol type: InlinedFunctionEndMsSymbol
+Could not apply one or more instances of an unsupported PDB symbol type: EnvironmentBlockMsSymbol
+Could not apply one or more instances of an unsupported PDB symbol type: InlinedFunctionCallsiteMsSymbol
+Could not nest one or more instances of a PDB symbol type: FrameSecurityCookieMsSymbol
+Could not nest one or more instances of a PDB symbol type: UserDefinedTypeMsSymbol
+Could not nest one or more instances of a PDB symbol type: ConstantMsSymbol
+Could not nest one or more instances of a PDB symbol type: FileStaticMsSymbol
+Could not nest one or more instances of a PDB symbol type: IndirectCallSiteInfoMsSymbol
+Could not nest one or more instances of a PDB symbol type: InlinedFunctionEndMsSymbol
+Could not nest one or more instances of a PDB symbol type: InlinedFunctionCallsiteMsSymbol
+Could not process C13InlineeLines
+====End PdbApplicatorMetrics Report====
+  
+2026-10-15 18:35:44 INFO  (DefaultPdbApplicator) PDB Applicator Reporting Terminated Normally  
+2026-10-15 18:35:47 INFO  (AutoAnalysisManager) -----------------------------------------------------
+    ASCII Strings                              3.052 secs
+    Apply Data Archives                        0.283 secs
+    Call Convention ID                         0.090 secs
+    Call-Fixup Installer                       0.178 secs
+    Create Address Tables                      0.624 secs
+    Create Address Tables - One Time           1.797 secs
+    Create Function                            0.045 secs
+    Data Reference                             1.696 secs
+    Decompiler Switch Analysis                37.329 secs
+    Demangler Microsoft                        2.547 secs
+    Disassemble Entry Points                  15.550 secs
+    Disassemble Entry Points - One Time        0.017 secs
+    Embedded Media                             0.280 secs
+    External Entry References                  0.000 secs
+    Function ID                                7.371 secs
+    Function Start Search                      0.153 secs
+    Non-Returning Functions - Discovered       3.292 secs
+    Non-Returning Functions - Known            0.043 secs
+    PDB Universal                             19.813 secs
+    PDB Universal Function Internals           2.375 secs
+    PDB Universal Reporting                    0.001 secs
+    Reference                                  1.262 secs
+    Scalar Operand References                  6.235 secs
+    Shared Return Calls                        5.810 secs
+    Stack                                     33.268 secs
+    Subroutine References                      1.153 secs
+    Subroutine References - One Time           0.010 secs
+    Windows x86 PE Exception Handling          1.877 secs
+    Windows x86 PE RTTI Analyzer               2.269 secs
+    Windows x86 Thread Environment Block (TEB) Analyzer     0.014 secs
+    WindowsResourceReference                   2.135 secs
+    x86 Constant Reference Analyzer           23.578 secs
+-----------------------------------------------------
+     Total Time   174 secs
+-----------------------------------------------------
+  
+2026-10-15 18:35:47 INFO  (HeadlessAnalyzer) REPORT: Analysis succeeded for file: file:///tmp/in/iw6_ds_xb3.exe  
+2026-10-15 18:35:47 INFO  (HeadlessAnalyzer) REPORT: Execute script: ExportAll.java '/tmp/raw'   
+2026-10-15 18:35:47 INFO  (HeadlessAnalyzer) SCRIPT: /home/runner/work/ghosts-decomp/ghosts-decomp/tools/ghidra/ExportAll.java  
+2026-10-15 18:35:51 INFO  (GhidraScript) ExportAll.java> exported 5000 functions  
+2026-10-15 18:35:55 INFO  (GhidraScript) ExportAll.java> exported 10000 functions  
+2026-10-15 18:35:58 INFO  (GhidraScript) ExportAll.java> exported 15000 functions  
+2026-10-15 18:36:00 INFO  (GhidraScript) ExportAll.java> functions: 18152  
+2026-10-15 18:36:02 INFO  (HeadlessAnalyzer) ANALYZING changes made by post scripts: file:///tmp/in/iw6_ds_xb3.exe  
+2026-10-15 18:36:02 INFO  (HeadlessAnalyzer) REPORT: Post-analysis succeeded for file: file:///tmp/in/iw6_ds_xb3.exe  
+2026-10-15 18:36:03 INFO  (LocalFileSystem) /iw6_ds_xb3.exe: file created (runner)  
+2026-10-15 18:36:03 INFO  (HeadlessAnalyzer) REPORT: Save succeeded for: /iw6_ds_xb3.exe (iw6:/iw6_ds_xb3.exe)  
+2026-10-15 18:36:03 INFO  (HeadlessAnalyzer) REPORT: Import succeeded  
