@@ -28,7 +28,7 @@ source_roots = ['c:\trees\iw6\code_source\src']
 [[build]]
 id = "iw6mp64_MSStore_ship"
 kind = "retail"
-analyze = true
+analyze = false  # analysed (analysis/iw6mp64_MSStore_ship); set true only to redo it
 timestamp = "2024-11-18T18:02:39Z"
 pdb_path = 'd:\workspace\outrun\iw6-depot\iw6\game\pc\iw6mp64_MSStore_ship.pdb'
 pdb_guid = "0A83874F-F6E2-4423-A596-766DECB765C4"
@@ -69,7 +69,7 @@ map = { key = "ghosts/Ghosts/Call of Duty - Ghosts PS4 Server/iw6_ds.map", sha25
 [[build]]
 id = "iw6_ds_xb3"
 kind = "reference"
-analyze = true
+analyze = false  # analysed blind (analysis/iw6_ds_xb3); set true only to redo it
 ghidra_pdb = false  # analysed blind; its own PDB/MAP is the ground truth for scoring tools/match
 timestamp = "2014-02-22T04:45:04Z"
 changelist = 665584

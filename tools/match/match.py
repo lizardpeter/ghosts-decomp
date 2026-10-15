@@ -7,8 +7,9 @@
 builds, which is how the matcher is validated against ground truth: tools/match/validate.py).
 
 Reads analysis/<build>/functions.tsv and ghidra/callgraph.tsv for both builds, and the two original exes
-(from DIR, default .work/originals, fetched with tools/fetch_originals.py) to find each function's
-references to strings and to global data.
+(from DIR, default .work/originals, fetched with tools/fetch_originals.py; an Arxan-protected build must be its
+unpacked image) and disassembles every function (x64) to find its references to strings and its distinctive
+immediates.
 
 Writes analysis/<target>/match/functions.tsv (generated; never hand-edit):
   target_va  ref_va  ref_name  source  method  confidence  evidence
@@ -17,6 +18,9 @@ Methods, in the order they run:
   string     the pair are the only functions in their builds referencing a given string
              (several such strings strengthen the match; conflicting candidates are dropped)
   constant   the same with distinctive numeric immediates (at least two shared, each unique on both sides)
+  named      a string registered or tabled together with exactly one function on each side: a string and a
+             function address loaded for the same call (Cmd_AddCommand("name", Func)), or a {name, ..., function}
+             entry in a data table (script built-ins, callbacks)
   callee     propagation: a matched pair's unmatched callees pair up when each side has exactly one
              candidate with the same matched-callee signature, or exactly one unmatched callee
   caller     the same, upwards through callers
@@ -72,36 +76,14 @@ class Build:
         f = self.fn[self.starts[i]]
         return f["va"] if addr < f["va"] + max(f["size"], 1) else None
 
-    def _scan_constants(self, tva, tdata, base, size):
-        """Distinctive immediates per function: not addresses, not small, not powers/masks."""
-        import capstone
-        md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
-        md.detail = True
-        self.const_refs = collections.defaultdict(set)
-        self.fn_consts = collections.defaultdict(set)
-        for va, f in self.fn.items():
-            off = va - tva
-            if off < 0 or off >= len(tdata) or f["size"] <= 0:
-                continue
-            for ins in md.disasm(tdata[off:off + f["size"]], va):
-                for op in ins.operands:
-                    if op.type == capstone.x86.X86_OP_IMM:
-                        v = op.imm & 0xFFFFFFFF
-                    elif op.type == capstone.x86.X86_OP_MEM and op.mem.base == 0 and op.mem.index == 0:
-                        continue
-                    else:
-                        continue
-                    if v < 0x10000 or v > 0xFFFF0000 or base <= v < base + size:
-                        continue
-                    if v & (v - 1) == 0 or (v + 1) & v == 0:
-                        continue  # powers of two and low-bit masks are everywhere
-                    self.const_refs[v].add(va)
-                    self.fn_consts[va].add(v)
-
     def _scan(self, exe):
-        """Every 4-byte value in .text that is the address of a C string -> (string, owning function)."""
+        """One x64 disassembly pass over every function: the C strings it references and its distinctive
+        immediates. x64 code reaches data RIP-relatively (lea rcx, [rip+disp]), so references are resolved from
+        the decoded operands rather than by scanning for absolute addresses as on x86."""
+        import capstone
         pe = pefile.PE(str(exe), fast_load=True)
         base = pe.OPTIONAL_HEADER.ImageBase
+        size = pe.OPTIONAL_HEADER.SizeOfImage
         secs = {s.Name.rstrip(b"\0"): s for s in pe.sections}
         strs = {}
         for name in (b".rdata", b".data"):
@@ -113,18 +95,67 @@ class Build:
                 strs[va + m.start()] = m.group()[:-1]
         text = secs[b".text"]
         tva, tdata = base + text.VirtualAddress, text.get_data()
-        self._scan_constants(tva, tdata, base, pe.OPTIONAL_HEADER.SizeOfImage)
-        self.str_refs = collections.defaultdict(set)   # string -> {function}
-        self.fn_strs = collections.defaultdict(set)    # function -> {string}
-        for i in range(len(tdata) - 3):
-            v = struct.unpack_from("<I", tdata, i)[0]
-            s = strs.get(v)
-            if s is None:
+        md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+        md.detail = True
+        rip = capstone.x86.X86_REG_RIP
+        self.str_refs = collections.defaultdict(set)    # string -> {function}
+        self.fn_strs = collections.defaultdict(set)     # function -> {string}
+        self.const_refs = collections.defaultdict(set)  # immediate -> {function}
+        self.fn_consts = collections.defaultdict(set)
+        self.named = collections.defaultdict(set)      # string -> {function it names}: registrations, tables
+        for va, f in self.fn.items():
+            off = va - tva
+            if off < 0 or off >= len(tdata) or f["size"] <= 0:
                 continue
-            f = self.owner(tva + i)
-            if f is not None:
-                self.str_refs[s].add(f)
-                self.fn_strs[f].add(s)
+            recent = []  # last few RIP-relative targets: ("s", string) or ("f", function)
+            for ins in md.disasm(tdata[off:off + f["size"]], va):
+                if ins.mnemonic.startswith("call") or ins.mnemonic.startswith("j"):
+                    recent = []  # a registration's arguments are loaded between two calls
+                for op in ins.operands:
+                    if op.type == capstone.x86.X86_OP_MEM and op.mem.base == rip and op.mem.index == 0:
+                        target = ins.address + ins.size + op.mem.disp
+                        s = strs.get(target)
+                        if s is not None:
+                            self.str_refs[s].add(va)
+                            self.fn_strs[va].add(s)
+                            recent.append(("s", s))
+                        elif ins.mnemonic == "lea" and target in self.fn:
+                            recent.append(("f", target))
+                        kinds = {k for k, _ in recent[-4:]}
+                        if kinds == {"s", "f"}:
+                            names = [x for k, x in recent[-4:] if k == "s"]
+                            funcs = [x for k, x in recent[-4:] if k == "f"]
+                            if len(names) == 1 and len(funcs) == 1:
+                                self.named[names[0]].add(funcs[0])
+                                recent = []
+                    elif op.type == capstone.x86.X86_OP_IMM:
+                        v = op.imm & 0xFFFFFFFFFFFFFFFF
+                        if v < 0x10000 or v > 0xFFFFFFFFFFFF0000 or base <= v < base + size:
+                            continue
+                        if 0xFFFF0000 <= v <= 0xFFFFFFFF:
+                            continue  # small negative 32-bit values
+                        if v & (v - 1) == 0 or (v + 1) & v == 0:
+                            continue  # powers of two and low-bit masks are everywhere
+                        self.const_refs[v].add(va)
+                        self.fn_consts[va].add(v)
+        # data tables of {const char *name; ...; function pointer} (script built-ins, command and callback tables)
+        for name in (b".rdata", b".data"):
+            sec = secs.get(name)
+            if not sec:
+                continue
+            d = sec.get_data()
+            for i in range(0, len(d) - 32, 8):
+                sv = struct.unpack_from("<Q", d, i)[0]
+                st = strs.get(sv)
+                if st is None:
+                    continue
+                for k in (8, 16, 24):
+                    fv = struct.unpack_from("<Q", d, i + k)[0]
+                    if fv in self.fn:
+                        self.named[st].add(fv)
+                        break
+                    if strs.get(fv) is not None:
+                        break  # next entry's name: no function in this entry
 
 
 def main():
@@ -201,6 +232,25 @@ def main():
             continue
         accept(t, r, "constant", min(0.95, 0.75 + 0.05 * len(vs)),
                f"{len(vs)} unique constant(s): " + ", ".join(f"{v:#x}" for v in vs[:4]))
+
+    # 1c. names attached to functions by registrations (Cmd_AddCommand("name", Func)) and data tables
+    nvotes = collections.defaultdict(lambda: collections.defaultdict(list))
+    for st, rfs in ref.named.items():
+        tfs = tgt.named.get(st)
+        if len(rfs) == 1 and tfs and len(tfs) == 1:
+            nvotes[next(iter(tfs))][next(iter(rfs))].append(st)
+    nby_ref = collections.defaultdict(set)
+    for t, cands in nvotes.items():
+        for r in cands:
+            nby_ref[r].add(t)
+    for t, cands in nvotes.items():
+        if len(cands) != 1:
+            continue
+        r, ss = next(iter(cands.items()))
+        if len(nby_ref[r]) != 1:
+            continue
+        accept(t, r, "named", min(0.97, 0.85 + 0.04 * len(ss)),
+               f"registered/tabled under {len(ss)} name(s): " + repr(ss[0][:60].decode("latin1")))
 
     # 2./3. call-graph propagation until nothing changes
     def signature(build, va, mapping):
