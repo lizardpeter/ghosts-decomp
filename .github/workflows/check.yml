@@ -18,7 +18,7 @@ jobs:
         if: steps.recon.outputs.any == '1'
         run: |
           sudo apt-get install -y -q clang lld llvm >/dev/null
-          pip install -q unicorn pefile
+          pip install -q unicorn==2.1.4 pefile  # the harness hooks rdtsc through unicorn_py3 internals
       - name: Fetch the reference exe
         if: steps.recon.outputs.any == '1'
         run: |

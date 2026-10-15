@@ -11,11 +11,15 @@
   binary's address from the MAP (and original statics, declared with IW6_STATIC, from the PDB). Functions become a `jmp [rip+0]; .quad <va>` thunk into the original code,
   data becomes an absolute symbol at the original address. So a function can be reconstructed and tested
   before anything it calls is. build/hybrid.tsv lists every such dependency.
+- Thread-local variables (`__declspec(thread)`, e.g. dvar_modifiedFlags) are reached through `_tls_index` and an
+  offset into the TLS block, not an address. The original's `_tls_index` is linked like any data; each original
+  TLS variable is placed in the DLL's own .tls section at the same offset it has in the original's, so the
+  offsets the compiler emits are the original's. Nothing else in the reconstruction may use TLS.
 
 This is the `compiles` gate. It is not byte matching: that needs the original VC11 (VS2012) x64 compiler.
 
-Ported from black-ops-1-decomp (x86) and not exercised yet: there is no reconstruction and no MAP-bearing
-reference build in the repo so far.
+Ported from black-ops-1-decomp (x86). `-fms-compatibility-version=17.00` makes clang follow VS2012, the original
+compiler: no thread-safe statics or TLS guards, which VS2012 didn't have and the original binary doesn't link.
 """
 import csv
 import subprocess
@@ -29,7 +33,7 @@ BUILD = ROOT / "build"
 TARGET_BUILD = next((b["id"] for b in tomllib.loads((ROOT / "target.toml").read_text())["build"]
                      if b.get("kind") == "reference" and "map" in b), None)
 TRIPLE = "--target=x86_64-pc-windows-msvc"
-CFLAGS = [TRIPLE, "-O0", "-ffp-contract=off", "-fno-exceptions",
+CFLAGS = [TRIPLE, "-fms-compatibility-version=17.00", "-O0", "-ffp-contract=off", "-fno-exceptions",
           "-fms-extensions", "-fno-stack-protector", "-ffreestanding", "-fno-builtin", "-Wall", "-Werror",
           "-Wno-unused-function", "-Wno-unused-variable", f"-I{ROOT / 'include'}",
           f"-isystem{ROOT / 'tools' / 'recon' / 'include'}"]
@@ -59,6 +63,16 @@ def original_statics():
     with open(ROOT / "analysis" / TARGET_BUILD / "pdb" / "statics.tsv", newline="") as f:
         rows = list(csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE))
     return {f"iw6s@{r['source']}@{r['scope']}@{r['name']}": int(r["va"], 16) for r in rows}
+
+
+def original_tls_section():
+    """[start, end) of the reference build's .tls section (analysis/<build>/pdb/sections.tsv)."""
+    with open(ROOT / "analysis" / TARGET_BUILD / "pdb" / "sections.tsv", newline="") as f:
+        for r in csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE):
+            if r["name"] == ".tls":
+                lo = int(r["va"], 16)
+                return lo, lo + int(r["vsize"], 16)
+    return 0, 0
 
 
 def main():
@@ -117,14 +131,25 @@ def main():
         sys.exit("reconstruction uses symbols the original binary does not have:\n  " + "\n  ".join(missing))
     asm = ["\t.text"]
     hybrid = ["symbol\tkind\tva"]
+    tls_lo, tls_hi = original_tls_section()
+    tls = []
     for u in undefined:
         va, is_func = orig[u] if u in orig else (statics[u], False)
         q = '"' + u + '"'
+        if tls_lo <= va < tls_hi:
+            tls.append((va - tls_lo, q))
+            hybrid.append(f"{u}\ttls\t{va:09X}")
+            continue
         if is_func:
             asm += [f"\t.globl {q}", f"{q}:", "\tjmpq *0(%rip)", f"\t.quad {va:#x}"]
         else:
             asm += [f"\t.globl {q}", f"\t.set {q}, {va:#x}"]
         hybrid.append(f"{u}\t{'function' if is_func else 'data'}\t{va:09X}")
+    if tls:
+        asm += ['\t.section .tls$, "dw"', "hybrid_tls_start:"]
+        for off, q in sorted(tls):
+            asm += [f"\t.skip {off} - (. - hybrid_tls_start)", f"\t.globl {q}", f"{q}:"]
+        asm += [f"\t.skip {tls_hi - tls_lo} - (. - hybrid_tls_start)"]
     (BUILD / "hybrid.s").write_text("\n".join(asm) + "\n")
     run("clang", TRIPLE, "-c", BUILD / "hybrid.s", "-o", BUILD / "hybrid.obj")
     (BUILD / "hybrid.tsv").write_text("\n".join(hybrid) + "\n")

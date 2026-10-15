@@ -38,6 +38,34 @@ The harness (`tests/differential/harness.py`) is ported to x64. What changed fro
 - VC11's x64 CRT math (`sin`, `pow`, ...) is called as ordinary functions in the original; the hybrid link
   routes the reconstruction's calls to the same original routines.
 
+### State, the OS, and calls the test can't see
+
+Most game functions read and write global state and call into the rest of the engine. The harness supports that
+without giving up the bit-exact contract:
+
+- **Setup.** An input can carry a `setup(writer)` that writes state into the original's globals (key bindings,
+  key catchers, `cmd_args` with an argv in scratch memory, dvar pointers to scratch `dvar_t`s) before each of the
+  two calls. Setup writes are undone afterwards like the call's own writes, so inputs never leak into each other.
+- **Thread-local storage.** `gs:[0x58]` leads to a copy of the original's TLS template. Reconstructed code reaches
+  the same block: `tools/build_recon.py` links the original's `_tls_index` and lays out the DLL's own `.tls` so
+  each original TLS variable (`dvar_modifiedFlags`) has its original offset. TLS writes are compared too.
+- **Imports.** Every import address table slot of the original points at a stub returning 0 (deterministic
+  `timeGetTime`, `EnterCriticalSection` and so on). `Machine.on_import` gives a stub behaviour when a test needs
+  one.
+- **rdtsc** returns a counter that restarts with every call (`Sys_Milliseconds` seeds `sys_counterBase` from it).
+- **Observed calls.** A case can list original functions whose calls are recorded with their arguments and
+  compared. That covers callees whose effect is invisible in this build (`CL_ExecBinding` is empty in the
+  server); a reconstructed callee is watched at both copies.
+- **Fakes.** A case can replace an original function with Python for both runs (`Dvar_GetInt` for dvars that
+  were never registered, `Com_ErrorEntering`), so the paths behind them are exercised.
+- **Addresses that differ by construction** are normalised before comparing: a pointer the reconstruction stores
+  to one of its own functions counts as the original function's address, a pointer into either image's
+  `.rdata` counts as the string it points at, and a returned `const char *` is compared as a string (`ret:
+  "cstr"`).
+
+Each new case is mutation-checked: a deliberate change in the reconstruction (a constant, a comparison, a
+dropped call) must make it fail. A function whose tests survive a mutation gets better inputs, not a pass.
+
 ## Byte matching
 
 Would need the VC11 (VS2012 Update 4) x64 compiler on a Windows runner. The retail builds are optimized

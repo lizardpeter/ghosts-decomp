@@ -41,6 +41,7 @@ function is client-only and will be located in the Store build by matching.
 | S14 | Havok Script (LUI) | `io`, `os`, `package`, `debug`, `loadfile`/`dofile`/`load`, `string.dump`, `os.execute` reachable | malicious mod/fastfile/UI | don't open the libraries | client | iw6-mod ui_scripting.cpp |
 | S15 | fastfile loading | signature check (kept in the original; the community clients disable it) | server-supplied/mod fastfiles | keep a signature check (our own key) | both | docs/community-patches.md §2 |
 | S16 | crash fixes | null `g_entities` on "invalid password" kick; migrated-client reconnect with duplicate GUID; atexit crash | server/client | null checks, clean rejection | partly server-side, to locate | iw6-mod patches.cpp, network.cpp |
+| S17 | `Key_StringToKeynum` + `Key_Bind_f`/`Key_Unbind_f`/`Key_SwapBind_f` | a one-byte key name >= 0x80 becomes keynum -128..-1; the binding is written up to 1.5 KB before `playerKeys` (command nodes' function pointers, dvar pointers) | console, config files; server-triggered only if a server can make the client run `bind` (to check) | reject keynums outside 0..255 | 1400AD4F0 `client/cl_keys.cpp:1731` (callers :2055, :2092, :2163) | found in reconstruction (records/bugs.tsv B0009) |
 
 ## Audit targets (no known bug yet)
 

@@ -39,6 +39,26 @@ def same(a, b):
     return a == b
 
 
+def normalize_writes(writes, m, recon, recon_to_orig):
+    """Make global writes comparable across the two images. A pointer the reconstruction stores to one of its
+    own functions is replaced by the original function's address, and a pointer into either image's .rdata
+    (a string literal) by the string it points to: literals have different addresses in the two builds."""
+    out = dict(writes)
+    for a in sorted(writes):
+        if a % 8 or any(a + i not in out for i in range(8)) or not isinstance(out[a], bytes):
+            continue
+        v = struct.unpack("<Q", b"".join(out[a + i] for i in range(8)))[0]
+        if v in recon_to_orig:
+            v = recon_to_orig[v]
+            for i, byte in enumerate(struct.pack("<Q", v)):
+                out[a + i] = bytes([byte])
+        elif any(lo <= v < hi for img in m.images for lo, hi in img.rdata):
+            for i in range(1, 8):
+                del out[a + i]
+            out[a] = ("str", m.read_cstr(v))
+    return out
+
+
 def export_name(symbol):
     # x64: no leading underscore on extern "C" names, so MAP and export names agree
     return symbol
@@ -54,6 +74,8 @@ def main():
     mapsyms = {r["name"]: int(r["va"], 16) for r in read_tsv(ROOT / "analysis" / BUILD / "map" / "publics.tsv")}
     recon = Image(ROOT / "build" / "recon.dll")
     m = Machine(Image(original_exe(BUILD)), recon)
+
+    recon_to_orig = {va: mapsyms[name] for name, va in recon.exports.items() if name in mapsyms}
 
     explicit = {}
     for test in sorted(Path(__file__).parent.glob("test_*.py")):
@@ -84,16 +106,27 @@ def main():
             verdict, used = "missing: no export with the original decorated name", 0
         else:
             verdict, used = "pass", 0
-            for args in case["inputs"]:
-                want = m.call(va, args, case["ret"])
+            for inp in case["inputs"]:
+                args, setup = (inp["args"], inp.get("setup")) if isinstance(inp, dict) else (inp, None)
+                fakes = {mapsyms[s]: fn for s, fn in {**case.get("fakes", {}),
+                                                      **(inp.get("fakes", {}) if isinstance(inp, dict) else {})}.items()}
+                # an observed function that is also reconstructed is reached at the reconstruction's own copy
+                # when the reconstruction calls it: watch both, and report either as the original address
+                observe = {mapsyms[s]: spec for s, spec in case.get("observe", {}).items()}
+                observe.update({recon.exports[s]: spec for s, spec in case.get("observe", {}).items()
+                                if s in recon.exports})
+                want = m.call(va, args, case["ret"], setup, fakes, observe)
                 if isinstance(want[0], str) and want[0].startswith("fault"):
                     continue  # the original itself crashes on this input: not a usable case
-                got = m.call(target, args, case["ret"])
+                got = m.call(target, args, case["ret"], setup, fakes, observe)
+                got = (*got[:3], [(recon_to_orig.get(c[0], c[0]), *c[1:]) for c in got[3]])
                 used += 1
                 # recon globals live at the original's addresses (hybrid link), so writes compare 1:1
-                if not (same(want[0], got[0]) and want[1] == got[1] and want[2] == got[2]):
+                want_w = normalize_writes(want[2], m, recon, recon_to_orig)
+                got_w = normalize_writes(got[2], m, recon, recon_to_orig)
+                if not (same(want[0], got[0]) and want[1] == got[1] and want_w == got_w and want[3] == got[3]):
                     verdict = (f"FAIL args={args!r}\n       original={want[0]!r} bufs_equal={want[1] == got[1]} "
-                               f"globals_equal={want[2] == got[2]}\n       recon   ={got[0]!r}")
+                               f"globals_equal={want_w == got_w} calls_equal={want[3] == got[3]}\n       recon   ={got[0]!r}")
                     break
             if verdict == "pass" and used < min(MIN_USABLE, len(case["inputs"])):
                 verdict = f"untestable: original faults on {len(case['inputs']) - used}/{len(case['inputs'])} inputs"

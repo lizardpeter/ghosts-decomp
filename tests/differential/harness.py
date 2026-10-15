@@ -11,6 +11,20 @@ Ported from black-ops-1-decomp's x86-32 harness. What changed for x64 (docs/veri
   before the call, so RSP % 16 == 8 at entry.
 - Returns in RAX, or XMM0 for float/double. No x87 state: x64 MSVC does all floating point in SSE.
 - A TEB is reachable through GS (self pointer, stack base/limit for __chkstk, PEB with the image base).
+- Thread-local storage: gs:[0x58] points at a one-slot TLS array whose block is a copy of the original's TLS
+  template (`__declspec(thread)` variables such as dvar_modifiedFlags). The reconstruction reaches the same block,
+  since its `_tls_index` and TLS offsets resolve to the original's (tools/build_recon.py). Writes to the block are
+  journaled and compared like writes to globals.
+- Imports: every import address table slot of the original points at a stub that returns 0, so code calling the
+  OS (EnterCriticalSection, timeGetTime, ...) runs deterministically instead of faulting. A test can give a stub
+  behaviour with Machine.on_import(name, fn).
+- rdtsc is deterministic: a counter that restarts with every call and advances by a fixed step (time bases such as
+  sys_counterBase come from it).
+- Inputs can set up state first: an input may be {"args": [...], "setup": fn(writer)}; see Writer.
+- Calls into the original can be observed and faked, for both runs alike: `observe` records the argument
+  registers of every call to the given addresses (to check what a function passes to a callee whose effect is
+  invisible, such as an empty function in this build); `fakes` replaces an original function with Python
+  (fn(mu) -> return value) for state the emulator lacks (dvars that were never registered, error state).
 """
 import hashlib
 import os
@@ -19,8 +33,10 @@ import tomllib
 from pathlib import Path
 
 import pefile
-from unicorn import UC_ARCH_X86, UC_HOOK_MEM_WRITE, UC_MODE_64, Uc, UcError
-from unicorn.x86_const import (UC_X86_REG_MXCSR, UC_X86_REG_R8, UC_X86_REG_R9, UC_X86_REG_RAX, UC_X86_REG_RBP,
+from unicorn.unicorn_py3.arch.intel import HOOK_INSN_CPUID_CFUNC  # rdtsc hooks share the cpuid callback type
+from unicorn.unicorn_py3.unicorn import uccallback
+from unicorn import UC_ARCH_X86, UC_HOOK_CODE, UC_HOOK_INSN, UC_HOOK_MEM_WRITE, UC_MODE_64, Uc, UcError
+from unicorn.x86_const import (UC_X86_REG_RIP, UC_X86_INS_RDTSC, UC_X86_INS_RDTSCP, UC_X86_REG_MXCSR, UC_X86_REG_R8, UC_X86_REG_R9, UC_X86_REG_RAX, UC_X86_REG_RBP,
                                UC_X86_REG_RCX, UC_X86_REG_RDX, UC_X86_REG_RSP, UC_X86_REG_XMM0,
                                UC_X86_REG_XMM1, UC_X86_REG_XMM2, UC_X86_REG_XMM3)
 
@@ -29,6 +45,9 @@ STACK, STACK_SIZE = 0x00100000, 0x00100000
 HEAP, HEAP_SIZE = 0x00300000, 0x00100000
 SENTINEL = 0x00200000
 TEB = 0x00400000
+TLS_BLOCK = 0x00410000
+STUBS, STUBS_SIZE = 0x00420000, 0x00010000
+SCRATCH, SCRATCH_SIZE = 0x00500000, 0x00100000
 INT_REGS = (UC_X86_REG_RCX, UC_X86_REG_RDX, UC_X86_REG_R8, UC_X86_REG_R9)
 XMM_REGS = (UC_X86_REG_XMM0, UC_X86_REG_XMM1, UC_X86_REG_XMM2, UC_X86_REG_XMM3)
 MASK64 = (1 << 64) - 1
@@ -41,7 +60,8 @@ def _page(n):
 class Image:
     def __init__(self, path: Path):
         self.pe = pefile.PE(str(path), fast_load=True)
-        self.pe.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_EXPORT"]])
+        self.pe.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY[d] for d in (
+            "IMAGE_DIRECTORY_ENTRY_EXPORT", "IMAGE_DIRECTORY_ENTRY_IMPORT", "IMAGE_DIRECTORY_ENTRY_TLS")])
         self.base = self.pe.OPTIONAL_HEADER.ImageBase
         self.size = _page(self.pe.OPTIONAL_HEADER.SizeOfImage)
         self.data = self.pe.get_memory_mapped_image()
@@ -49,6 +69,19 @@ class Image:
         if hasattr(self.pe, "DIRECTORY_ENTRY_EXPORT"):
             for e in self.pe.DIRECTORY_ENTRY_EXPORT.symbols:
                 self.exports[e.name.decode()] = self.base + e.address
+        # import address table slots: va -> "dll!name"
+        self.iat = {}
+        for d in getattr(self.pe, "DIRECTORY_ENTRY_IMPORT", []):
+            for imp in d.imports:
+                name = imp.name.decode() if imp.name else f"#{imp.ordinal}"
+                self.iat[imp.address] = f"{d.dll.decode().lower()}!{name}"
+        self.rdata = [(self.base + sec.VirtualAddress, self.base + sec.VirtualAddress + sec.Misc_VirtualSize)
+                      for sec in self.pe.sections if sec.Name.rstrip(b"\0") == b".rdata"]
+        self.tls = None  # (template bytes, va of the TLS index variable)
+        if hasattr(self.pe, "DIRECTORY_ENTRY_TLS"):
+            t = self.pe.DIRECTORY_ENTRY_TLS.struct
+            start, end = t.StartAddressOfRawData - self.base, t.EndAddressOfRawData - self.base
+            self.tls = (bytes(self.data[start:end]) + b"\0" * t.SizeOfZeroFill, t.AddressOfIndex)
 
 
 def reference_build() -> str:
@@ -80,6 +113,33 @@ def _float_bits(a) -> int:
     return struct.unpack("<I", struct.pack("<f", a[1]))[0] if a[0] == "f" else struct.unpack("<Q", struct.pack("<d", a[1]))[0]
 
 
+class Writer:
+    """Sets up state for one call: writes into the images are undone afterwards, and scratch memory
+    (strings, argv arrays) is handed out from a region cleared before every call."""
+
+    def __init__(self, machine):
+        self.m = machine
+        self.next = SCRATCH
+
+    def write(self, va, data: bytes):
+        self.m._setup_write(va, bytes(data))
+
+    def u32(self, va, v):
+        self.write(va, struct.pack("<I", v & 0xFFFFFFFF))
+
+    def u64(self, va, v):
+        self.write(va, struct.pack("<Q", v & MASK64))
+
+    def alloc(self, data: bytes) -> int:
+        va = self.next
+        self.m.mu.mem_write(va, bytes(data))
+        self.next = (va + len(data) + 15) & ~15
+        return va
+
+    def cstr(self, s: str | bytes) -> int:
+        return self.alloc((s.encode("latin1") if isinstance(s, str) else s) + b"\0")  # one byte per char
+
+
 class Machine:
     def __init__(self, *images: Image):
         self.mu = Uc(UC_ARCH_X86, UC_MODE_64)
@@ -97,32 +157,130 @@ class Machine:
         if images:
             self.mu.mem_write(TEB + 0x2000 + 0x10, struct.pack("<Q", images[0].base))  # PEB.ImageBaseAddress
         self.mu.msr_write(0xC0000101, TEB)                                    # IA32_GS_BASE
+        # TLS: gs:[0x58] -> [block]; the original's TLS index variable stays 0, the slot the loader gives an exe
+        self.mu.mem_map(TLS_BLOCK, 0x10000)
+        self.mu.mem_write(TEB + 0x58, struct.pack("<Q", TEB + 0x3000))
+        self.mu.mem_write(TEB + 0x3000, struct.pack("<Q", TLS_BLOCK))
+        if images and images[0].tls:
+            self.mu.mem_write(TLS_BLOCK, images[0].tls[0])
+        # import stubs: `xor eax, eax; ret`, with Python behaviour hooked on the ret
+        self.mu.mem_map(STUBS, STUBS_SIZE)
+        self.mu.mem_map(SCRATCH, SCRATCH_SIZE)
+        self._stub_names, self._import_fns = {}, {}
+        for img in images:
+            for slot, name in img.iat.items():
+                stub = STUBS + 0x10 * len(self._stub_names)
+                self._stub_names[stub + 2] = name
+                self.mu.mem_write(stub, b"\x31\xc0\xc3")
+                self.mu.mem_write(slot, struct.pack("<Q", stub))
+        self.mu.hook_add(UC_HOOK_CODE, self._on_stub, begin=STUBS, end=STUBS + STUBS_SIZE - 1)
+        self.imports_called = []
         # Writes into any mapped image (the original's globals) are journaled so each call can be
         # rolled back and its side effects compared: see call().
         self.images = images
+        self._ranges = [(img.base, img.base + img.size) for img in images] + [(TLS_BLOCK, TLS_BLOCK + 0x10000)]
         self._journal = {}
+        self._setup_journal = {}
         self.mu.hook_add(UC_HOOK_MEM_WRITE, self._on_write)
+        self.tsc = 0
+        self._hooked, self._fakes, self._observe, self.observed = set(), {}, {}, []
+        self._rdtsc_cb = uccallback(self.mu, HOOK_INSN_CPUID_CFUNC)(self._on_rdtsc)
+        for insn in (UC_X86_INS_RDTSC, UC_X86_INS_RDTSCP):
+            self.mu._Uc__do_hook_add(UC_HOOK_INSN, self._rdtsc_cb, 1, 0, insn)
+
+    def _on_rdtsc(self, mu, user):
+        self.tsc += 0x400
+        mu.reg_write(UC_X86_REG_RAX, self.tsc & 0xFFFFFFFF)
+        mu.reg_write(UC_X86_REG_RDX, self.tsc >> 32)
+        return 1  # skip the real instruction
 
     def _on_write(self, mu, access, address, size, value, user):
-        for img in self.images:
-            if img.base <= address < img.base + img.size:
+        for lo, hi in self._ranges:
+            if lo <= address < hi:
                 for a in range(address, address + size):
                     if a not in self._journal:
                         self._journal[a] = bytes(mu.mem_read(a, 1))
                 return
 
+    def _setup_write(self, va, data):
+        for i in range(len(data)):
+            if va + i not in self._setup_journal:
+                self._setup_journal[va + i] = bytes(self.mu.mem_read(va + i, 1))
+        self.mu.mem_write(va, data)
+
+    def read_cstr(self, va, limit=512):
+        try:
+            data = bytes(self.mu.mem_read(va, limit))
+        except UcError:
+            return f"<unreadable {va:#x}>"
+        return data.split(b"\0", 1)[0]
+
+    def on_import(self, name, fn):
+        """fn(mu) runs when the original calls import `name` ("user32.dll!GetCursorPos"); it may set RAX and
+        write through the argument registers. Without one, an import returns 0."""
+        self._import_fns[name.lower()] = fn
+
+    def _on_stub(self, mu, address, size, user):
+        name = self._stub_names.get(address)
+        if name is None:
+            return
+        self.imports_called.append(name)
+        fn = self._import_fns.get(name.lower())
+        if fn:
+            fn(mu)
+
     def poke(self, va, data: bytes):
         self.mu.mem_write(va, data)
 
-    def call(self, va, args, ret="int"):
-        """args: ints, floats ('f', x), doubles ('d', x), or bytes (passed by pointer, read back after).
-        ret: int (32-bit), int64, char, short, float, double, void.
+    def _hook_at(self, va):
+        if va not in self._hooked:
+            self._hooked.add(va)
+            self.mu.hook_add(UC_HOOK_CODE, self._on_hooked, begin=va, end=va)
 
-        Returns (return value, [buffer contents after the call], {address: byte} written in mapped images).
+    def _on_hooked(self, mu, address, size, user):
+        spec = self._observe.get(address)
+        if spec is not None:
+            # spec: one letter per argument: i = 32-bit integer, q = 64-bit, f = float, s = C string pointer
+            got = []
+            for i, kind in enumerate(spec[:4]):
+                if kind == "f":
+                    got.append(mu.reg_read(XMM_REGS[i]) & 0xFFFFFFFF)
+                elif kind == "s":
+                    got.append(self.read_cstr(mu.reg_read(INT_REGS[i])))
+                else:
+                    got.append(mu.reg_read(INT_REGS[i]) & (MASK64 if kind == "q" else 0xFFFFFFFF))
+            self.observed.append((address, *got))
+        fn = self._fakes.get(address)
+        if fn:
+            value = fn(mu)
+            rsp = mu.reg_read(UC_X86_REG_RSP)
+            ret = struct.unpack("<Q", bytes(mu.mem_read(rsp, 8)))[0]
+            if value is not None:
+                mu.reg_write(UC_X86_REG_RAX, value & MASK64)
+            mu.reg_write(UC_X86_REG_RSP, rsp + 8)
+            mu.reg_write(UC_X86_REG_RIP, ret)
+
+    def call(self, va, args, ret="int", setup=None, fakes=None, observe=None):
+        """args: ints, floats ('f', x), doubles ('d', x), or bytes (passed by pointer, read back after).
+        ret: int (32-bit), int64, char, short, float, double, void, or cstr (a returned char pointer, compared as
+        the string it points to: a string literal lives at different addresses in the original and the
+        reconstruction).
+
+        Returns (return value, [buffer contents after the call], {address: byte} written in mapped images,
+        [observed calls]).
         Image writes are rolled back afterwards, so calls never see each other's state.
         A crash returns ("fault: ...", [], writes)."""
         mu = self.mu
         mu.mem_write(HEAP, b"\0" * HEAP_SIZE)
+        mu.mem_write(SCRATCH, b"\0" * SCRATCH_SIZE)
+        self._setup_journal = {}
+        self.imports_called = []
+        self.tsc = 0x100000000
+        self._fakes, self._observe, self.observed = dict(fakes or {}), dict(observe or {}), []
+        for a in list(self._fakes) + list(self._observe):
+            self._hook_at(a)
+        if setup:
+            setup(Writer(self))
         heap = HEAP
         slots, bufs = [], []  # slot: (is_float, 64-bit value)
         for a in args:
@@ -158,11 +316,19 @@ class Machine:
         except UcError as e:
             fault = f"fault: {e}"
         globals_written = {a: bytes(mu.mem_read(a, 1)) for a in sorted(self._journal)}
+        returned_str = None
+        if ret == "cstr" and not fault:
+            ptr = mu.reg_read(UC_X86_REG_RAX)
+            returned_str = self.read_cstr(ptr) if ptr else None  # before rollback: it may point at a written global
         for a, old in self._journal.items():
             mu.mem_write(a, old)
+        for a, old in self._setup_journal.items():
+            mu.mem_write(a, old)
         self._journal = {}
+        self._setup_journal = {}
+        observed, self._fakes, self._observe = self.observed, {}, {}
         if fault:
-            return fault, [], globals_written
+            return fault, [], globals_written, observed
         rax = mu.reg_read(UC_X86_REG_RAX)
         xmm0 = mu.reg_read(UC_X86_REG_XMM0)
         eax = rax & 0xFFFFFFFF
@@ -174,5 +340,8 @@ class Machine:
             "float": struct.unpack("<f", struct.pack("<I", xmm0 & 0xFFFFFFFF))[0],
             "double": struct.unpack("<d", struct.pack("<Q", xmm0 & MASK64))[0],
             "void": None,
+            "cstr": None,
         }[ret]
-        return value, [bytes(mu.mem_read(a, n)) for a, n in bufs], globals_written
+        if ret == "cstr":
+            value = returned_str
+        return value, [bytes(mu.mem_read(a, n)) for a, n in bufs], globals_written, observed

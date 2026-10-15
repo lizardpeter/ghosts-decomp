@@ -17,7 +17,8 @@ Writes:
   analysis/<build>/pdb/lines.tsv       function start -> (source file, first line) from line tables
   analysis/<build>/pdb/locals.tsv      parameter/local names and types per function, as Ghidra stack offsets
   analysis/<build>/pdb/statics.tsv     file- and function-static data: source file, scope, name, va, type
-  analysis/<build>/pdb/types.h         every PDB type as C++ with offsets and sizes (resymc), independent of Ghidra
+  analysis/<build>/pdb/types.h         every PDB type as C++ with offsets and sizes (resymc), independent of Ghidra;
+                                       negative enumerators corrected from llvm-pdbutil (resymc prints -1 as 0xff)
   analysis/<build>/pdb/types-errors.txt  types resymc could not rebuild
   analysis/<build>/pdb/raw/*.txt       llvm-pdbutil dumps the tables were parsed from
   analysis/<build>/map/publics.tsv     linker MAP publics: va, name, flags, lib, obj
@@ -326,6 +327,47 @@ def main():
         "role\tfile\tsha256\n" + "".join(f"{role}\t{p.name}\t{sha256(p)}\n" for role, p in inputs))
 
 
+def enum_values(types_dump: str) -> dict:
+    """{enum name: {enumerator: value}} from `llvm-pdbutil dump -types`."""
+    fieldlists, enums, cur, kind, name = {}, {}, None, None, None
+    for line in types_dump.splitlines():
+        m = re.match(r"\s*(0x[0-9A-F]+) \| (LF_\w+) \[size = \d+\](?: `(.*)`)?", line)
+        if m:
+            cur, kind, name = int(m.group(1), 16), m.group(2), m.group(3)
+            if kind == "LF_FIELDLIST":
+                fieldlists[cur] = {}
+            continue
+        if kind == "LF_FIELDLIST":
+            e = re.match(r"\s*- LF_ENUMERATE \[(\S+) = (-?\d+)\]", line)
+            if e:
+                fieldlists[cur][e.group(1)] = int(e.group(2))
+        elif kind == "LF_ENUM":
+            f = re.match(r"\s*field list: (0x[0-9A-F]+)", line)
+            if f and name not in enums and int(f.group(1), 16) in fieldlists:
+                enums[name] = fieldlists[int(f.group(1), 16)]
+    return enums
+
+
+def fix_enum_values(text: str, types_dump: str) -> str:
+    """resymc prints a negative enumerator stored as a one- or two-byte leaf as its raw low byte(s)
+    (`GPAD_PHYSAXIS_NONE = 0xff` where the PDB says -1). Put back the PDB's value wherever they differ."""
+    enums = enum_values(types_dump)
+    out, values = [], None
+    for line in text.split("\n"):
+        m = re.match(r"enum (\S+) : \w+ \{", line)
+        if m:
+            values = enums.get(m.group(1))
+        elif line.startswith("};"):
+            values = None
+        elif values is not None:
+            e = re.match(r"(\s*)(\w+) = (0x[0-9a-f]+|-?\d+),$", line)
+            if e and e.group(2) in values and int(e.group(3), 0) != values[e.group(2)]:
+                v = values[e.group(2)]
+                line = f"{e.group(1)}{e.group(2)} = {v if v < 0 else hex(v)},"
+        out.append(line)
+    return "\n".join(out)
+
+
 def extract_types(out, pdb):
     """All types as C++ from resymc: complete even where Ghidra's PDB loader gives up on a deep struct."""
     res = subprocess.run(["resymc", "dump-all", "-s", "-x", "-f", "portable", str(pdb), str(out / "pdb" / "types.h")],
@@ -339,7 +381,8 @@ def extract_types(out, pdb):
     fwd = sorted({l for c in chunks for l in c.splitlines()
                   if re.fullmatch(r"(struct|union|enum|class) [^{]+;", l)})
     defs = sorted({"\n".join(l for l in c.splitlines() if l not in fwd) for c in chunks} - {""})
-    path.write_text("\n".join(fwd) + "\n\n" + "\n\n".join(defs) + "\n")
+    text = "\n".join(fwd) + "\n\n" + "\n\n".join(defs) + "\n"
+    path.write_text(fix_enum_values(text, pdbutil("dump", "-types", str(pdb))))
     errors = sorted(line.split("] ", 1)[-1] for line in res.stderr.splitlines() if "ERROR" in line)
     (out / "pdb" / "types-errors.txt").write_text("".join(e + "\n" for e in errors))
     return len(errors)
