@@ -235,7 +235,9 @@ def parse_locals(text, va_of):
 
 
 def parse_statics(text, mods, va_of):
-    """S_LDATA32 records per compiland. Scope is '' for file statics, else the enclosing function."""
+    """S_LDATA32 records per compiland. Scope is '' for file statics, else the enclosing function.
+    Source is the module's repo-relative source: its PDB 'src file', or (VS2012 x64 leaves that empty) the one
+    derive_module_sources() found from its functions' line tables, so IW6_AT can name the compiland."""
     rows, mod, proc_end, proc = [], None, -1, ""
     lines = text.splitlines()
     for i, line in enumerate(lines):
@@ -256,7 +258,9 @@ def parse_statics(text, mods, va_of):
         a = re.search(r"addr = (\d{4}):(\d+)", lines[i + 1])
         ty = re.search(r"type = 0x[0-9A-F]+ \((.*)\), addr", lines[i + 1])
         if a and mod is not None and int(a.group(1)) != 0:  # segment 0: absolute/optimised away
-            rows.append([mods.get(mod, {}).get("source", ""), proc, name, va_of(int(a.group(1)), int(a.group(2))),
+            m = mods.get(mod, {})
+            src = rel_source(m["source"]) if m.get("source") else m.get("derived", "")
+            rows.append([src, proc, name, va_of(int(a.group(1)), int(a.group(2))),
                          ty.group(1) if ty else "", "tls" if kind == "S_LTHREAD32" else ""])
     return rows
 
@@ -328,6 +332,14 @@ def extract_types(out, pdb):
                          capture_output=True, text=True)
     if res.returncode != 0:
         sys.exit(f"resymc failed: {res.stderr[-2000:]}")
+    # resymc emits types in hash order, different on every run: sort for a reproducible file. Forward
+    # declarations first, then each definition (separated by blank lines) ordered by its first line.
+    path = out / "pdb" / "types.h"
+    chunks = [c.strip("\n") for c in path.read_text().split("\n\n") if c.strip()]
+    fwd = sorted({l for c in chunks for l in c.splitlines()
+                  if re.fullmatch(r"(struct|union|enum|class) [^{]+;", l)})
+    defs = sorted({"\n".join(l for l in c.splitlines() if l not in fwd) for c in chunks} - {""})
+    path.write_text("\n".join(fwd) + "\n\n" + "\n\n".join(defs) + "\n")
     errors = sorted(line.split("] ", 1)[-1] for line in res.stderr.splitlines() if "ERROR" in line)
     (out / "pdb" / "types-errors.txt").write_text("".join(e + "\n" for e in errors))
     return len(errors)
@@ -371,7 +383,7 @@ def extract_pdb(out, pdb, base):
     first_line = {va: (canon(s), ln) for va, (s, ln) in first_line.items()}
     statics = parse_statics(dumps["symbols"], mods, va_of)
     tsv(out / "pdb" / "statics.tsv", ["source", "scope", "name", "va", "type", "kind"],
-        sorted(([canon(rel_source(r[0])), *r[1:]] for r in statics), key=lambda r: (r[0], r[1], r[2])))
+        sorted(([canon(r[0]), *r[1:]] for r in statics), key=lambda r: (r[0], r[1], r[2])))
     tsv(out / "pdb" / "modules.tsv", ["module", "obj", "lib", "source"],
         [[m["index"], canon(rel_source(m["obj"])), canon(rel_source(m["lib"])), canon(rel_source(m["source"])) if m["source"] else canon(m.get("derived", ""))]
          for m in sorted(mods.values(), key=lambda m: m["index"])])
