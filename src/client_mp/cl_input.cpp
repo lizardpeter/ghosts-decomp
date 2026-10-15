@@ -397,3 +397,344 @@ void CL_ClearKeys(LocalClientNum_t localClientNum)
 {
 	memset(playersKb[localClientNum], 0, sizeof(playersKb[localClientNum]));
 }
+
+// ==== BEGIN cmdbuttons ====
+
+static_assert(__builtin_offsetof(clientActive_t, snap) == 0x8, "clientActive_t layout");
+static_assert(__builtin_offsetof(clSnapshot_s, ps_weapState) == 0x2AC, "playerState_s layout (Store build)");
+static_assert(__builtin_offsetof(clSnapshot_s, ps_weapon) == 0x41C, "playerState_s layout");
+static_assert(__builtin_offsetof(clSnapshot_s, ps_weapFlags) == 0x420, "playerState_s layout");
+static_assert(__builtin_offsetof(clSnapshot_s, ps_lastWeaponHand) == 0x43C, "playerState_s layout");
+static_assert(__builtin_offsetof(clSnapshot_s, ps_ammoInClip) == 0x530, "playerState_s layout");
+static_assert(sizeof(clSnapshot_s) == 0x34B8, "clSnapshot_s size (Store build)");
+static_assert(__builtin_offsetof(clientActive_t, stanceHeld) == 0x3548, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, wasSprinting) == 0x3558, "clientActive_t layout");
+
+
+// bgame/bg_weapons_util.h (inlined)
+static inline int BG_GetAmmoInClip(const clSnapshot_s *ps, Weapon weapon, bool isAlternate, PlayerHandIndex hand)
+{
+	const unsigned long long clipIndex = BG_ClipForWeapon(weapon, isAlternate);
+	for (int i = 0; i < MAX_AMMO_SLOTS; i++)
+	{
+		if (ps->ps_ammoInClip[i].clipIndex == clipIndex)
+			return ps->ps_ammoInClip[i].ammoCount[hand];
+	}
+	return 0;
+}
+
+// Store 14030D6B0  client_mp/cl_input.cpp (Black Ops' CL_KeyMove, cl_input_mp.cpp:1589), with CL_StanceButtonUpdate
+// and CL_AddCurrentStanceToCmd inlined
+void CL_KeyMove(LocalClientNum_t localClientNum, usercmd_s *cmd)
+{
+	kbutton_t *kb = playersKb[localClientNum];
+	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+
+	if (kb[KB_PRONE].active || kb[KB_DOWN].active)
+	{
+		cl->stance = CL_STANCE_STAND;
+		if (kb[KB_PRONE].active)
+		{
+			cmd->buttons |= 0x100;
+			cmd->buttons &= ~0x200u;
+		}
+		else
+		{
+			cmd->buttons |= 0x200;
+			cmd->buttons &= ~0x100u;
+		}
+		cmd->buttons |= 0x1000;
+	}
+	else
+	{
+		// CL_StanceButtonUpdate: the stance key held long enough goes prone (or stands), or slides when sprinting
+		if (cl->stanceHeld)
+		{
+			const int holdTime = cl->wasSprinting ? 200 : 300;
+			if ((int)((unsigned int)com_frameTime - (unsigned int)cl->stanceTime) >= holdTime)
+			{
+				if (cl->wasSprinting || cl->stance == 3)
+				{
+					// stanceHeld stays set
+					cl->wasSprinting = false;
+					cl->stance = 3;  // CL_STANCE_SLIDE
+				}
+				else
+				{
+					cl->stanceHeld = false;
+					cl->stance = cl->stancePosition == CL_STANCE_PRONE ? CL_STANCE_STAND : CL_STANCE_PRONE;
+				}
+			}
+		}
+
+		// CL_AddCurrentStanceToCmd
+		switch (cl->stance)
+		{
+		case CL_STANCE_CROUCH:
+			cmd->buttons |= 0x200;
+			cmd->buttons &= ~0x100u;
+			cmd->buttons &= ~0x1000u;
+			break;
+		case CL_STANCE_PRONE:
+			cmd->buttons |= 0x100;
+			cmd->buttons &= ~0x200u;
+			cmd->buttons &= ~0x1000u;
+			break;
+		case 3:  // CL_STANCE_SLIDE
+			cmd->buttons &= ~0x20000000u;
+			if (cl->stanceHeld)
+				cmd->buttons |= 0x20000000;
+			cmd->buttons &= ~0x100u;
+			cmd->buttons |= 0x200;
+			cmd->buttons &= ~0x1000u;
+			break;
+		default:
+			cmd->buttons &= ~0x100u;
+			cmd->buttons &= ~0x200u;
+			cmd->buttons &= ~0x1000u;
+			break;
+		}
+	}
+
+	if (kb[KB_SPEED].active != cl->usingAds)
+		cmd->buttons |= 0x800;
+	else
+		cmd->buttons &= ~0x800u;
+	if (cl->usingAds && !kb[KB_SPEED].active)
+		cmd->buttons |= 0x10000000;
+	else
+		cmd->buttons &= ~0x10000000u;
+
+	if (kb[KB_ADS_ACCESSIBLE].active || kb[KB_ADS_ACCESSIBLE].wasPressed)
+	{
+		const clSnapshot_s *ps = &cl->snap;
+		if (ps->ps_lastWeaponHand == WEAPON_HAND_LEFT)
+		{
+			if (ps->ps_weapState[WEAPON_HAND_LEFT].weaponState == WEAPON_FIRING)
+				cmd->buttons |= 0x80000;
+			else if (ps->ps_weapState[WEAPON_HAND_RIGHT].weaponState == WEAPON_FIRING)
+				cmd->buttons |= 0x1;
+			else if (kb[KB_ADS_ACCESSIBLE].wasPressed)
+			{
+				if (!BG_GetAmmoInClip(ps, ps->ps_weapon, (ps->ps_weapFlags & PWF_ALT_MODE) != 0, WEAPON_HAND_LEFT))
+					cmd->buttons |= 0x1;
+				else if (BG_ShotLimitReached((const playerState_s *)ps, ps->ps_weapon, WEAPON_HAND_LEFT))
+					cmd->buttons |= 0x1;
+				else
+					cmd->buttons |= 0x80000;
+			}
+		}
+		kb[KB_ADS_ACCESSIBLE].wasPressed = false;
+	}
+
+	int side = (int)(CL_KeyState(&kb[KB_MOVERIGHT]) * 127.0f);
+	side += (int)(CL_KeyState(&kb[KB_MOVELEFT]) * -127.0f);
+	int forward = (int)(CL_KeyState(&kb[KB_FORWARD]) * 127.0f);
+	forward += (int)(CL_KeyState(&kb[KB_BACK]) * -127.0f);
+
+	if (!kb[KB_BACK].active)
+	{
+		if (kb[KB_SPRINT].active || kb[KB_SPRINT].wasPressed)
+		{
+			cmd->buttons |= 0x2;
+			kb[KB_SPRINT].wasPressed = false;
+		}
+		else
+		{
+			cmd->buttons &= ~0x2u;
+		}
+	}
+
+	if (kb[KB_STRAFE].active && !(cmd->buttons & 0x2))
+	{
+		side += (int)(CL_KeyState(&kb[KB_RIGHT]) * 127.0f);
+		side += (int)(CL_KeyState(&kb[KB_LEFT]) * -127.0f);
+	}
+
+	if (cmd->buttons & 0x1)
+	{
+		if (BG_WeaponDef(cl->snap.ps_weapon, (cl->snap.ps_weapFlags & PWF_ALT_MODE) != 0)->meleeOnly)
+			cmd->buttons |= 0x4;
+	}
+
+	cmd->forwardmove = ClampChar(forward);
+	cmd->rightmove = ClampChar(side);
+
+	if (!CL_IsGamepadEnabled(localClientNum))
+		CG_HandleSpecialStateInput(localClientNum, &cmd->buttons);
+}
+
+// Store 14030B7D0  client_mp/cl_input.cpp (Black Ops' CL_CmdButtons, cl_input_mp.cpp:2337)
+void CL_CmdButtons(LocalClientNum_t localClientNum, usercmd_s *cmd)
+{
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_ATTACK, 0x1);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_BREATH, 0x2000);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_ZOOM, 0x4000000);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_FRAG, 0x4000);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_OFFHANDSECONDARY, 0x8000);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_MELEE, 0x4);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_ACTIVATE, 0x8);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_RELOAD, 0x10);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_USE_RELOAD, 0x20);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_PRONE, 0x100);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_CROUCH, 0x200);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_UP, 0x400);
+	CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_THROW, 0x80000);
+
+	// Key_IsCatcherActive(localClientNum, -1)
+	if (CL_GetLocalClientUIGlobals(localClientNum)->keyCatchers && !cl_bypassMouseInput->current.enabled
+	    && UI_GetActiveMenu(localClientNum) != UIMENU_SCOREBOARD)
+		cmd->buttons |= 0x800000;
+
+	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+	if (cl->snap.ps_weapFlags & 0x1)
+		cmd->buttons |= 0x10;
+
+	if (CL_GetLocalClientUIGlobals(localClientNum)->connectionState > CA_CONNECTED
+	    && (cl->snap.ps_pm_type == 2 || cl->snap.ps_pm_type == 3 || cl->snap.ps_pm_type == 5))  // PM_NOCLIP, PM_UFO, PM_SPECTATOR
+		CL_UpdateCmdButton(localClientNum, &cmd->buttons, KB_ANYUP, 0x400);
+
+	if (CL_KeyActiveOrPressed(localClientNum, KB_ADS_ACCESSIBLE))
+		cmd->buttons |= 0x800;
+	if (CL_KeyActiveOrPressed(localClientNum, KB_ATTACK_ACCESSIBLE))
+		cmd->buttons |= 0x1;
+	if (cl->snap.ps_lastWeaponHand == WEAPON_HAND_LEFT && CL_KeyActiveOrPressed(localClientNum, KB_ATTACK_ACCESSIBLE))
+		cmd->buttons |= 0x80000;
+	playersKb[localClientNum][KB_ATTACK_ACCESSIBLE].wasPressed = false;
+}
+
+// ==== END cmdbuttons ====
+
+// ==== BEGIN gamepadmove ====
+
+enum GamePadButton
+{
+	GPAD_B = 0x10002000,
+	GPAD_L_TRIG = 0x20000000,
+	GPAD_R_TRIG = 0x20000001,
+};
+
+static_assert(__builtin_offsetof(clSnapshot_s, ps_eFlags) == 0x124, "playerState_s layout (Store build)");
+static_assert(__builtin_offsetof(usercmd_s, airburstMarkDistance) == 0x1E, "usercmd_s layout");
+static_assert(__builtin_offsetof(GamerSettingState, invertedPitch) == 0x44, "GamerSettingState layout");
+
+float CL_GamepadAxisValue(LocalClientNum_t localClientNum, GamepadVirtualAxis virtualAxis);  // client/cl_gamepad.cpp
+float GPad_GetButton(int portIndex, GamePadButton button);               // win32/win_gamepad.cpp
+bool CG_ShouldUpdateViewAngles(LocalClientNum_t localClientNum);         // cgame_mp/cg_gamepad.cpp
+void AimAssist_UpdateGamePadInput(const AimInput *input, AimOutput *output);  // aim_assist/aim_assist.cpp
+float sub_140263E10(const playerState_s *ps, float yawAxis);  // bgame: scales the yaw stick down near the prone yaw limit (name unknown)
+int sub_1402F7090(LocalClientNum_t localClientNum, const playerState_s *ps, unsigned int buttons, int *distance);  // cgame: airburst mark distance (name unknown)
+
+// Store 14030D390: the sign of the pitch stick, +1 with the profile's inverted pitch (name unknown)
+float sub_14030D390(LocalClientNum_t localClientNum)
+{
+	return GamerProfile_GetProfileSettings(CL_GetFirstActiveControllerIndex())->invertedPitch ? 1.0f : -1.0f;
+}
+
+// Store 14030CF10  (Black Ops: client_mp/cl_input_mp.cpp:1804)
+void CL_GamepadMove(LocalClientNum_t localClientNum, float frametime_base, usercmd_s *cmd)
+{
+	if (!CL_IsGamepadEnabled(localClientNum))
+		return;
+	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+	if (cl->snap.ps_pm_flags & PMF_NO_MOUSE_LOOK)
+		return;
+
+	const int controllerIndex = CL_GetFirstActiveControllerIndex();
+	float pitch = CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_PITCH);
+	pitch *= sub_14030D390(localClientNum);
+	const float yaw = -CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_YAW);
+	const float forward = CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_FORWARD);
+	const float side = CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_SIDE);
+	const float attack = CL_GamepadAxisValue(localClientNum, GPAD_VIRTAXIS_ATTACK);
+
+	// scale so that the stick's square maps onto the full move range
+	float moveScale = 127.0f;
+	if (fabs(side) > 0.0f || fabs(forward) > 0.0f)
+	{
+		float length;
+		if (fabs(side) > fabs(forward))
+			length = forward / side;
+		else
+			length = side / forward;
+		moveScale = sqrtf(length * length + 1.0f) * 127.0f;
+	}
+	int rightMove = (int)(moveScale * side);
+	int forwardMove = (int)(moveScale * forward);
+	// a centred stick keeps the keyboard's move, clamped again (-128 becomes -127)
+	if (!rightMove)
+		rightMove = cmd->rightmove;
+	cmd->rightmove = ClampChar(rightMove);
+	if (!forwardMove)
+		forwardMove = cmd->forwardmove;
+	cmd->forwardmove = ClampChar(forwardMove);
+
+	kbutton_t *kb = playersKb[localClientNum];
+	if (kb[KB_SPEED].active == !cl->usingAds)
+		cmd->buttons |= 0x800;
+	if (!kb[KB_BACK].active)
+	{
+		if (kb[KB_SPRINT].active || kb[KB_SPRINT].wasPressed)
+		{
+			cmd->buttons |= 0x2;
+			kb[KB_SPRINT].wasPressed = false;
+		}
+		else
+		{
+			cmd->buttons &= ~0x2u;
+		}
+	}
+
+	if (attack >= 0.8f)
+		cmd->buttons |= 0x1;
+	if (cmd->buttons & 0x1)
+	{
+		if (BG_WeaponDef(cl->snap.ps_weapon, (cl->snap.ps_weapFlags >> 14) & 1)->meleeOnly)
+			cmd->buttons |= 0x4;
+	}
+
+	if (cl->snap.ps_eFlags & 0x200000)
+	{
+		if (GPad_GetButton(controllerIndex, GPAD_R_TRIG) != 0.0f)
+			cmd->buttons |= 0x1000000;
+		if (GPad_GetButton(controllerIndex, GPAD_L_TRIG) != 0.0f)
+			cmd->buttons |= 0x2000000;
+		if (GPad_GetButton(controllerIndex, GPAD_B) != 0.0f)
+			cmd->buttons |= 0x2000000;
+	}
+
+	CG_HandleSpecialStateInput(localClientNum, &cmd->buttons);
+	if (CG_ShouldUpdateViewAngles(localClientNum))
+	{
+		AimInput aimInput;
+		aimInput.deltaTime = frametime_base;
+		aimInput.deltaTimeScaled = (float)cls.frametime * 0.001f;
+		aimInput.pitch = cl->clViewangles[0];
+		aimInput.pitchAxis = pitch;
+		aimInput.pitchMax = cl->cgameMaxPitchSpeed;
+		aimInput.yaw = cl->clViewangles[1];
+		aimInput.yawAxis = sub_140263E10(CG_GetPredictedPlayerState(localClientNum), yaw);
+		aimInput.yawMax = cl->cgameMaxYawSpeed;
+		aimInput.forwardAxis = forward;
+		aimInput.rightAxis = side;
+		aimInput.buttons = cmd->buttons;
+		aimInput.localClientNum = localClientNum;
+		aimInput.meleeChargeEnt = cmd->meleeChargeEnt;
+		aimInput.meleeChargeDist = cmd->meleeChargeDist;
+
+		AimOutput aimOutput;
+		AimAssist_UpdateGamePadInput(&aimInput, &aimOutput);
+		cl->clViewangles[0] = aimOutput.pitch;
+		cl->clViewangles[1] = aimOutput.yaw;
+		sub_14027B800(&aimOutput, cmd);
+	}
+
+	int airburstDistance;
+	if (sub_1402F7090(localClientNum, (const playerState_s *)&cl->snap, cmd->buttons, &airburstDistance))
+	{
+		cmd->buttons |= 0x8000000;
+		cmd->airburstMarkDistance = (unsigned short)airburstDistance;
+	}
+}
+
+// ==== END gamepadmove ====

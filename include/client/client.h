@@ -285,7 +285,9 @@ struct clientStatic_t
 // bytes in the Store build, absent from the server PDB.
 struct GamerSettingState
 {
-	unsigned char unknown0[0x2BC];
+	unsigned char unknown0[0x44];
+	bool invertedPitch;  // the profile's "invertedPitch" (profile_toggleInvertedPitch flips it)
+	unsigned char unknown45[0x2BC - 0x45];
 	bool gpadEnabled;  // the profile's "gpadEnabled": mouse movement is ignored while it is set
 };
 

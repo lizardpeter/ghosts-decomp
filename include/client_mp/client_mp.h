@@ -7,6 +7,7 @@
 #pragma once
 
 #include "client/client.h"
+#include "bgame/bg_weapons.h"
 
 struct usercmd_s
 {
@@ -37,7 +38,18 @@ struct clSnapshot_s
 	int ps_pm_type;
 	int ps_pm_time;
 	int ps_pm_flags;
-	unsigned char rest[0x34B8 - 0x10];
+	unsigned char unknown10[0x124 - 0x10];
+	int ps_eFlags;
+	unsigned char unknown128[0x2AC - 0x128];
+	PlayerActiveWeaponState ps_weapState[2];  // per hand
+	unsigned char unknown2E4[0x41C - 0x2E4];
+	Weapon ps_weapon;                         // weapCommon.weapon
+	int ps_weapFlags;                         // weapCommon.weapFlags
+	unsigned char unknown424[0x43C - 0x424];
+	PlayerHandIndex ps_lastWeaponHand;        // weapCommon.lastWeaponHand
+	GlobalAmmo ps_ammoNotInClip[MAX_AMMO_SLOTS];
+	ClipAmmo ps_ammoInClip[MAX_AMMO_SLOTS];
+	unsigned char rest[0x34B8 - 0x620];
 };
 
 #define PMF_NO_MOUSE_LOOK 0x800  // pm_flags bit that stops mouse look (name unknown; Black Ops tests the same bit)
@@ -123,3 +135,4 @@ struct AimOutput
 };
 
 void AimAssist_UpdateMouseInput(const AimInput *input, AimOutput *output);  // aim_assist/aim_assist.cpp
+void CG_HandleSpecialStateInput(LocalClientNum_t localClientNum, unsigned int *buttons);  // cgame_mp/cg_gamepad.cpp

@@ -4,6 +4,8 @@
 // axis bindings and button events it keeps. Functions appear in original line order; each is tagged with its
 // address in that build and its original line.
 
+#include <math.h>
+
 #include <iw6_static.h>
 
 #include "client/client.h"
@@ -235,3 +237,33 @@ void CL_GamepadButtonEvent(LocalClientNum_t localClientNum, int controllerIndex,
 		return;
 	CL_ExecBinding(localClientNum, binding, key, 0);
 }
+
+// ==== BEGIN gamepadmove ====
+
+// The other axis on the same stick, for the squared mapping (none for the triggers).
+IW6_STATIC const GamepadPhysicalAxis axisSameStick[GPAD_PHYSAXIS_COUNT] IW6_AT("", "axisSameStick")
+	IW6_INIT(= { GPAD_PHYSAXIS_RSTICK_Y, GPAD_PHYSAXIS_RSTICK_X, GPAD_PHYSAXIS_LSTICK_Y, GPAD_PHYSAXIS_LSTICK_X,
+	             GPAD_PHYSAXIS_NONE, GPAD_PHYSAXIS_NONE });
+
+// Store 14030A9F0  (Black Ops: client/cl_gamepad.cpp:706; the Store build has no DevGui test and no range asserts)
+float CL_GamepadAxisValue(LocalClientNum_t localClientNum, GamepadVirtualAxis virtualAxis)
+{
+	const GamepadPhysicalAxis physicalAxis = gaGlobs[localClientNum].virtualAxes[virtualAxis].physicalAxis;
+	if (physicalAxis == GPAD_PHYSAXIS_NONE)
+		return 0.0f;
+
+	float axisDeflection = (float)gaGlobs[localClientNum].axesValues[physicalAxis] * (1.0f / 65535.0f);
+	if (gaGlobs[localClientNum].virtualAxes[virtualAxis].mapType == GPAD_MAP_SQUARED)
+	{
+		const GamepadPhysicalAxis otherAxis = axisSameStick[physicalAxis];
+		float otherAxisDeflection;
+		if (otherAxis == GPAD_PHYSAXIS_NONE)
+			otherAxisDeflection = 0.0f;
+		else
+			otherAxisDeflection = (float)gaGlobs[localClientNum].axesValues[otherAxis] * (1.0f / 65535.0f);
+		axisDeflection *= sqrtf(otherAxisDeflection * otherAxisDeflection + axisDeflection * axisDeflection);
+	}
+	return axisDeflection;
+}
+
+// ==== END gamepadmove ====

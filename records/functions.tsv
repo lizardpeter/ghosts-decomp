@@ -144,3 +144,8 @@ iw6mp64_MSStore_ship	14030EE10	matches	src/client_mp/cl_input.cpp	differential t
 iw6mp64_MSStore_ship	14030D670	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
 iw6mp64_MSStore_ship	14030E620	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
 iw6mp64_MSStore_ship	14030B6B0	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030D6B0	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030B7D0	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030CF10	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030D390	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14030A9F0	matches	src/client/cl_gamepad.cpp	differential test against the Store build (emulated)
