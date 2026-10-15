@@ -1,0 +1,79 @@
+2026-10-15 18:59:07 INFO  (LoggingInitialization) Using log config file: jar:file:/opt/ghidra/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml  
+2026-10-15 18:59:07 INFO  (LoggingInitialization) Using log file: /tmp/out/decompile-1.log  
+2026-10-15 18:59:07 DEBUG (GhidraObjectInputFilter) Including serial input filter: FileSystem/data/client.rmi.serial.filter  
+2026-10-15 18:59:07 INFO  (Preferences) Loading user preferences: /home/runner/.config/ghidra/ghidra_12.1.4_PUBLIC/preferences  
+2026-10-15 18:59:07 INFO  (ClassSearcher) Searching for classes...  
+2026-10-15 18:59:08 INFO  (ClassSearcher) Class search complete (1059 ms)  
+2026-10-15 18:59:09 INFO  (DefaultSSLContextInitializer) Initializing SSL Context  
+2026-10-15 18:59:10 INFO  (SecureRandomFactory) Initializing Random Number Generator...  
+2026-10-15 18:59:10 INFO  (SecureRandomFactory) Random Number Generator initialization complete: NativePRNGNonBlocking  
+2026-10-15 18:59:10 INFO  (DefaultTrustManagerFactory) Trust manager disabled, cacerts have not been set  
+2026-10-15 18:59:10 INFO  (FileCacheMaintenanceDaemon) Starting cache cleanup: /var/tmp/runner-ghidra/fscache2  
+2026-10-15 18:59:10 INFO  (FileCacheMaintenanceDaemon) Finished cache cleanup, estimated storage used: 0  
+2026-10-15 18:59:11 INFO  (AnalyzeHeadless) Headless startup complete (5881 ms)  
+2026-10-15 18:59:11 INFO  (ClassSearcher) Class searcher loaded 59 extension points (20 false positives)  
+2026-10-15 18:59:11 INFO  (HeadlessAnalyzer) HEADLESS Script Paths:
+    /opt/ghidra/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /home/runner/work/ghosts-decomp/ghosts-decomp/tools/ghidra
+    /opt/ghidra/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /opt/ghidra/Ghidra/Processors/DATA/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /opt/ghidra/Ghidra/Processors/JVM/ghidra_scripts
+    /opt/ghidra/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/VersionTracking/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/PyGhidra/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/Base/ghidra_scripts
+    /opt/ghidra/Ghidra/Processors/Atmel/ghidra_scripts
+    /opt/ghidra/Ghidra/Debug/Debugger/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/Decompiler/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/FunctionID/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/PDB/ghidra_scripts
+    /opt/ghidra/Ghidra/Processors/8051/ghidra_scripts
+    /opt/ghidra/Ghidra/Processors/PIC/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/FileFormats/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/BSim/ghidra_scripts
+    /opt/ghidra/Ghidra/Features/BytePatterns/ghidra_scripts  
+2026-10-15 18:59:11 INFO  (HeadlessAnalyzer) HEADLESS: execution starts  
+2026-10-15 18:59:11 INFO  (HeadlessAnalyzer) Opening existing project: /tmp/proj/iw6  
+2026-10-15 18:59:12 DEBUG (DefaultProjectManager) No tools found; Installing default tools  
+2026-10-15 18:59:12 DEBUG (DefaultProjectManager) 	no recent project directories found  
+2026-10-15 18:59:12 INFO  (HeadlessProject) Opening project: /tmp/proj/iw6  
+2026-10-15 18:59:14 INFO  (HeadlessAnalyzer) REPORT: Processing read-only project file: /iw6mp64_ship.exe  
+2026-10-15 18:59:14 INFO  (HeadlessAnalyzer) REPORT: Execute script: Decompile.java '/tmp/out/decomp-1.jsonl' '1' '6' '90'   
+2026-10-15 18:59:16 INFO  (HeadlessAnalyzer) SCRIPT: /home/runner/work/ghosts-decomp/ghosts-decomp/tools/ghidra/Decompile.java  
+2026-10-15 18:59:31 INFO  (GhidraScript) Decompile.java> shard 1: 1000 ok, 0 failed, 14s  
+2026-10-15 18:59:33 WARN  (DecompileCallback) Decompiling 140328ca0, pcode error at 140328cab: Unable to resolve constructor at 140328cab  
+2026-10-15 18:59:35 WARN  (DecompileCallback) Decompiling 140376e60, pcode error at 140376e8c: Unable to resolve constructor at 140376e8c  
+2026-10-15 18:59:39 WARN  (DecompileCallback) Decompiling 140401310, pcode error at 140401689: Unable to resolve constructor at 140401689  
+2026-10-15 18:59:40 WARN  (DecompileCallback) Decompiling 140414820, pcode error at 140414824: Unable to resolve constructor at 140414824  
+2026-10-15 18:59:40 WARN  (DecompileCallback) Decompiling 14041e760, pcode error at 14041e776: Unable to resolve constructor at 14041e776  
+2026-10-15 18:59:41 WARN  (DecompileCallback) Decompiling 140431e10, pcode error at 140431e10: Unable to resolve constructor at 140431e10  
+2026-10-15 18:59:42 INFO  (GhidraScript) Decompile.java> shard 1: 2000 ok, 0 failed, 25s  
+2026-10-15 18:59:44 WARN  (DecompileCallback) Decompiling 14049d390, pcode error at 14049d423: Unable to resolve constructor at 14049d423  
+2026-10-15 18:59:44 WARN  (DecompileCallback) Decompiling 14049d390, pcode error at 14049d3ec: Unable to resolve constructor at 14049d3ec  
+2026-10-15 18:59:46 WARN  (DecompileCallback) Decompiling 1404e4bf0, pcode error at 1404e4bf3: Unable to resolve constructor at 1404e4bf3  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 140586930, pcode error at 140586934: Unable to resolve constructor at 140586934  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 140589ed0, pcode error at 140589ee2: Unable to resolve constructor at 140589ee2  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 140589ed0, pcode error at 140589f02: Unable to resolve constructor at 140589f02  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 14058ada0, pcode error at 14058adae: Unable to resolve constructor at 14058adae  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 14058bcf0, pcode error at 14058bcf8: Unable to resolve constructor at 14058bcf8  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 14058c740, pcode error at 14058c740: Unable to resolve constructor at 14058c740  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 14058d180, pcode error at 14058d181: Unable to resolve constructor at 14058d181  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 14058e490, pcode error at 14058e496: Unable to resolve constructor at 14058e496  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 14058e490, pcode error at 14058e4b1: Unable to resolve constructor at 14058e4b1  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 140591850, pcode error at 14059189d: Unable to resolve constructor at 14059189d  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 140596910, pcode error at 140596927: Unable to resolve constructor at 140596927  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 1405975b0, pcode error at 1405975ba: Unable to resolve constructor at 1405975ba  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 140598190, pcode error at 140598191: Unable to resolve constructor at 140598191  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 1405a4d40, pcode error at 1405a4d40: Unable to resolve constructor at 1405a4d40  
+2026-10-15 18:59:50 WARN  (DecompileCallback) Decompiling 1405a6a10, pcode error at 1405a6a12: Unable to resolve constructor at 1405a6a12  
+2026-10-15 18:59:53 INFO  (GhidraScript) Decompile.java> shard 1: 3000 ok, 0 failed, 37s  
+2026-10-15 18:59:59 WARN  (DecompileCallback) Decompiling 1406cad70, pcode error at 1406cad75: Unable to resolve constructor at 1406cad75  
+2026-10-15 18:59:59 WARN  (DecompileCallback) Decompiling 1406cd3a0, pcode error at 1406cd3b3: Unable to resolve constructor at 1406cd3b3  
+2026-10-15 18:59:59 WARN  (DecompileCallback) Decompiling 1406ce490, pcode error at 1406ce490: Unable to resolve constructor at 1406ce490  
+2026-10-15 18:59:59 WARN  (DecompileCallback) Decompiling 1406d1610, pcode error at 1406d1610: Unable to resolve constructor at 1406d1610  
+2026-10-15 19:00:06 INFO  (GhidraScript) Decompile.java> shard 1: 4000 ok, 0 failed, 49s  
+2026-10-15 19:00:14 INFO  (GhidraScript) Decompile.java> shard 1 done: 4655 ok, 0 failed  
