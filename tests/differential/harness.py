@@ -227,6 +227,12 @@ class Machine:
         for name in self._stub_names.values():
             if name.split("!", 1)[1] in CRT_IMPORTS and name.startswith("api-ms-win-crt-math"):
                 self._import_fns[name.lower()] = CRT_IMPORTS[name.split("!", 1)[1]]
+            # memory routines (VCRUNTIME140.dll in the Store build) really copy and fill, with their writes journaled
+            # like an instruction's, so they are compared and rolled back
+            elif name.split("!", 1)[1] in ("memcpy", "memmove"):
+                self._import_fns[name.lower()] = self._memmove
+            elif name.split("!", 1)[1] == "memset":
+                self._import_fns[name.lower()] = self._memset
         self.imports_called = []
         # Writes into any mapped image (the original's globals) are journaled so each call can be
         # rolled back and its side effects compared: see call().
@@ -254,6 +260,28 @@ class Machine:
                     if a not in self._journal:
                         self._journal[a] = bytes(mu.mem_read(a, 1))
                 return
+
+    def _emulated_write(self, va, data):
+        """A write made for the program by Python (an import such as memcpy): journaled as _on_write does."""
+        for lo, hi in self._ranges:
+            a0, a1 = max(va, lo), min(va + len(data), hi)
+            if a0 < a1:
+                old = bytes(self.mu.mem_read(a0, a1 - a0))
+                for i in range(a1 - a0):
+                    self._journal.setdefault(a0 + i, old[i:i + 1])
+        self.mu.mem_write(va, bytes(data))
+
+    def _memmove(self, mu):
+        dst, src, n = mu.reg_read(UC_X86_REG_RCX), mu.reg_read(UC_X86_REG_RDX), mu.reg_read(UC_X86_REG_R8)
+        if n:
+            self._emulated_write(dst, mu.mem_read(src, n))
+        mu.reg_write(UC_X86_REG_RAX, dst)
+
+    def _memset(self, mu):
+        dst, c, n = mu.reg_read(UC_X86_REG_RCX), mu.reg_read(UC_X86_REG_RDX) & 0xFF, mu.reg_read(UC_X86_REG_R8)
+        if n:
+            self._emulated_write(dst, bytes([c]) * n)
+        mu.reg_write(UC_X86_REG_RAX, dst)
 
     def _setup_write(self, va, data):
         for i in range(len(data)):

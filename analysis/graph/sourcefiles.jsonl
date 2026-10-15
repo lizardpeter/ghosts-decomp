@@ -734,6 +734,7 @@
 {"path": "client_mp/cl_cgame_mp.cpp", "subsystem": "client_mp"}
 {"path": "client_mp/cl_input.cpp", "subsystem": "client_mp"}
 {"path": "client_mp/cl_main_mp.cpp", "subsystem": "client_mp"}
+{"path": "client_mp/cl_net_chan_mp.cpp", "subsystem": "client_mp"}
 {"path": "client_mp/cl_parse_mp.cpp", "subsystem": "client_mp"}
 {"path": "client_mp/cl_pose_mp.cpp", "subsystem": "client_mp"}
 {"path": "client_mp/cl_rank.cpp", "subsystem": "client_mp"}

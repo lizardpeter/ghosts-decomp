@@ -21,6 +21,7 @@
 #include "client/client.h"
 #include "client_mp/client_mp.h"
 #include "qcommon/dvar.h"
+#include "qcommon/qcommon.h"
 
 #define IW6_SOURCE "client_mp/cl_input.cpp"
 
@@ -738,3 +739,248 @@ void CL_GamepadMove(LocalClientNum_t localClientNum, float frametime_base, userc
 }
 
 // ==== END gamepadmove ====
+
+// ==== BEGIN sendcmd ====
+// Building user commands and sending them to the server (Store build). Names and structure follow Black Ops'
+// CL_CreateNewCommands (:2706), CL_WritePacket (:2842), CL_SendCmd (:3082), CL_CreateCmdsDuringConnection (:3092)
+// and CL_Input (:3107). The Store build has no demo checks; instead an unidentified client mode (unk_143E96824)
+// replaces the user's input by a default command (1, 2) and stops sending packets (2).
+
+extern int unk_143E96824;                  // client_mp: a client mode, 0..3 (name unknown)
+extern const dvar_t *cl_maxpackets;        // client_mp/cl_main_mp.cpp
+extern const dvar_t *cl_packetdup;         // client_mp/cl_main_mp.cpp
+
+// The Store build's tamper check on clViewangles ('data_validation_enabled'): sub_14017AB80 checks the data
+// against its recorded copy, sub_14017AAE0 records it again after a legitimate change (names unknown).
+struct DataValidation;
+extern DataValidation unk_140CFC520;
+void sub_14017AB80(DataValidation *validation, const void *data, int offset, int size, bool force);
+void sub_14017AAE0(DataValidation *validation, const void *data, int offset, int size);
+
+usercmd_s CL_CreateCmd(LocalClientNum_t localClientNum);  // Store 14030EB60
+void CL_SyncGpu(int (*WorkCallback)(unsigned long long));  // client_mp/cl_main_mp.cpp
+void IN_Frame();                                            // win32/win_input.cpp
+bool sub_140345260(LocalClientNum_t localClientNum);        // true for local client 0 (name unknown)
+bool CL_Netchan_Transmit(netchan_t *chan, unsigned char *data, int length);  // client_mp/cl_net_chan_mp.cpp
+void CL_Netchan_TransmitNextFragment(netchan_t *chan);                        // client_mp/cl_net_chan_mp.cpp
+void CL_SavePredictedOriginForServerTime(clientActive_t *cl, int serverTime); // client_mp/cl_parse_mp.cpp
+void sub_14031AA70(clientActive_t *cl, int serverTime, const PlayerVehicleState *vehState);  // archives the vehicle state (name unknown)
+void sub_1403125F0(LocalClientNum_t localClientNum, const char *reason, int unknown);  // drops the connection (name unknown)
+
+static_assert(__builtin_offsetof(clientActive_t, serverId) == 0x34E0, "clientActive_t layout (Store build)");
+static_assert(__builtin_offsetof(clientActive_t, snap.valid) == 0x347C, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, snap.messageNum) == 0x3488, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, cgameOrigin) == 0x3580, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, cgamePlayerVehState) == 0x3598, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, cgamePredictedDataServerTime) == 0x360C, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, cmds) == 0x3628, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, cmdNumber) == 0x5428, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, clientArchiveIndex) == 0xE02C, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, packetBackupMask) == 0xE034, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, outPackets) == 0xE044, "clientActive_t layout");
+static_assert(sizeof(usercmd_s) == 0x3C, "usercmd_s layout");
+static_assert(sizeof(PlayerVehicleState) == 0x68, "PlayerVehicleState layout");
+static_assert(__builtin_offsetof(clientConnection_t, connectLastSendTime) == 0x1C, "clientConnection_t layout (Store build)");
+static_assert(__builtin_offsetof(clientConnection_t, checksumFeed) == 0x128, "clientConnection_t layout");
+static_assert(__builtin_offsetof(clientConnection_t, reliableCommands) == 0x134, "clientConnection_t layout");
+static_assert(__builtin_offsetof(clientConnection_t, serverMessageSequence) == 0x20134, "clientConnection_t layout");
+static_assert(__builtin_offsetof(clientConnection_t, serverCommands) == 0x20140, "clientConnection_t layout");
+static_assert(__builtin_offsetof(clientConnection_t, netchan) == 0x40148, "clientConnection_t layout");
+static_assert(__builtin_offsetof(netchan_t, unsentFragments) == 0x3C, "netchan_t layout");
+static_assert(__builtin_offsetof(clientStatic_t, realtime) == 0x120, "clientStatic_t layout");
+static_assert(sizeof(msg_t) == 0x38, "msg_t layout");
+
+// Store 14030BB00  client_mp/cl_input.cpp (Black Ops :2706)
+void CL_CreateNewCommands(LocalClientNum_t localClientNum)
+{
+	if (CL_GetLocalClientUIGlobals(localClientNum)->connectionState < CA_PRIMED)
+		return;
+
+	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+	const int mode = unk_143E96824;
+	++cl->cmdNumber;
+	const int cmdNum = cl->cmdNumber & CMD_MASK;
+	if (mode != 0 && mode != 3)
+	{
+		MSG_SetDefaultUserCmd((const playerState_s *)&cl->snap, &cl->cmds[cmdNum]);
+		return;
+	}
+
+	sub_14017AB80(&unk_140CFC520, cl->clViewangles, 0, sizeof(cl->clViewangles), false);
+	const usercmd_s cmd = CL_CreateCmd(localClientNum);
+	cl->cmds[cmdNum] = cmd;
+	sub_14017AAE0(&unk_140CFC520, cl->clViewangles, 0, sizeof(cl->clViewangles));
+}
+
+// Store 14030BA90  client_mp/cl_input.cpp (Black Ops :3092)
+void CL_CreateCmdsDuringConnection(LocalClientNum_t localClientNum)
+{
+	const connstate_t clcState = CL_GetLocalClientUIGlobals(localClientNum)->connectionState;
+	if (clcState >= CA_CONNECTED && clcState != CA_ACTIVE)
+	{
+		CL_SyncGpu(nullptr);
+		CL_CreateNewCommands(localClientNum);
+	}
+}
+
+// Store 14030BAD0: CL_CreateCmdsDuringConnection for an active connection (no caller in the Store build; name unknown)
+void sub_14030BAD0(LocalClientNum_t localClientNum)
+{
+	if (CL_GetLocalClientUIGlobals(localClientNum)->connectionState == CA_ACTIVE)
+	{
+		CL_SyncGpu(nullptr);
+		CL_CreateNewCommands(localClientNum);
+	}
+}
+
+// Store 14030D610  client_mp/cl_input.cpp (Black Ops :3107): the Store build reads the mouse here
+void CL_Input(LocalClientNum_t localClientNum)
+{
+	if (CL_GetLocalClientUIGlobals(localClientNum)->connectionState != CA_ACTIVE)
+		return;
+
+	if (sub_140345260(localClientNum))
+	{
+		cls.inputUpdatedPrevFrame = true;
+		IN_Frame();
+	}
+	CL_CreateNewCommands(localClientNum);
+}
+
+// Store 14030E710  client_mp/cl_input.cpp (Black Ops :2842)
+void CL_WritePacket(LocalClientNum_t localClientNum)
+{
+	unsigned char data[2048];
+	unsigned char compressedBuf[2048];
+	usercmd_s nullcmd;
+	msg_t buf;
+
+	const connstate_t connstate = CL_GetLocalClientUIGlobals(localClientNum)->connectionState;
+	if (connstate == CA_CINEMATIC || connstate == CA_LOGO || connstate == CA_SENDINGSTATS)
+		return;
+
+	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+	clientConnection_t *clc = CL_GetLocalClientConnection(localClientNum);
+
+	MSG_SetDefaultUserCmd((const playerState_s *)&cl->snap, &nullcmd);
+	const usercmd_s *oldcmd = &nullcmd;
+	memset(&buf, 0, sizeof(buf));
+	MSG_Init(&buf, data, sizeof(data));
+
+	// write the current serverId so the server can tell if this is from the current gameState
+	MSG_WriteByte(&buf, cl->serverId);
+	// write the last message we received, which can be used for delta compression, and the current server
+	// command sequence
+	MSG_WriteLong(&buf, clc->serverMessageSequence);
+	MSG_WriteLong(&buf, clc->serverCommandSequence);
+
+	// write any unacknowledged clientCommands
+	for (int i = clc->reliableAcknowledge + 1; i <= clc->reliableSequence; i++)
+	{
+		MSG_WriteBits(&buf, 2, 3);  // clc_clientCommand
+		MSG_WriteLong(&buf, i);
+		MSG_WriteString(&buf, clc->reliableCommands[i & 127]);
+	}
+
+	// we want to send all the usercmds that were generated in the last few packet, so even if a couple packets
+	// are dropped in a row, all the cmds will make it to the server
+	const int oldPacketNum = (clc->netchan.outgoingSequence - cl_packetdup->current.integer - 1) & cl->packetBackupMask;
+	int count = cl->cmdNumber - cl->outPackets[oldPacketNum].p_cmdNumber;
+	if (count > MAX_PACKET_USERCMDS)
+		count = MAX_PACKET_USERCMDS;
+	if (count >= 1)
+	{
+		// begin a client move command
+		if (cl->snap.valid && clc->serverMessageSequence == cl->snap.messageNum)
+			MSG_WriteBits(&buf, 0, 3);  // clc_move
+		else
+			MSG_WriteBits(&buf, 1, 3);  // clc_moveNoDelta
+
+		// write the command count
+		MSG_WriteByte(&buf, count);
+
+		// use the checksum feed in the key, the message acknowledge and the last server command
+		int key = clc->checksumFeed ^ clc->serverMessageSequence;
+		key ^= Com_HashKey(clc->serverCommands[clc->serverCommandSequence & 127], 32);
+
+		// write all the commands, including the predicted command
+		for (int i = 0; i < count; i++)
+		{
+			const usercmd_s *cmd = &cl->cmds[(cl->cmdNumber - count + 1 + i) & CMD_MASK];
+			MSG_WriteDeltaUsercmdKey(&buf, key, oldcmd, cmd);
+			oldcmd = cmd;
+		}
+
+		// the predicted origin goes out as the floats' bits
+		MSG_WriteLong(&buf, *(const int *)&cl->cgameOrigin[0]);
+		MSG_WriteLong(&buf, *(const int *)&cl->cgameOrigin[1]);
+		MSG_WriteLong(&buf, *(const int *)&cl->cgameOrigin[2]);
+		MSG_WriteLong(&buf, cl->cgamePredictedDataServerTime);
+		if (cl->cgamePlayerVehState.entity && cl->cgamePlayerVehState.entity != 0x7FF)
+		{
+			MSG_WriteBit1(&buf);
+			MSG_WriteLong(&buf, *(const int *)&cl->cgamePlayerVehState.origin[0]);
+			MSG_WriteLong(&buf, *(const int *)&cl->cgamePlayerVehState.origin[1]);
+			MSG_WriteLong(&buf, *(const int *)&cl->cgamePlayerVehState.origin[2]);
+			MSG_WriteLong(&buf, cl->cgamePlayerVehState.splineId);
+			MSG_WriteLong(&buf, cl->cgamePlayerVehState.targetEntity);
+		}
+		else
+		{
+			MSG_WriteBit0(&buf);
+		}
+		sub_14031AA70(cl, cl->cgamePredictedDataServerTime, &cl->cgamePlayerVehState);
+		CL_SavePredictedOriginForServerTime(cl, cl->cgamePredictedDataServerTime);
+	}
+
+	MSG_WriteBits(&buf, 3, 3);  // clc_EOF
+
+	// the header (serverId, messageAcknowledge, reliableAcknowledge) goes out uncompressed
+	memcpy(compressedBuf, buf.data, 8);
+	compressedBuf[8] = buf.data[8];
+	if ((unsigned int)buf.cursize > sizeof(data))
+		Com_Error(ERR_DROP, "Overflow compressed msg buf in CL_WritePacket()");
+	const int compressedSize = MSG_WriteBitsCompress(false, buf.data + 9, compressedBuf + 9, buf.cursize - 9) + 9;
+
+	// deliver the message
+	const int packetNum = clc->netchan.outgoingSequence & cl->packetBackupMask;
+	cl->outPackets[packetNum].p_realtime = cls.realtime;
+	cl->outPackets[packetNum].p_serverTime = oldcmd->serverTime;
+	cl->outPackets[packetNum].p_cmdNumber = cl->cmdNumber;
+	clc->connectLastSendTime = cls.realtime;
+
+	if (!CL_Netchan_Transmit(&clc->netchan, compressedBuf, compressedSize) && !Com_ErrorEntered())
+		sub_1403125F0(localClientNum, "EXE_DISCONNECTED", 0);
+	while (clc->netchan.unsentFragments)
+		CL_Netchan_TransmitNextFragment(&clc->netchan);
+}
+
+// Store 14030E370  client_mp/cl_input.cpp (Black Ops :3082), with CL_ReadyToSendPacket (:2743) inlined
+void CL_SendCmd(LocalClientNum_t localClientNum)
+{
+	clientConnection_t *clc = CL_GetLocalClientConnection(localClientNum);
+	const connstate_t connstate = CL_GetLocalClientUIGlobals(localClientNum)->connectionState;
+
+	// don't send anything while playing a cinematic
+	if (connstate == CA_CINEMATIC || connstate == CA_LOGO)
+		return;
+	if (unk_143E96824 == 2)
+		return;
+
+	// if we don't have a valid gamestate yet, only send one packet a second
+	if (connstate != CA_PRIMED && connstate != CA_ACTIVE && cls.realtime < clc->connectLastSendTime + 1000)
+		return;
+
+	// send every frame for loopbacks
+	if (clc->netchan.remoteAddressType != NA_LOOPBACK)
+	{
+		// check for exceeding cl_maxpackets
+		clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+		const int oldPacketNum = (clc->netchan.outgoingSequence - 1) & cl->packetBackupMask;
+		if (cls.realtime - cl->outPackets[oldPacketNum].p_realtime < 1000 / cl_maxpackets->current.integer)
+			return;
+	}
+
+	CL_WritePacket(localClientNum);
+}
+// ==== END sendcmd ====

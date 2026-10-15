@@ -31,7 +31,8 @@ struct usercmd_s
 	unsigned int partialSightedSpawnsMask;
 };
 
-// The leading fields of playerState_s and the size of clSnapshot_s in the Store build.
+// The leading fields of playerState_s, the snapshot header after the scores, and the size of clSnapshot_s in the
+// Store build (the fields after the scores are 0x104 further on than in the server PDB).
 struct clSnapshot_s
 {
 	int ps_commandTime;
@@ -49,8 +50,42 @@ struct clSnapshot_s
 	PlayerHandIndex ps_lastWeaponHand;        // weapCommon.lastWeaponHand
 	GlobalAmmo ps_ammoNotInClip[MAX_AMMO_SLOTS];
 	ClipAmmo ps_ammoInClip[MAX_AMMO_SLOTS];
-	unsigned char rest[0x34B8 - 0x620];
+	unsigned char unknown620[0x3474 - 0x620];  // the rest of playerState_s, ScoreboardInfo scores
+	int valid;
+	int snapFlags;
+	int serverTime;
+	int messageNum;
+	unsigned char tail[0x34B8 - 0x3484];
 };
+
+struct PlayerVehicleState
+{
+	int entity;  // ENTITYNUM_NONE (0x7FF) or 0 when not in a vehicle
+	int flags;
+	int targetEntity;
+	float origin[3];
+	float angles[3];
+	float velocity[3];
+	float angVelocity[3];
+	float tilt[2];
+	float tiltVelocity[2];
+	float gunAngles[2];
+	unsigned int splineId;
+	unsigned int splineNodeIndex;
+	float splineLambda;
+	float corridorSpeeds[2];
+};
+
+struct outPacket_t
+{
+	int p_cmdNumber;
+	int p_serverTime;
+	int p_realtime;
+};
+
+#define CMD_BACKUP 128
+#define CMD_MASK (CMD_BACKUP - 1)
+#define MAX_PACKET_USERCMDS 32
 
 #define PMF_NO_MOUSE_LOOK 0x800  // pm_flags bit that stops mouse look (name unknown; Black Ops tests the same bit)
 
@@ -90,14 +125,24 @@ struct clientActive_t
 	float cgameKickAngles[3];
 	float cgameOrigin[3];
 	float cgameVelocity[3];
-	unsigned char cgamePlayerVehState[0x68];  // PlayerVehicleState
+	PlayerVehicleState cgamePlayerVehState;
 	int cgameBobCycle;
 	int cgameMovementDir;
 	int cgameExtraButtons;
 	int cgamePredictedDataServerTime;
 	float clViewangles[3];
 	float mouseViewDelta[3];  // Store build only: the view change CL_MouseMove made this frame (name unknown)
-	// usercmd_s cmds[128] and the rest follow
+	usercmd_s cmds[CMD_BACKUP];
+	int cmdNumber;
+	unsigned char clientArchive[256][0x8C];  // ClientArchiveData
+	int clientArchiveIndex;
+	int packetBackupCount;
+	int packetBackupMask;
+	int parseEntitiesCount;
+	int parseClientsCount;
+	int parseOmnvarsCount;
+	outPacket_t outPackets[16];
+	// clSnapshot_s snapshots[] and the rest follow
 };
 
 extern clientActive_t clients[1];  // client_mp/cl_main_mp.cpp
@@ -106,6 +151,61 @@ extern clientActive_t clients[1];  // client_mp/cl_main_mp.cpp
 inline clientActive_t *CL_GetLocalClientGlobals(LocalClientNum_t localClientNum)
 {
 	return &clients[0];
+}
+
+enum netadrtype_t
+{
+	NA_BOT = 0x0,
+	NA_BAD = 0x1,
+	NA_LOOPBACK = 0x2,
+	NA_BROADCAST = 0x3,
+	NA_IP = 0x4,
+};
+
+// The leading netchan_t fields the client code reads, at their Store offsets.
+struct netchan_t
+{
+	int outgoingSequence;
+	int sock;                        // netsrc_t
+	int dropped;
+	int incomingSequence;
+	netadrtype_t remoteAddressType;  // remoteAddress.type
+	unsigned char unknown14[0x3C - 0x14];
+	int unsentFragments;
+	// the rest is opaque
+};
+
+// The client's connection to the server in the Store build. Its netadr_s is 0x10 bytes (0x14 in the server PDB), so
+// the fields after serverAddress are 4 bytes earlier than in the PDB, up to netchan, which is 8-aligned again.
+struct clientConnection_t
+{
+	int qport;
+	int clientNum;
+	int lastPacketTime;
+	unsigned char serverAddress[0x10];  // netadr_s
+	int connectLastSendTime;            // also when CL_WritePacket last sent a packet (Black Ops: lastPacketSentTime)
+	int connectPacketCount;
+	char serverMessage[256];
+	int challenge;
+	int checksumFeed;
+	int reliableSequence;
+	int reliableAcknowledge;
+	char reliableCommands[128][1024];
+	int serverMessageSequence;
+	int serverCommandSequence;
+	int lastExecutedServerCommand;
+	char serverCommands[128][1024];
+	bool isServerRestarting;
+	alignas(8) netchan_t netchan;  // netchan_t has pointers after the fields above
+	// netchanOutgoingBuffer and the rest follow
+};
+
+extern clientConnection_t clientConnections[1];  // client_mp/cl_main_mp.cpp
+
+// Inline from client_mp/client_mp.h: one local client in this build.
+inline clientConnection_t *CL_GetLocalClientConnection(LocalClientNum_t localClientNum)
+{
+	return &clientConnections[0];
 }
 
 struct AimInput
