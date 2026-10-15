@@ -16,6 +16,7 @@ Compilers: Store build VS2019 (x64, LTCG); servers and Steam exes VS2012 (x64).
 - Progress: [STATUS.md](STATUS.md)
 - What is being reversed and where the originals live: [target.toml](target.toml)
 - The builds and their provenance: [docs/retail-builds.md](docs/retail-builds.md)
+- How Store functions get their original names, and how accurate that is: [docs/matching.md](docs/matching.md)
 - Planned enhancements and the maths behind them: [docs/roadmap.md](docs/roadmap.md)
 - The Store build (final target) and how it is run for testing: [docs/store-build.md](docs/store-build.md)
 - Decrypting the Arxan-protected Steam exes: [docs/arxan.md](docs/arxan.md)
