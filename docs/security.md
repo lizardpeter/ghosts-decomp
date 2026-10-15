@@ -1,7 +1,7 @@
-# Security issues to fix in the patched variant
+# Security issues to fix in the enhanced build
 
-Known vulnerabilities in Ghosts and in the IW-engine code it shares, for the patched variant (docs/variants.md).
-The faithful variant keeps them. Sources: the community clients' fixes (docs/community-patches.md) and public
+Known vulnerabilities in Ghosts and in the IW-engine code it shares, for the enhanced build (docs/variants.md).
+The faithful build keeps them. Sources: the community clients' fixes (docs/community-patches.md) and public
 reports (surveyed 2026-10; verified facts and inferences are kept separate below).
 
 ## Public record
@@ -23,7 +23,7 @@ reports (surveyed 2026-10; verified facts and inferences are kept separate below
 Location in the PS4 server reference where the function exists there (server-side code); `client` means the
 function is client-only and will be located in the Store build by matching.
 
-| # | Function | Bug | Vector | Fix (patched) | Where (PS4 server) | Source |
+| # | Function | Bug | Vector | Fix (enhanced) | Where (PS4 server) | Source |
 |---|---|---|---|---|---|---|
 | S1 | `SV_SteamAuthClient` | unchecked `authBlob` copy (RCE) | connecting client → host | bound the copy | not in server; client/host | CVE-2018-20817 |
 | S2 | `PartyHost_HandleJoinPartyRequest` (name from MW2) | overflow on join request (RCE in MW2) | lobby peer → host | bound/validate | client | CVE-2019-20893 (inferred for IW6) |

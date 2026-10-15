@@ -1,45 +1,39 @@
-# Two variants: faithful and patched
+# Faithful and enhanced builds
 
-The repo produces two builds from one source tree.
+The repo produces two builds from one source tree (decomp-project skill, principle 8).
 
-| | **faithful** | **patched** |
+| | **faithful** | **enhanced** |
 |---|---|---|
-| Purpose | the decomp: behaves exactly like the original, bugs included | a version to play: security fixes, replaced online checks, enhancements |
-| Verified against the original | yes, every function (differential tests, records/functions.tsv) | only where it intentionally doesn't differ |
-| Build flag | default | `IW6_PATCHED=1` (`tools/build_recon.py --variant patched`, added with the first patch) |
-| Online use | not recommended: it has the original's known vulnerabilities | intended |
+| Purpose | the decomp: reproduces the original exactly, bugs included; the ground truth | the faithful code plus deliberate, documented changes: security fixes, bug fixes, modernization, features |
+| Source | `src/`, `include/` | `src/` + `enhanced/` (same layout as `src/`) |
+| Tests | strict: `matches` means identical behaviour to the original binary | each change's intended effect, and identical to faithful everywhere else |
+| Online use | not safe: it keeps the original's known vulnerabilities (docs/security.md) | intended |
 
 ## Rules
 
-1. **`src/` is faithful.** A function in `src/` reproduces the original's behaviour, including bugs, and earns
-   `matches` only by passing the differential test. Never "fix" something in passing; record it as a finding.
-2. **Changes live in `patches/`, mirroring `src/`'s layout.** Two kinds:
-   - **Replacements:** a whole function rewritten in `patches/<same path>.cpp`. In a patched build the linker uses
-     it instead of the `src/` version (`build_recon.py` drops the faithful definition of any symbol a patch file
-     defines). This is the default; it keeps `src/` free of conditionals.
-   - **Points:** a check that has to sit in the middle of a long function and doesn't justify duplicating it.
-     Written in `src/` as `IW6_FIX(id) { ... }`, which compiles to nothing in the faithful build. Use sparingly;
-     each one names a fix id.
-3. **Every change has a record** in `records/patches.tsv`: `id`, `kind` (security | replacement | enhancement |
-   qol), `functions` (original symbols touched), `doc` (where it is explained), `test` (the test that shows the
-   original's behaviour and the patched behaviour), `source` (our own finding, or e.g. `iw6-mod security.cpp`, as
-   the source of the *idea*; their code is GPL and isn't copied).
-4. **Security fixes come with a test that triggers the original bug** in the emulator: the faithful build must
-   show the bug (crash, out-of-bounds write, hang), the patched one must not. That keeps the fix list honest.
-5. **Enhancements are switchable at runtime where it makes sense** (dvars: FOV range, FPS cap, ultrawide), so the
-   patched build can still be run "stock".
+1. **`src/` contains only original behaviour.** Never "improve" a faithful function, even for an obvious bug:
+   the bug is part of the original. Record it as a finding and fix it in `enhanced/`.
+2. **A function defined in `enhanced/` overrides the faithful one in the enhanced build only.** This uses the same
+   per-function linking as the hybrid link, so there are no conditionals in `src/`. Faithful fixes reach the
+   enhanced build automatically because it shares that code.
+3. **`records/patches.tsv` lists every change:** id, functions changed (build + VA), kind (`bugfix`, `security`,
+   `modernize` such as frame rate, widescreen, platform ports, or `feature`), description, test reference.
+4. **Two build targets; CI builds and tests both.**
+5. **Changes go on verified faithful code** wherever possible. Patching unverified code makes it impossible to
+   tell a fix from a decompilation error. Security-critical functions are therefore good early decomp targets.
+6. **Not yet created:** `enhanced/`, `records/patches.tsv` and the enhanced build target are added with the first
+   enhancement, not before.
+7. **One repo** unless licensing or contributors differ (e.g. importing GPL code from iw6-mod/iw6x-client, which
+   the faithful repo should not take on). A separate enhanced repo would use this one as a submodule, never a
+   copy, and needs the user's decision first.
 
-## Starting list (patched)
+Arxan and DRM are in neither build: they aren't game source.
 
-- Security: docs/security.md (community fixes, CVE-2018-20817 and related public reports, audit targets).
-- Replacements for disabled online protections (section 2): identity and connection security against our own
-  backend instead of Demonware/Steam, fastfile signature checking kept or replaced with our own signing.
-- Arxan/DRM: absent from both variants. It isn't game source, so the faithful build doesn't reproduce it either.
-- QoL/enhancements: section 6, picked one by one.
+## Planned enhancements
 
-## While the reconstruction is incomplete
-
-Both variants run hybrid (docs/verification.md): whatever isn't reconstructed yet runs the original code. A patch
-can only apply to a function that has been reconstructed, so security-relevant functions are good early targets.
-Until then a fix can be applied the community way, as a hook on the original function from the patched DLL,
-recorded with kind `security` and marked temporary.
+- `security`: docs/security.md (community fixes, CVE-2018-20817 and related public reports, audit targets).
+- Replacements for the online protections the community clients disable (docs/community-patches.md section 2):
+  identity and connection security against our own backend instead of Demonware/Steam, and fastfile signature
+  checking kept or replaced with our own signing.
+- `modernize`/`feature`: candidates in docs/community-patches.md section 6 (FPS, FOV, ultrawide, ...), picked one
+  by one, runtime-switchable where it makes sense.

@@ -32,7 +32,7 @@ analysis/<build>/    GENERATED per build
   logs/                pipeline logs
 records/             AUTHORED small facts; the only input to the graph besides analysis/
 src/ include/        AUTHORED faithful reconstruction, mirroring the original source tree
-patches/             AUTHORED changes for the patched variant (security fixes, enhancements), mirroring src/
+enhanced/            AUTHORED (once needed) overrides for the enhanced build, same layout as src/
 tests/               differential tests (harness not yet ported to x64)
 docs/<topic>.md      method notes and per-build findings. Topic names, never dates.
 tools/               pipeline scripts (unpack/, ghidra/, pdb/, match/, graph/, recon/)
@@ -40,11 +40,12 @@ tools/               pipeline scripts (unpack/, ghidra/, pdb/, match/, graph/, r
 
 Folder and file names describe *what*, never *when*. Dates belong in commit messages.
 
-## Two variants
+## Faithful and enhanced
 
 `src/` is the **faithful** decomp: original behaviour, bugs included, verified function by function. The
-**patched** variant adds security fixes, replacements for disabled online checks and enhancements from
-`patches/`, each recorded in `records/patches.tsv`. Never fix a bug in `src/` in passing. See docs/variants.md.
+**enhanced** build is the faithful code plus overrides from `enhanced/` (security, bugfix, modernize, feature),
+each recorded in `records/patches.tsv`; both are created with the first enhancement. Never fix a bug in `src/`.
+See docs/variants.md.
 
 ## Addresses
 
