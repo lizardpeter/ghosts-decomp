@@ -31,13 +31,20 @@ analysis/<build>/    GENERATED per build
   match/               reference -> target identifications with evidence and confidence
   logs/                pipeline logs
 records/             AUTHORED small facts; the only input to the graph besides analysis/
-src/ include/        AUTHORED reconstruction, mirroring the original source tree
+src/ include/        AUTHORED faithful reconstruction, mirroring the original source tree
+patches/             AUTHORED changes for the patched variant (security fixes, enhancements), mirroring src/
 tests/               differential tests (harness not yet ported to x64)
 docs/<topic>.md      method notes and per-build findings. Topic names, never dates.
 tools/               pipeline scripts (unpack/, ghidra/, pdb/, match/, graph/, recon/)
 ```
 
 Folder and file names describe *what*, never *when*. Dates belong in commit messages.
+
+## Two variants
+
+`src/` is the **faithful** decomp: original behaviour, bugs included, verified function by function. The
+**patched** variant adds security fixes, replacements for disabled online checks and enhancements from
+`patches/`, each recorded in `records/patches.tsv`. Never fix a bug in `src/` in passing. See docs/variants.md.
 
 ## Addresses
 
