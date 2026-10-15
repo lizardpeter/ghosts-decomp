@@ -69,7 +69,8 @@ map = { key = "ghosts/Ghosts/Call of Duty - Ghosts PS4 Server/iw6_ds.map", sha25
 [[build]]
 id = "iw6_ds_xb3"
 kind = "reference"
-analyze = false
+analyze = true
+ghidra_pdb = false  # analysed blind; its own PDB/MAP is the ground truth for scoring tools/match
 timestamp = "2014-02-22T04:45:04Z"
 changelist = 665584
 pdb_path = 'c:\trees\iw6\game\dedicated\xb3\iw6mp64_dh_server_durango.pdb'

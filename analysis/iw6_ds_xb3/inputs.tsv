@@ -1,0 +1,4 @@
+role	file	sha256
+exe	iw6_ds.exe	3d4781fd1e91b4d8563a18507efd0ca6a65deaa1ed792a8fe4eb2ed0bc670573
+pdb	iw6_ds.pdb	d433a9ec2449073f0689b8704d58d3317b87ec0e8c7ee68b58c0682652e8be4d
+map	iw6_ds.map	3376e6cc5dc6effb0be6d383d5dbad7e5684faec3b0b31e0ee67eb5ac70df6a6

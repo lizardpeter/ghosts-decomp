@@ -87,7 +87,10 @@ jobs:
         run: |
           mkdir -p /tmp/proj /tmp/raw
           pdbargs=()
-          if [ -f /tmp/in/${{ matrix.build }}.pdb ]; then
+          # ghidra_pdb = false analyses a symbol build blind (as a matcher ground-truth pair); its PDB tables still
+          # come from tools/pdb/extract.py
+          usepdb=$(python3 -c "import tomllib; b=[b for b in tomllib.load(open('target.toml','rb'))['build'] if b['id']=='${{ matrix.build }}'][0]; print(b.get('ghidra_pdb', True))")
+          if [ -f /tmp/in/${{ matrix.build }}.pdb ] && [ "$usepdb" = "True" ]; then
             pdbargs=(-preScript PrepPdb.java /tmp/in/${{ matrix.build }}.pdb
                      -postScript ApplyPdbNames.java "$GITHUB_WORKSPACE/analysis/${{ matrix.build }}/pdb/locals.tsv")
           fi

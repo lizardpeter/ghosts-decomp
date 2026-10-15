@@ -10,21 +10,39 @@
   "imports": [
     {
       "file": "iw6/builds.jsonl",
-      "sha256": "1917e0f03af55c13ddabda541c433674dc629cdcb8d0cb40e365a60d22034ce8",
-      "rows": 1,
+      "sha256": "c5fadb0b2804869f1a28e182a378da4c4a5771c716c223d128fba21e6284e962",
+      "rows": 3,
       "cypher": "UNWIND {{ROWS}} AS r MERGE (b:Build {id:r.id}) SET b.timestamp=r.timestamp, b.exe_sha256=r.exe_sha256, b.pdb_guid=r.pdb_guid"
     },
     {
       "file": "iw6/sourcefiles.jsonl",
-      "sha256": "4dd5080aa6631563803d1797d1b02026f38eca90812f3c7c0ef909f5fe4de0b9",
-      "rows": 1204,
+      "sha256": "aa39667d9e0ae6fb4c4c02473fe7fb1580e7e69792fb6306f43534847e991192",
+      "rows": 1209,
       "cypher": "UNWIND {{ROWS}} AS r MERGE (s:Subsystem {name:r.subsystem}) MERGE (f:SourceFile {path:r.path}) MERGE (f)-[:PART_OF]->(s)"
+    },
+    {
+      "file": "iw6/functions-iw6mp64_MSStore_ship.jsonl",
+      "sha256": "95ec01a3c21ebe3970c7f31f9d3a3363204959324bf342aa8456b681ad0ef97f",
+      "rows": 23588,
+      "cypher": "UNWIND {{ROWS}} AS r MATCH (b:Build {id:r.build}) MERGE (fn:Function {key:r.key}) SET fn.name = coalesce(fn.name, r.name), fn.symbol = r.symbol MERGE (fi:FunctionInstance {id:r.id}) SET fi.build=r.build, fi.va=r.va, fi.size=r.size, fi.status=r.status, fi.type=r.type, fi.src=r.src, fi.bytes_sha256=r.sha MERGE (fi)-[:INSTANCE_OF]->(fn) MERGE (fi)-[:IN_BUILD]->(b) WITH fn, r WHERE r.source <> '' MATCH (sf:SourceFile {path:r.source}) MERGE (fn)-[d:DEFINED_IN]->(sf) SET d.line=r.line"
     },
     {
       "file": "iw6/functions-iw6_ds_ps4.jsonl",
       "sha256": "7c87977cff296409e040d141d1a14e19c46b1c9229cb79919f64d5f31d5324c1",
       "rows": 18063,
       "cypher": "UNWIND {{ROWS}} AS r MATCH (b:Build {id:r.build}) MERGE (fn:Function {key:r.key}) SET fn.name = coalesce(fn.name, r.name), fn.symbol = r.symbol MERGE (fi:FunctionInstance {id:r.id}) SET fi.build=r.build, fi.va=r.va, fi.size=r.size, fi.status=r.status, fi.type=r.type, fi.src=r.src, fi.bytes_sha256=r.sha MERGE (fi)-[:INSTANCE_OF]->(fn) MERGE (fi)-[:IN_BUILD]->(b) WITH fn, r WHERE r.source <> '' MATCH (sf:SourceFile {path:r.source}) MERGE (fn)-[d:DEFINED_IN]->(sf) SET d.line=r.line"
+    },
+    {
+      "file": "iw6/functions-iw6_ds_xb3.jsonl",
+      "sha256": "ed8fbfe22d894bad24c42eafd21bd752b6786493d517ee4acc483a51ac03df4d",
+      "rows": 18302,
+      "cypher": "UNWIND {{ROWS}} AS r MATCH (b:Build {id:r.build}) MERGE (fn:Function {key:r.key}) SET fn.name = coalesce(fn.name, r.name), fn.symbol = r.symbol MERGE (fi:FunctionInstance {id:r.id}) SET fi.build=r.build, fi.va=r.va, fi.size=r.size, fi.status=r.status, fi.type=r.type, fi.src=r.src, fi.bytes_sha256=r.sha MERGE (fi)-[:INSTANCE_OF]->(fn) MERGE (fi)-[:IN_BUILD]->(b) WITH fn, r WHERE r.source <> '' MATCH (sf:SourceFile {path:r.source}) MERGE (fn)-[d:DEFINED_IN]->(sf) SET d.line=r.line"
+    },
+    {
+      "file": "iw6/calls-iw6mp64_MSStore_ship.jsonl",
+      "sha256": "4ffe245f1d804b6f1eb5344329330fdc0705b6d76e1b8e7368733078ea86aae0",
+      "rows": 77738,
+      "cypher": "UNWIND {{ROWS}} AS r MATCH (a:FunctionInstance {id:r.caller}) MATCH (c:FunctionInstance {id:r.callee}) MERGE (a)-[e:CALLS]->(c) SET e.kind=r.kind"
     },
     {
       "file": "iw6/calls-iw6_ds_ps4.jsonl",
