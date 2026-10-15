@@ -15,7 +15,8 @@ Compiler: MSVC 2012 (VC11) x64. Reference builds with symbols are being added (d
 - Progress: [STATUS.md](STATUS.md)
 - What is being reversed and where the originals live: [target.toml](target.toml)
 - The builds and their provenance: [docs/retail-builds.md](docs/retail-builds.md)
-- Decrypting the Arxan-protected exes: [docs/arxan.md](docs/arxan.md)
+- The Store build (final target) and how it is run for testing: [docs/store-build.md](docs/store-build.md)
+- Decrypting the Arxan-protected Steam exes: [docs/arxan.md](docs/arxan.md)
 
 ## Pipeline
 
