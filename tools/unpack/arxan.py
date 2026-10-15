@@ -44,7 +44,6 @@ RETURN = 0xDEAD0000
 TSC_STEP = 0x400                                # cycles per rdtsc: small, so timing checks always pass
 # APIs the stub itself uses; the first call to anything else is the decrypted program running.
 STUB_APIS = {"LoadLibraryA", "GetProcAddress", "VirtualProtect", "VirtualQuery", "GetSystemInfo"}
-MAX_SECONDS = 4 * 3600
 
 
 def entropy(b: bytes) -> float:
@@ -172,20 +171,15 @@ class Emu:
         mu.reg_write(UC_X86_REG_RAX, ret)
 
     def run(self):
+        # One uninterrupted emu_start: resuming after a wall-clock timeout split the run at different
+        # points each time and made the stub's result differ between runs. Stops come only from hooks.
         t0 = time.time()
-        rip = self.ep
-        while self.stop_reason is None and time.time() - t0 < MAX_SECONDS:
-            try:
-                self.mu.emu_start(rip, RETURN, timeout=60_000_000)
-            except UcError as e:
-                self.stop_reason = self.stop_reason or f"{e} at {self.mu.reg_read(UC_X86_REG_RIP):#x}"
-                break
-            rip = self.mu.reg_read(UC_X86_REG_RIP)
-            if rip == RETURN:
-                self.stop_reason = "entry stub returned"
-            elif self.stop_reason is None:
-                self.log(f"  {time.time() - t0:.0f}s: rip {rip:X} ({self.section_of(rip)}), rdtsc x{self.rdtsc_calls}")
-        self.stop_reason = self.stop_reason or "time limit"
+        try:
+            self.mu.emu_start(self.ep, RETURN)
+        except UcError as e:
+            self.stop_reason = self.stop_reason or f"{e} at {self.mu.reg_read(UC_X86_REG_RIP):#x}"
+        if self.stop_reason is None:
+            self.stop_reason = "entry stub returned"
         self.log(f"stopped after {time.time() - t0:.0f}s: {self.stop_reason}; rdtsc calls {self.rdtsc_calls}")
 
 
