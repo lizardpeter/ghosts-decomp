@@ -1,0 +1,85 @@
+# Working in ghosts-decomp
+
+Decompilation of Call of Duty: Ghosts (IW6, PC, x64). Read this before changing anything.
+
+The structure and method come from `lizardpeter/black-ops-1-decomp` (BO1). This repo owns its own copy of
+the tools and adapts them; there is no shared toolkit.
+
+## The one rule: generated vs authored
+
+Every file is exactly one of these. They never share a folder.
+
+| Kind | Where | Who writes it |
+|---|---|---|
+| **Generated** | `analysis/<build>/` | Only the scripts in `tools/`. Never hand-edit. Re-running the pipeline on the same input reproduces it. |
+| **Authored** | `src/`, `include/`, `tests/`, `docs/`, `records/` | People and agents. |
+
+If a generated file is wrong, fix the script that wrote it and re-run. Don't patch the output.
+
+## Layout
+
+```
+target.toml          builds (sha256 + R2 key of each original file), project id, protection
+analysis/<build>/    GENERATED per build
+  functions.tsv        every function: address, size, name, signature, bytes hash, decompile status
+  unpack/              how the Arxan entry stub was emulated (log, sections changed, OEP, image hash)
+  ghidra/              Ghidra exports (functions, callgraph, symbols, strings, types.h) + saved project (split tar)
+  pseudocode/<group>.c Ghidra decompiler output, grouped by original source file once known
+  disasm/<group>.asm   disassembly, same grouping
+  pdb/ map/            symbol tables from a reference build's PDB / linker MAP
+  match/               reference -> target identifications with evidence and confidence
+  logs/                pipeline logs
+records/             AUTHORED small facts; the only input to the graph besides analysis/
+src/ include/        AUTHORED reconstruction, mirroring the original source tree
+tests/               differential tests (harness not yet ported to x64)
+docs/<topic>.md      method notes and per-build findings. Topic names, never dates.
+tools/               pipeline scripts (unpack/, ghidra/, pdb/, match/, graph/, recon/)
+```
+
+Folder and file names describe *what*, never *when*. Dates belong in commit messages.
+
+## Addresses
+
+x64 virtual addresses at the image base 0x140000000, written as 9 upper-case hex digits without `0x`
+(`14073DCA4`). Every tool uses that form.
+
+## Protected builds
+
+The retail exes are Arxan-protected: `.text` is encrypted on disk and the entry stub decrypts it at
+startup. `tools/unpack/arxan.py` emulates the stub and writes the decrypted image, which is what Ghidra
+analyses. The unpacked image is generated, never stored: its sha256 is pinned in `target.toml`
+(`unpacked_sha256`) so anyone can reproduce it from the original. See `docs/arxan.md`.
+
+## Function status ladder
+
+Every function in `records/functions.tsv` has exactly one status:
+
+`located -> named -> typed -> decompiled -> compiles -> matches -> integrated`
+
+- `located`: entry and size known (Ghidra; `.pdata` gives every non-leaf function's bounds on x64)
+- `named`: original name known (PDB/MAP, or a recorded cross-build match)
+- `typed`: original prototype known
+- `decompiled`: authored source exists in `src/`
+- `compiles`: that source builds in CI
+- `matches`: passes the differential test against the original (byte matching would need VC11 x64)
+- `integrated`: linked into the runnable reconstruction
+
+`matches` needs a passing automated test; CI fails if a record claims more than the tests show. A
+function kept below `matches` on purpose carries a note saying why. `STATUS.md` and the graph are both
+computed from this file. Don't track progress anywhere else.
+
+Every cross-build identification records its method, evidence and confidence. Never match on address
+position across differently linked builds.
+
+## Graph
+
+Graph `re_iw6` on the Graph DB is **derived**. `tools/graph/sync.py` turns `records/` plus
+`analysis/<build>/functions.tsv` into a MERGE-by-key import set under `analysis/graph/`, loaded with the
+Graph DB `bulk_import_file` tool. Never write ad-hoc Cypher to the graph; change records and re-sync.
+The graph holds identity, relationships and status only, with no code text.
+
+## Originals
+
+The game files (exe, pdb, map) are never committed. They live in R2 under the keys in `target.toml`,
+and the pipeline verifies their sha256 before use. Helpers for reading the bucket are not part of this
+repo.

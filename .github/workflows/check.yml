@@ -1,0 +1,33 @@
+# Every push: the generated STATUS.md and graph import set are current, and (once src/ has code) the
+# reconstruction compiles, every differential test passes and records/ only claims what tests prove.
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Has reconstruction
+        id: recon
+        run: echo "any=$(find src -name '*.cpp' 2>/dev/null | head -1 | wc -l)" >> "$GITHUB_OUTPUT"
+      - name: Toolchain
+        if: steps.recon.outputs.any == '1'
+        run: |
+          sudo apt-get install -y -q clang lld llvm >/dev/null
+          pip install -q unicorn pefile
+      - name: Compile reconstruction
+        if: steps.recon.outputs.any == '1'
+        run: python3 tools/build_recon.py
+      - name: Differential tests
+        if: steps.recon.outputs.any == '1'
+        run: python3 tests/differential/run.py --check-records
+      - name: Generated files are current
+        run: |
+          python3 tools/status.py >/dev/null
+          python3 tools/graph/sync.py >/dev/null
+          git diff --exit-code -- STATUS.md analysis/graph || {
+            echo "::error::STATUS.md or analysis/graph is stale: run tools/status.py and tools/graph/sync.py"; exit 1; }
