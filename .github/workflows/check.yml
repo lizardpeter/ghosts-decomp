@@ -19,12 +19,17 @@ jobs:
         run: |
           sudo apt-get install -y -q clang lld llvm >/dev/null
           pip install -q unicorn pefile
+      - name: Fetch the reference exe
+        if: steps.recon.outputs.any == '1'
+        run: |
+          ref=$(python3 -c "import tomllib; print(next(b['id'] for b in tomllib.load(open('target.toml','rb'))['build'] if b.get('kind')=='reference' and 'map' in b))")
+          python3 tools/fetch_originals.py "$ref" .work/originals --only exe
       - name: Compile reconstruction
         if: steps.recon.outputs.any == '1'
         run: python3 tools/build_recon.py
       - name: Differential tests
         if: steps.recon.outputs.any == '1'
-        run: python3 tests/differential/run.py --check-records
+        run: IW6_ORIGINALS=.work/originals python3 tests/differential/run.py --check-records
       - name: Generated files are current
         run: |
           python3 tools/status.py >/dev/null

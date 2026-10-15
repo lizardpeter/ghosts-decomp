@@ -1,1 +1,3 @@
 build	va	status	src	note
+iw6_ds_ps4	14022C700	matches	src/universal/com_math.cpp	differential test (emulated, original vs recon)
+iw6_ds_ps4	14022C6B0	matches	src/universal/com_math.cpp	differential test (emulated, original vs recon)

@@ -14,7 +14,7 @@ SPECIAL_F = [0.0, -0.0, 1.0, -1.0, 0.5, -0.5, 2.0, 1e-30, -1e-30, 1e30, -1e30, 3
              float("inf"), float("-inf"), float("nan")]
 SPECIAL_I = [0, 1, -1, 2, 127, 128, -128, 255, 256, 32767, -32768, 65535, 2**31 - 1, -2**31]
 INT_TYPES = {"int", "unsigned int", "long", "unsigned long", "short", "unsigned short", "char", "signed char",
-             "unsigned char", "bool", "unsigned", "__int64", "unsigned __int64"}
+             "unsigned char", "bool", "unsigned", "__int64", "unsigned __int64", "long long", "unsigned long long"}
 
 
 def demangle(symbol: str) -> str | None:
@@ -48,8 +48,12 @@ def ret_kind(ret: str) -> str:
     r = ret.replace("const", "").strip()
     if r == "void":
         return "void"
-    if r in ("float", "double"):
+    if r == "float":
         return "float"
+    if r == "double":
+        return "double"
+    if "*" in r or "&" in r or r in ("__int64", "unsigned __int64", "long long", "unsigned long long"):
+        return "int64"  # x64: pointers and 64-bit integers return in all of RAX
     if r in ("char", "signed char", "unsigned char", "bool"):
         return "char"
     if r in ("short", "unsigned short"):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Download one build's originals (exe, and pdb/map when the build has them) from R2 and verify their sha256.
 
-    python3 tools/fetch_originals.py <build-id> <dest-dir>
+    python3 tools/fetch_originals.py <build-id> <dest-dir> [--only exe|pdb|map]
 """
 import hashlib
 import sys
@@ -18,8 +18,9 @@ def main():
     cfg = tomllib.loads((ROOT / "target.toml").read_text())
     build = next(b for b in cfg["build"] if b["id"] == build_id)
     dest.mkdir(parents=True, exist_ok=True)
+    only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
     for role in ("exe", "pdb", "map"):
-        if role not in build:  # retail builds have no PDB/MAP
+        if (only and role != only) or role not in build:  # retail builds have no PDB/MAP
             continue
         spec = build[role]
         out = dest / f"{build_id}.{role}"

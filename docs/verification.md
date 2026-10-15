@@ -26,8 +26,7 @@ Same contract as BO1: the original and the reconstruction run in one Unicorn add
 inputs; return value, every pointer buffer and every global write must match exactly; inputs on which the
 original faults are skipped; too few usable inputs means untestable, never passed.
 
-**The harness in `tests/differential/` is still BO1's x86-32 code and has to be ported before the first
-`matches`.** What changes on x64:
+The harness (`tests/differential/harness.py`) is ported to x64. What changed from BO1:
 
 - `UC_MODE_64`, a GS-based TEB (`gs:[0x30]` self pointer, `gs:[0x60]` PEB) for code that reads it.
 - Win64 calling convention: the first four arguments in rcx, rdx, r8, r9, or xmm0 to xmm3 for floating
@@ -35,7 +34,7 @@ original faults are skipped; too few usable inputs means untestable, never passe
   rsp 16-byte aligned before the call; return in rax or xmm0.
 - No x87 state to set up: x64 MSVC does all floating point in SSE. The CPU starts with MXCSR 0x1F80.
   The x87-specific workarounds from BO1 (unrounded ST0 returns, `X87_MATH`) don't apply.
-- The original must run from the **unpacked** image (tools/unpack), since the raw exe's code is encrypted.
+- An Arxan-protected build runs from its **unpacked** image (tools/unpack); the harness checks `unpacked_sha256`.
 - VC11's x64 CRT math (`sin`, `pow`, ...) is called as ordinary functions in the original; the hybrid link
   routes the reconstruction's calls to the same original routines.
 
@@ -44,3 +43,12 @@ original faults are skipped; too few usable inputs means untestable, never passe
 Would need the VC11 (VS2012 Update 4) x64 compiler on a Windows runner. The retail builds are optimized
 (and probably LTCG, to be measured as on BO1), so byte matching is not the goal for them; behavioural
 equivalence is.
+
+## First run (PS4 server reference)
+
+- Sanity: original functions called directly give the expected results (`AngleNormalize360(-90) = 270`,
+  `Vec3Normalize([3,4,0])` returns 5 and writes `[0.6, 0.8, 0]`, `vectoyaw([0,1,0]) = 90`, `I_stricmp`).
+- `AngleNormalize360` and `AngleDelta` (universal/com_math.cpp) reconstructed and passing on ~290 generated inputs
+  each (NaN, infinities, signed zeros), with `floorf` resolved to the original CRT through the hybrid link.
+- Mutation checks: a changed constant fails on a concrete input; a wrong return type no longer drops the
+  function silently, the build stops with "prototype differs from the original's decorated name".

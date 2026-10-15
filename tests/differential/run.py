@@ -23,9 +23,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from auto import auto_case  # noqa: E402
-from harness import ROOT, Image, Machine, original_exe  # noqa: E402
+from harness import ROOT, Image, Machine, original_exe, reference_build  # noqa: E402
 
-BUILD = "CoDMPServer"
+BUILD = reference_build()
 MATCHED = {"matches", "integrated"}
 MIN_USABLE = 20
 csv.field_size_limit(1 << 30)
@@ -40,8 +40,8 @@ def same(a, b):
 
 
 def export_name(symbol):
-    # extern "C" x86 names carry a leading underscore in the MAP but not in the DLL's export table
-    return symbol[1:] if symbol.startswith("_") else symbol
+    # x64: no leading underscore on extern "C" names, so MAP and export names agree
+    return symbol
 
 
 def read_tsv(path):
@@ -54,8 +54,6 @@ def main():
     mapsyms = {r["name"]: int(r["va"], 16) for r in read_tsv(ROOT / "analysis" / BUILD / "map" / "publics.tsv")}
     recon = Image(ROOT / "build" / "recon.dll")
     m = Machine(Image(original_exe(BUILD)), recon)
-    # A modern CPU: the CRT's startup would have set this, enabling its SSE2 math paths.
-    m.poke(mapsyms["___use_sse2_mathfcns"], struct.pack("<I", 1))
 
     explicit = {}
     for test in sorted(Path(__file__).parent.glob("test_*.py")):

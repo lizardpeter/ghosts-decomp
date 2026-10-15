@@ -100,6 +100,16 @@ def main():
     stray = [e for e in exports if e not in orig and e not in ("_fltused",)]
     exports = [e for e in exports if e in orig]
     rows = [r for r in rows if r.split("\t")[0] in orig]
+    # A stray symbol whose plain name matches an original function is a prototype mismatch (wrong parameter
+    # or return type, constness, calling convention): the function would silently drop out of testing.
+    def base_name(sym):
+        return sym[1:].split("@", 1)[0] if sym.startswith("?") else sym
+    orig_names = {}
+    for o in orig:
+        orig_names.setdefault(base_name(o), []).append(o)
+    mismatched = [f"{e}  (original: {', '.join(orig_names[base_name(e)])})" for e in stray if base_name(e) in orig_names]
+    if mismatched:
+        sys.exit("prototype differs from the original's decorated name:\n  " + "\n  ".join(mismatched))
     if stray:
         print("note: defined in src/ but not in the original MAP (not exported):", ", ".join(stray))
     missing = [u for u in undefined if u not in orig and u not in statics]
@@ -121,7 +131,7 @@ def main():
 
     dll = BUILD / "recon.dll"
     run("lld-link", "/dll", "/noentry", "/nodefaultlib", "/base:0x180000000", "/fixed", f"/out:{dll}",
-        *[f"/export:{e}" for e in exports]  # x64: no leading underscore on C names,
+        *[f"/export:{e}" for e in exports],  # x64: no leading underscore on C names
         *objs, *env_objs, BUILD / "hybrid.obj")
     (BUILD / "recon.symbols.tsv").write_text("symbol\tsource\n" + "\n".join(rows) + "\n")
     print(f"{dll}: {len(exports)} functions from {len(sources)} files; "
