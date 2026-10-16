@@ -128,9 +128,16 @@ the fixes in records/bugs.tsv.
 ## Checked
 
 - No `syscall` or `int 0x2e` instruction in the exe, so all traffic goes through the DLLs above.
-- Every function that calls a WS2_32, WINHTTP or XCurl import is in the table, from a scan of the whole
-  disassembly. Run-time lookups (GetProcAddress) fetch only the WinHTTP WebSocket functions, GetAdaptersInfo,
-  the NVIDIA, AMD and NVIDIA GameWorks entry points, WinRT activation, and the GDK runtime's own exports.
+- Every function that calls a WS2_32, WINHTTP or XCurl import was found by scanning the whole disassembly and
+  classified. The ones not in the table only convert addresses or query state: inet_pton, inet_ntop, WSAIoctl
+  in bdNetImpl::start, __WSAFDIsSet.
+- Run-time lookups (GetProcAddress) fetch only these:
+  - the WinHTTP WebSocket functions;
+  - GetAdaptersInfo;
+  - NVIDIA's nvapi and GameWorks entry points;
+  - WinRT activation;
+  - a few kernel32 functions;
+  - the GDK runtime's own exports.
 - The exception is LUI's Lua, which keeps `package.loadlib` and `require`'s C loader (security S21): a script could
   load any DLL. The guard still catches traffic from such a DLL, because it hooks Winsock and WinHTTP themselves.
 - The game's own net layer (win_net.cpp, com_net.cpp) is reconstructed and tested, so its list of exits is
