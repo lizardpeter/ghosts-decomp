@@ -42,7 +42,7 @@ process.
 
 | Host | Where it is chosen | What it is |
 |---|---|---|
-| `auth3.prod.demonware.net` (cert, dev variants) | dwSelectAuthAddress 14019AEE0, by a built-in environment string ("RETAIL") | Demonware authentication |
+| `auth3.prod.demonware.net` (cert, dev variants) | dwSelectAuthAddress 14019AEE0 compares a built-in "RETAIL" with itself, so always prod; the HTTPS auth service picks its environment from XSystemGetXboxLiveSandboxId (140749EF0) | Demonware authentication |
 | `lsg.2510.prod.demonware.net` (cert, dev variants) | dwLogOnComplete 14019A9A0, port 443, title 2510 | Demonware lobby (LSG): matchmaking, stats, storage, presence, teams, ... |
 | `ghosts-stun.{us,eu,jp,au}.demonware.net`, `stun.{us,eu,jp,au}.demonware.net` | dwNetStart 1405A8C70, bdNetStartParams | STUN / NAT discovery |
 | `*.xboxlive.com` (userpresence, social, sessiondirectory, rta) | xsapi | Xbox Live services |
@@ -50,6 +50,40 @@ process.
 
 None of these can be configured. The hosts are compiled in, and the game has no dvar for them (the PS4 server
 reads `DS_OPT_AUTHADDR`/`DS_OPT_LSGADDR`; the client doesn't).
+
+## The GDK runtime
+
+docs/gdk.md names all 97 GDK calls (13 interfaces) and their callers. The calls that reach Xbox or Microsoft
+services are these:
+
+- sign-in (`XUserAddAsync`);
+- tokens (`XUserGetTokenAndSignature*`): Demonware's auth and every Xbox Live call depend on these;
+- licence and add-ons (`XStoreQueryGameLicense*`, product queries);
+- cloud saves (`XGameSave*`);
+- achievements (`XGameEventWrite`);
+- HTTPS certificate checks (`XNetworkingQuerySecurityInformationForUrl*`);
+- the gamer picture and profile card.
+
+XAsync and XTaskQueue carry all of libHttpClient's and xsapi's work but send nothing themselves.
+
+Nothing in the exe quits after a sign-in, licence or connectivity failure. Failures end in a popup, and the
+online systems stay off. Online starts only once the licence query has finished and found the game licensed
+(1401A1760, 1401A5550). The licence popup's buttons are Lua in the fastfiles and haven't been checked.
+
+An offline loader has to answer at least these:
+
+- `XGameRuntimeInitialize`;
+- `XGameGetXboxTitleId` = 0x66CDD1F0 (outside its package the exe has no MicrosoftGame.config);
+- working XAsync and XTaskQueue;
+- one signed-in user: an ID, a gamertag, state 0, not a guest, every privilege granted;
+- `XUserIsStoreUser` true;
+- `XblContextCreateHandle` succeeding;
+- connectivity registration succeeding;
+- a store context;
+- a licence with isActive 1 and isTrial 0.
+
+Add-on and DLC queries may fail. If runtime initialisation fails while a kernel debugger is attached,
+1406AEC18 calls DebugBreak.
 
 ## Cutting it
 
