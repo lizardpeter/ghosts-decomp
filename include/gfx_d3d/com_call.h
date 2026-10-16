@@ -25,3 +25,31 @@ enum D3D11ContextSlot : unsigned int
 	CTX_HSSetShader = 60,
 	CTX_DSSetShader = 64,
 };
+
+// ---- buffers ----
+// IUnknown, first in every interface (Store: ID3D11Buffer::AddRef 140630487 `call [rax+8]`, Release 1406023BC
+// `call [rax+0x10]`)
+enum IUnknownSlot : unsigned int
+{
+	UNK_AddRef = 1,
+	UNK_Release = 2,
+};
+
+// ID3D11Device (Store: CreateBuffer 140601685 `call [rax+0x18]` on dx.d3d11device)
+enum D3D11DeviceBufferSlot : unsigned int
+{
+	DEV_CreateBuffer = 3,
+};
+
+// ID3D11DeviceContext (Store: Map 140602786 `call [rax+0x70]`, Unmap 140602846 `jmp [rax+0x78]`)
+enum D3D11ContextBufferSlot : unsigned int
+{
+	CTX_Map = 14,
+	CTX_Unmap = 15,
+};
+
+// ID3D11Buffer: ID3D11DeviceChild 3-6, ID3D11Resource 7-9, then GetDesc (Store: 140602815 `call [rax+0x50]`)
+enum D3D11BufferSlot : unsigned int
+{
+	BUF_GetDesc = 10,
+};
