@@ -158,3 +158,7 @@ iw6mp64_MSStore_ship	14030E370	matches	src/client_mp/cl_input.cpp	differential t
 iw6mp64_MSStore_ship	14030EB60	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
 iw6mp64_MSStore_ship	14030DF50	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
 iw6mp64_MSStore_ship	14030EED0	matches	src/client_mp/cl_input.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	1402EB4D0	matches	src/cgame/cg_camera.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	1402E9060	matches	src/cgame/cg_camera.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	140532D80	matches	src/universal/com_math.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	1402E8D20	matches	src/cgame/cg_camera.cpp	differential test against the Store build (emulated)

@@ -1602,3 +1602,14 @@ void ClosestPointsTwoSegs(float *const s00, float *const s01, float *const s10, 
 	*t0 = fabs(sN) < 0.0001f ? 0.0f : sN / sD;
 	*t1 = fabs(tN) < 0.0001f ? 0.0f : tN / tD;
 }
+
+// ---- Store build only (iw6mp64_MSStore_ship): not in the PS4 server ----
+
+// Store 140532D80 (name unknown): the view tangents for a horizontal FOV given at 4:3. The vertical FOV is fixed
+// by fovX (tan(fovY / 2) = 0.75 * tan(fovX / 2)) and the horizontal one follows the aspect ratio (Hor+).
+void sub_140532D80(float fovX, float aspect, float *tanHalfFovX, float *tanHalfFovY)
+{
+	const float tanY = (float)tan((double)(fovX * 0.017453292f * 0.5f)) * 0.75f;
+	*tanHalfFovX = tanY * aspect;
+	*tanHalfFovY = tanY;
+}

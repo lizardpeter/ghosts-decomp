@@ -60,8 +60,10 @@ Once per client frame:
    capped per frame by the cgame's maximum yaw/pitch speed when it sets one, then aim assist
    (`AimAssist_UpdateMouseInput`) gets the angles and returns the final ones.
 
-So with `cl_mouseAccel 0` and no zoom, one count turns the view by `sensitivity * 0.022` degrees. MW2019-style
-"1.5 at 3200 DPI, about 29 cm per 360" is 0.0099 degrees per count, which is Ghosts `sensitivity 0.45`.
+`cgameFOVSensitivityScale` is tan(fov/2)/tan(32.5°), measured against the default FOV 65 and applied to hip fire
+too (docs/view.md, B0023). So with `cl_mouseAccel 0` at `cg_fov 65`, one count turns the view by
+`sensitivity * 0.022` degrees. MW2019-style "1.5 at 3200 DPI, about 29 cm per 360" is 0.0099 degrees per count:
+Ghosts `sensitivity 0.45` at `cg_fov 65`, 0.456 at 64.37 (MW2019's FOV 80), and 0.342 at 80.
 
 Known problems, for the enhanced build: the movement is the system cursor's, after Windows' pointer speed and
 acceleration (B0010); in fullscreen one frame can't move further than the cursor can before hitting the window edge

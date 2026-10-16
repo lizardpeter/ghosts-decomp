@@ -695,6 +695,7 @@
 {"path": "bgame/bg_weapons_util.h", "subsystem": "bgame"}
 {"path": "bgame/bg_weapons_view.cpp", "subsystem": "bgame"}
 {"path": "cgame/cg_ammocounter.cpp", "subsystem": "cgame"}
+{"path": "cgame/cg_camera.cpp", "subsystem": "cgame"}
 {"path": "cgame/cg_camerashake.cpp", "subsystem": "cgame"}
 {"path": "cgame/cg_colltree.cpp", "subsystem": "cgame"}
 {"path": "cgame/cg_compass.cpp", "subsystem": "cgame"}

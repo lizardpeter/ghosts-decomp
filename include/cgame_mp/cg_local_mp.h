@@ -6,6 +6,7 @@
 // spelled out, at their verified Store offsets (static_asserts in the .cpp files that use them).
 #pragma once
 
+#include "bgame/bg_weapons.h"
 #include "client/client.h"
 
 // One spawn point the client checks for being in view (name unknown): 0x14 bytes. The cgame fills the array; the
@@ -35,17 +36,38 @@ struct cg_s
 	int ps_pm_type;
 	int ps_pm_time;
 	int ps_pm_flags;
-	unsigned char unknown10[0x23C - 0x10];
+	int ps_otherFlags;
+	int ps_linkFlags;
+	unsigned char unknown18[0x124 - 0x18];
+	int ps_eFlags;
+	unsigned char unknown128[0x23C - 0x128];
 	int ps_locationSelectionInfo;  // 0 when not selecting a location; bit 7: the selection has a direction
-	unsigned char unknown240[0x7188C - 0x240];
+	unsigned char unknown240[0x41C - 0x240];
+	Weapon ps_weapon;              // weapCommon.weapon
+	int ps_weapFlags;              // weapCommon.weapFlags; bit 14: the alternate (underbarrel) mode
+	unsigned char unknown424[0x7188C - 0x424];
 	int frametime;
-	unsigned char unknown71890[0xB52F0 - 0x71890];
+	unsigned char unknown71890[0x718C8 - 0x71890];
+	// refdef (refdef_t): only these fields
+	int refdef_displayViewport[4];
+	float refdef_tanHalfFovX;      // tan(horizontal FOV / 2): what the renderer's projection uses
+	float refdef_tanHalfFovY;
+	unsigned char unknown718E0[0xB1B18 - 0x718E0];
+	float zoomSensitivity;         // tan(fov / 2) / tan(65 / 2): the mouse sensitivity scale while zoomed
+	unsigned char unknownB1B1C[0xB4EF8 - 0xB1B1C];
+	unsigned int hybridScopeState;  // 2 or 3: one of a hybrid scope's two FOVs; 4 or 5: switching (name unknown)
+	float hybridScopeFrac;          // how far a switch has gone (name unknown)
+	unsigned char unknownB4F00[0xB52F0 - 0xB4F00];
 	float compassMapWorldSize[2];
 	unsigned char unknownB52F8[0xB5368 - 0xB52F8];
 	float selectedLocation[2];
 	float selectedLocationAngle;
 	float selectedDirectionPoint[2];  // Store build only: where the direction cursor is (name unknown)
-	unsigned char unknownB537C[0x10F05C - 0xB537C];
+	unsigned char unknownB537C[0x10E79F - 0xB537C];
+	bool remoteMissileCam;          // the view is a remote missile's camera: missileRemoteFOV (name unknown)
+	unsigned char unknown10E7A0[0x10EDC4 - 0x10E7A0];
+	float scriptedViewFov;          // the FOV while eFlags 0x3800 or otherFlags 0x200000 (name unknown)
+	unsigned char unknown10EDC8[0x10F05C - 0x10EDC8];
 	unsigned int sightedClientsMask;  // copied to usercmd_s::sightedClientsMask (name unknown)
 	unsigned char unknown10F060[0x10F880 - 0x10F060];
 	SpawnSightGlob spawnSight;        // name unknown
@@ -54,8 +76,27 @@ struct cg_s
 
 extern cg_s cgArray[1];  // cgame_mp/cg_main_mp.cpp
 
+// The cgame's per-local-client static globals: the Store build keeps the PS4 server PDB's leading fields.
+struct cgs_t
+{
+	int viewX;
+	int viewY;
+	int viewWidth;
+	int viewHeight;
+	float viewAspect;  // the window aspect ratio (cls.vidConfig.windowAspectRatio)
+	float viewMult;
+	// the rest is not needed yet
+};
+
+extern cgs_t cgsArray[1];  // cgame_mp/cg_main_mp.cpp
+
 // Inline from cgame_mp/cg_local_mp.h: one local client in this build.
 inline cg_s *CG_GetLocalClientGlobals(LocalClientNum_t localClientNum)
 {
 	return &cgArray[0];
+}
+
+inline cgs_t *CG_GetLocalClientStaticGlobals(LocalClientNum_t localClientNum)
+{
+	return &cgsArray[0];
 }

@@ -19,6 +19,7 @@ float cosf(float);
 float acosf(float);
 float atanf(float);
 float atan2f(float, float);
+double tan(double);
 
 // fabs is a compiler intrinsic in VC11 x64 (andpd with a sign mask on the double), never a CRT call.
 static inline double fabs(double x) { return __builtin_fabs(x); }
