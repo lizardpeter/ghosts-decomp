@@ -166,6 +166,19 @@ def _atan2(single):
     return run
 
 
+def _unary(fn, single):
+    """A one-argument CRT math routine (tan, sin, ...): Python's libm result, not necessarily bit-exact with the
+    CRT, but both runs reach the same stub, so callers are compared on real values."""
+    def run(mu):
+        x = _xmm_float(mu) if single else _xmm_double(mu)
+        try:
+            y = fn(x)
+        except (ValueError, OverflowError):
+            y = float("nan")
+        (_ret_float if single else _ret_double)(mu, y)
+    return run
+
+
 # CRT routines a build imports (the Store build links the CRT dynamically): exact Python versions, so code that
 # rounds or takes square roots through an import gets real results. Both runs reach the same stub.
 CRT_IMPORTS = {
@@ -173,6 +186,8 @@ CRT_IMPORTS = {
     "ceil": _rounding(math.ceil, False), "ceilf": _rounding(math.ceil, True),
     "sqrt": _sqrt(False), "sqrtf": _sqrt(True),
     "atan2": _atan2(False), "atan2f": _atan2(True),
+    **{name + suffix: _unary(getattr(math, name), suffix == "f")
+       for name in ("tan", "sin", "cos", "atan", "asin", "acos", "exp", "log") for suffix in ("", "f")},
 }
 
 
