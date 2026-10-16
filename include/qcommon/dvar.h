@@ -37,3 +37,9 @@ struct dvar_t
 extern __declspec(thread) int dvar_modifiedFlags;
 
 int Dvar_GetInt(const char *dvarName);
+const dvar_t *Dvar_RegisterBool(const char *dvarName, bool value, unsigned int flags, const char *description);
+const dvar_t *Dvar_RegisterInt(const char *dvarName, int value, int min, int max, unsigned int flags,
+                               const char *description);
+const dvar_t *Dvar_RegisterString(const char *dvarName, const char *value, unsigned int flags,
+                                  const char *description);
+void Dvar_SetInt(const dvar_t *dvar, int value);

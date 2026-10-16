@@ -1188,6 +1188,7 @@
 {"path": "win32/win_main.cpp", "subsystem": "win32"}
 {"path": "win32/win_messagebox.cpp", "subsystem": "win32"}
 {"path": "win32/win_mini_dumper.cpp", "subsystem": "win32"}
+{"path": "win32/win_net.cpp", "subsystem": "win32"}
 {"path": "win32/win_shared.cpp", "subsystem": "win32"}
 {"path": "win32/win_snd_driver_load_obj.cpp", "subsystem": "win32"}
 {"path": "win32/win_splash.cpp", "subsystem": "win32"}

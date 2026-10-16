@@ -22,6 +22,7 @@ Compilers: Store build VS2019 (x64, LTCG); servers and Steam exes VS2012 (x64).
 - Decrypting the Arxan-protected Steam exes: [docs/arxan.md](docs/arxan.md)
 - Input (keys, gamepad, mouse) and how the mouse reaches the view angles: [docs/input.md](docs/input.md)
 - Field of view, its effect on mouse sensitivity, and the aspect ratio: [docs/view.md](docs/view.md)
+- Every way the game reaches the network, and where to cut it: [docs/network.md](docs/network.md); the GDK (Xbox) runtime calls: [docs/gdk.md](docs/gdk.md)
 
 ## Pipeline
 

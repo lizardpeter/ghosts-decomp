@@ -14,9 +14,9 @@ DLLs, and the game functions that call them:
 
 | Path | DLL | Used by | All traffic goes through |
 |---|---|---|---|
-| Game UDP (the game protocol: snapshots, usercmds, out-of-band packets) | WS2_32 | win32/win_net.cpp | NET_OpenIP 14054F300 (the only socket), Sys_SendPacket 14054FB70 (sendto), Sys_GetPacket 14054F960 (recvfrom) |
+| Game UDP (the game protocol: snapshots, usercmds, out-of-band packets) | WS2_32 | win32/win_net.cpp (reconstructed, tested) | Sys_SendPacket 14054FB70: NA_IP addresses go out through Demonware (dwSendTo 1405A9C80 → bdPlatformSocket), only broadcasts use the game's own socket from NET_OpenIP 14054F300 (sendto). Sys_GetPacket 14054F960 reads that socket (recvfrom) and then Demonware (dwRecvFrom 1405A9740) |
 | SOCKS5 proxy for the game socket (only with `net_socksEnabled`) | WS2_32 (TCP) | NET_OpenSocks 14054F5B0 | connect to `net_socksServer:net_socksPort` |
-| Game DNS | WS2_32 gethostbyname | 140535F50 / 140535FE0 (address strings), NET_OpenIP, NET_OpenSocks | gethostbyname |
+| Game DNS | WS2_32 gethostbyname | Sys_StringToAdr 140535F50 / Sys_StringToSockaddr 140535FE0 (any address string not starting with a digit), NET_GetLocalAddress (inlined in NET_OpenIP; the local host name), NET_OpenSocks | gethostbyname |
 | Demonware UDP (peer-to-peer game traffic in DW sessions, STUN, NAT type discovery, UPnP, QoS probes, bandwidth test) | WS2_32 | DemonWare bdSocket/bdNet | bdPlatformSocket::create 14076E930, sendTo 14076EF90, receiveFrom 14076EC90 |
 | Demonware TCP (the lobby connection to the LSG) | WS2_32 | bdLobbyConnection | bdPlatformStreamSocket::create 1407E1340, connect 1407E11B0 |
 | Demonware DNS | WS2_32 getaddrinfo | bdGetHostByName | bdPlatformSocket::getHostByName 14076EB20 |
@@ -37,6 +37,10 @@ In the exe, nothing else imports WS2_32, WINHTTP or XCurl. The other DLLs it loa
 DirectSound, XInput) are not network libraries, but their own imports haven't been checked yet. The guard below
 covers them anyway, because it hooks the Winsock and WinHTTP functions themselves, for every module in the
 process.
+
+So the game's own UDP traffic to other players and servers rides on Demonware's socket, not on a socket of its
+own. Cutting Demonware's socket cuts game traffic too, and our server has to accept game packets the way
+Demonware's socket layer sends them, or the enhanced build has to send them itself.
 
 ## Servers the game contacts
 
