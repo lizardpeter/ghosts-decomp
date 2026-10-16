@@ -124,3 +124,20 @@ the fixes in records/bugs.tsv.
   changing the game's online code.
 - **Long term (enhanced):** the game's dw*/Live_* layer (dw/, online/, sessions/, the PS4 PDB names them) calls our
   own protocol instead of bd* tasks.
+
+## Checked
+
+- No `syscall` or `int 0x2e` instruction in the exe, so all traffic goes through the DLLs above.
+- Every function that calls a WS2_32, WINHTTP or XCurl import is in the table, from a scan of the whole
+  disassembly. Run-time lookups (GetProcAddress) fetch only the WinHTTP WebSocket functions, GetAdaptersInfo,
+  the NVIDIA, AMD and NVIDIA GameWorks entry points, WinRT activation, and the GDK runtime's own exports.
+- The exception is LUI's Lua, which keeps `package.loadlib` and `require`'s C loader (security S21): a script could
+  load any DLL. The guard still catches traffic from such a DLL, because it hooks Winsock and WinHTTP themselves.
+- The game's own net layer (win_net.cpp, com_net.cpp) is reconstructed and tested, so its list of exits is
+  established, not inferred:
+  - `bind` of the UDP port (27016 and up to 9 more);
+  - `sendto` for broadcasts;
+  - `dwSendTo` for every NA_IP address;
+  - `gethostbyname` for names;
+  - the SOCKS5 handshake when `net_socksEnabled` is set.
+
