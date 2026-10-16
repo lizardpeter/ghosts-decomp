@@ -84,8 +84,7 @@ is ignored. Details:
    - `XGameRuntimeInitialize` (1406AF4BC) failing → if hr is 0x89240101 or 0x89240102 (the runtime DLL or its exports
      are missing), `MessageBoxW "Game Runtime is not installed on this system or needs updating."` → return 0.
    - `XGameGetXboxTitleId` (1406AF32C) failing → `MessageBoxW "Title ID not found in MicrosoftGameConfig.mgc file."`
-     → return 0. Outside its package the exe has no MicrosoftGame.config, so a loader must answer this call with
-     0x66CDD1F0.
+     → return 0. Outside its package the exe has no MicrosoftGame.config.
    - Com_Init ignores the return value and keeps going. But all GDK set-up is then skipped: gamesave, users, presence,
      store and session queues are never created, so there is no sign-in, no licence and no online.
    - 1406AEC18 calls `DebugBreak()` when runtime initialisation fails and KUSER_SHARED_DATA+0x2D4 & 3 == 3 (a kernel
@@ -143,30 +142,6 @@ is ignored. Details:
    - LUI `CheckGameLicense` (140245440) re-runs the check.
    - **Not established here:** whether the `error_popmenu_license` buttons quit the game. That is Lua in the
      fastfiles, not exe code. No quit, exit or Com_Error call was found on these paths in the exe.
-4. **Minimum answers for an offline loader** (from the conditions above):
-   - XGameRuntimeInitialize: S_OK.
-   - XGameGetXboxTitleId: 0x66CDD1F0.
-   - Working XAsync and XTaskQueue semantics (every completion is dispatched by XTaskQueueDispatch from the game frame).
-   - User calls:
-     - XUserAddAsync/Result: a user handle.
-     - XUserGetId and XUserGetLocalId: values.
-     - XUserGetGamertag.
-     - XUserGetState: 0.
-     - XUserGetAgeGroup.
-     - XUserGetIsGuest: false.
-     - XUserCheckPrivilege: hasPrivilege = true.
-     - XUserRegisterForChangeEvent.
-     - XUserIsStoreUser: true.
-   - XSAPI XblContextCreateHandle must succeed.
-   - Store calls:
-     - XStoreCreateContext.
-     - XStoreQueryGameLicenseAsync/Result: isActive = 1, isTrial = 0.
-   - Can fail without harm: XStoreQueryAssociatedProducts* (add-ons) and XPackageEnumeratePackages (DLC; it just
-     enumerates nothing).
-   - Connectivity: XNetworkingRegisterConnectivityHintChanged must succeed, or 1401A8960 returns before the store and
-     licence step.
-   - Saves: XGameSave* failures only leave the profile unloaded (DAT_141E62194 stays 0).
-   - Demonware login also needs XUserGetTokenAndSignatureAsync. That is the step to redirect to our own backend.
 
 ## Unresolved or weak
 

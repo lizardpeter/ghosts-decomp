@@ -38,20 +38,21 @@ Status: both executables are in R2 (`ghosts/DUMP/`); the rest of the package is 
 
 ## Running it for testing
 
-Goal: get the original Store exe into a lobby or match **offline**, so that decompiled functions can be swapped in
-and tested in the running game.
+Goal: run the original Store exe offline, so that decompiled functions can be swapped in and tested in the
+running game.
 
 1. Map the platform layer: every GDK call (XGameRuntime initialisation, XUser sign-in, XStore licence, XGameSave,
-   Xbox Live services, invites) and the game functions that make them.
-2. A loader, kept apart from `src/` and `enhanced/`, starts the exe outside its package and answers those calls
-   locally: an offline signed-in user, a valid licence, local saves. Every patch it applies to the original is
-   listed with address, reason and evidence.
-3. Reach a private match with bots or a local dedicated server, fully offline.
-4. Later: online play against our own backend.
+   Xbox Live services, invites) and the game functions that make them. Done: docs/gdk.md and docs/network.md.
+2. Run the exe with no network at all: a VM or Windows Sandbox without a network adapter. It then takes its own
+   offline path (a popup, online systems off). How far it gets that way (menus, a private match with bots) is
+   still to be found out.
+3. A loader, kept apart from `src/` and `enhanced/`, swaps reconstructed gameplay functions into the running game
+   for testing. It doesn't touch the sign-in, licence or platform code. Every function it swaps is listed with its
+   address and evidence.
+4. Later: online play against our own backend, from the enhanced build.
 
 Rules:
 - The licence and sign-in code is Activision's own source, unlike Arxan. The faithful decomp reproduces it; the
-  enhanced build replaces it with a clean platform layer. Only the loader strips it from the original binary, for
-  testing.
-- A patched client never connects to Activision's or Xbox's live services. Testing is offline or against our
-  own servers.
+  enhanced build replaces it with its own platform layer and its own accounts. The original binary's licence and
+  sign-in handling is left as it is.
+- Testing the original happens offline, never against Activision's or Xbox's live services.

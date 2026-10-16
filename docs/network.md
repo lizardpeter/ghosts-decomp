@@ -1,11 +1,11 @@
 # Network and platform traffic
 
 This page lists every way the Microsoft Store build (`iw6mp64_MSStore_ship`) can reach the network. It also
-shows the few functions all of that traffic goes through. Those are the places to cut it, and later to point it at
-our own server.
+shows the few functions all of that traffic goes through. The faithful decomp reproduces all of it. The enhanced
+build replaces it in source.
 
-The goal is that a patched or rebuilt client never talks to Activision's, Demonware's, Xbox's or Microsoft's
-services. Local play and LAN must keep working, and online play goes to our own backend once it exists.
+The enhanced build's goal is that it never talks to Activision's, Demonware's, Xbox's or Microsoft's services.
+Local play and LAN keep working, and online play goes to our own backend once it exists.
 
 ## Ways out
 
@@ -34,13 +34,10 @@ Things that look like network access but aren't:
 - bcrypt and CRYPT32 do local cryptography and read the certificate store.
 
 In the exe, nothing else imports WS2_32, WINHTTP or XCurl. The other DLLs it loads (D3D, NVIDIA, AMD, Bink,
-DirectSound, XInput) are not network libraries, but their own imports haven't been checked yet. The guard below
-covers them anyway, because it hooks the Winsock and WinHTTP functions themselves, for every module in the
-process.
+DirectSound, XInput) are not network libraries, but their own imports haven't been checked yet.
 
 So the game's own UDP traffic to other players and servers rides on Demonware's socket, not on a socket of its
-own. Cutting Demonware's socket cuts game traffic too, and our server has to accept game packets the way
-Demonware's socket layer sends them, or the enhanced build has to send them itself.
+own. The enhanced build has to send game packets itself when it drops Demonware.
 
 ## Servers the game contacts
 
@@ -74,56 +71,21 @@ Nothing in the exe quits after a sign-in, licence or connectivity failure. Failu
 online systems stay off. Online starts only once the licence query has finished and found the game licensed
 (1401A1760, 1401A5550). The licence popup's buttons are Lua in the fastfiles and haven't been checked.
 
-An offline loader has to answer at least these:
-
-- `XGameRuntimeInitialize`;
-- `XGameGetXboxTitleId` = 0x66CDD1F0 (outside its package the exe has no MicrosoftGame.config);
-- working XAsync and XTaskQueue;
-- one signed-in user: an ID, a gamertag, state 0, not a guest, every privilege granted;
-- `XUserIsStoreUser` true;
-- `XblContextCreateHandle` succeeding;
-- connectivity registration succeeding;
-- a store context;
-- a licence with isActive 1 and isTrial 0.
-
-Add-on and DLC queries may fail. If runtime initialisation fails while a kernel debugger is attached,
+If runtime initialisation fails while a kernel debugger is attached,
 1406AEC18 calls DebugBreak.
 
-## Cutting it
+## In each build
 
-**The faithful decomp** (`src/`) reproduces all of this as it is. Nothing is cut there.
+**The faithful decomp** (`src/`) reproduces all of this as it is.
 
-**The loader**, used for testing the original exe offline (docs/store-build.md), cuts traffic at the DLL
-boundary. That is the one place nothing can slip past:
-
-- Ship our own `XCurl.dll` next to the exe. The exe imports it by name from its own folder, and it isn't a
-  KnownDLL, so ours loads before any game code runs. Every request it gets fails as "no network", or goes to our
-  server. Its DllMain also installs the guard below.
-- The guard hooks the functions in WS2_32 and WINHTTP themselves, not only the exe's import table, so every DLL in
-  the process is covered. It stays small because only these functions matter:
-  - WS2_32: `socket`/`WSASocketA` are allowed (local play needs them), but `connect`, `sendto` and `WSASendTo` are
-    checked against an allow-list: loopback, private LAN ranges, and our server.
-  - DNS: `gethostbyname` and `getaddrinfo` are answered from a local table. Demonware and Xbox names fail, or
-    resolve to our server.
-  - WINHTTP: `WinHttpOpen` returns NULL. With no session, every WinHTTP and WebSocket path fails at its first
-    step.
-  - `LoadLibraryExA("xgameruntime.dll")`: the exe loads it from System32 only (flag 0x800), so the exe's import
-    of LoadLibraryExA is patched to catch it. It gets our local implementation of the GDK interfaces the game uses (an offline signed-in user, a
-    valid licence, local saves) instead of the real runtime.
-- Each of these is listed with its reason and evidence, as docs/store-build.md requires for loader patches.
+**The original exe** is tested with no network at all: a VM or Windows Sandbox without a network adapter. It
+then behaves as it does offline: a popup, and the online systems stay off.
 
 **The enhanced build** (`enhanced/`) replaces the platform layer in source. It has no GDK, no Demonware, no xsapi
-and no XCurl. One backend client talks to our server, whose address is a setting. Game UDP stays as it is, with
-the fixes in records/bugs.tsv.
-
-## Where our server plugs in
-
-- **Short term (loader):** the DNS table maps the Demonware hosts to our server, and our server speaks enough of
-  the Demonware protocol (auth, then the LSG lobby: the bdLobbyService tasks the game uses). This is how the
-  community's private Demonware emulators work. It gives sign-in, matchmaking, stats and storage without
-  changing the game's online code.
-- **Long term (enhanced):** the game's dw*/Live_* layer (dw/, online/, sessions/, the PS4 PDB names them) calls our
-  own protocol instead of bd* tasks.
+and no XCurl. The game's dw*/Live_* layer (dw/, online/, sessions/; the PS4 PDB names them) calls our own
+backend client, with its own accounts and login, and that client talks to our server, whose address is a setting.
+A test on the built binary checks that none of the hosts above and none of the removed paths are left in it. Game
+UDP stays as it is, with the fixes in records/bugs.tsv.
 
 ## Checked
 
@@ -139,7 +101,7 @@ the fixes in records/bugs.tsv.
   - a few kernel32 functions;
   - the GDK runtime's own exports.
 - The exception is LUI's Lua, which keeps `package.loadlib` and `require`'s C loader (security S21): a script could
-  load any DLL. The guard still catches traffic from such a DLL, because it hooks Winsock and WinHTTP themselves.
+  load any DLL.
 - The game's own net layer (win_net.cpp, com_net.cpp) is reconstructed and tested, so its list of exits is
   established, not inferred:
   - `bind` of the UDP port (27016 and up to 9 more);
