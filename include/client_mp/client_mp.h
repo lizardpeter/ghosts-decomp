@@ -8,6 +8,7 @@
 
 #include "client/client.h"
 #include "bgame/bg_weapons.h"
+#include "qcommon/qcommon.h"
 
 struct usercmd_s
 {
@@ -152,15 +153,6 @@ inline clientActive_t *CL_GetLocalClientGlobals(LocalClientNum_t localClientNum)
 {
 	return &clients[0];
 }
-
-enum netadrtype_t
-{
-	NA_BOT = 0x0,
-	NA_BAD = 0x1,
-	NA_LOOPBACK = 0x2,
-	NA_BROADCAST = 0x3,
-	NA_IP = 0x4,
-};
 
 // The leading netchan_t fields the client code reads, at their Store offsets.
 struct netchan_t

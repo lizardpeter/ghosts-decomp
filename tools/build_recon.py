@@ -123,8 +123,31 @@ def main():
     # Only functions that exist in the original are exported (and tested). Anything else defined in src/
     # is an inline helper from a header; flag it so new names do not slip in unnoticed.
     stray = [e for e in exports if e not in orig and e not in ("_fltused",)]
-    exports = [e for e in exports if e in orig]
-    rows = [r for r in rows if r.split("\t")[0] in orig]
+    # A build whose PDB names each function's source file has the function only when it comes from the same file:
+    # the PS4 server's ds/ds_net.cpp NET_Init is not the PC's win32/win_net.cpp NET_Init. Functions the PDB places
+    # in a header (inline) are left alone.
+    pdb_source = {}
+    for r in symbols.read_tsv(ROOT / "analysis" / build / "pdb" / "functions.tsv"):
+        pdb_source.setdefault(int(r["va"], 16), []).append((r["name"], r["module_source"], r["line_source"]))
+    sources_of = {}
+    for r in rows:
+        sym, src = r.split("\t")
+        sources_of.setdefault(sym, set()).add(src.replace("\\", "/"))
+    other_file = set()
+    for e in set(stray) | {e for e in exports if e in orig}:
+        bn = e[1:].split("@", 1)[0] if e.startswith("?") else e
+        vas = [orig[e][0]] if e in orig else [va for k, (va, _) in orig.items()
+                                               if (k[1:].split("@", 1)[0] if k.startswith("?") else k) == bn]
+        # by address and plain name: identical code folding puts several functions at one address
+        known = [(ms, ls) for va in vas for name, ms, ls in pdb_source.get(va, []) if name == bn]
+        if known and all(ls.endswith(".cpp") and not ({ms, ls} & sources_of.get(e, set())) for ms, ls in known):
+            other_file.add(e)
+    if other_file:
+        print(f"note: {len(other_file)} function(s) in {build} come from another source file (not exported):",
+              ", ".join(sorted(other_file)))
+    stray = [e for e in stray if e not in other_file]
+    exports = [e for e in exports if e in orig and e not in other_file]
+    rows = [r for r in rows if r.split("\t")[0] in orig and r.split("\t")[0] not in other_file]
     # A stray symbol whose plain name matches an original function is a prototype mismatch (wrong parameter
     # or return type, constness, calling convention): the function would silently drop out of testing.
     def base_name(sym):

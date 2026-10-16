@@ -47,6 +47,30 @@ struct msg_t
 	int useZlib;
 };
 
+// qcommon/qcommon.h: network addresses
+enum netadrtype_t
+{
+	NA_BOT = 0x0,
+	NA_BAD = 0x1,
+	NA_LOOPBACK = 0x2,
+	NA_BROADCAST = 0x3,
+	NA_IP = 0x4,
+};
+
+// The Store build's netadr_s is 0x10 bytes: the server PDB's localNetID (0xC) is gone, so addrHandleIndex (the
+// DemonWare address handle of an NA_IP address) moved from 0x10 to 0xC (Sys_SendPacket copies 16 bytes,
+// sub_14054EFA0 reads 0xC).
+struct netadr_s
+{
+	netadrtype_t type;
+	unsigned char ip[4];
+	unsigned short port;
+	unsigned int addrHandleIndex;
+};
+static_assert(sizeof(netadr_s) == 0x10, "netadr_s layout (Store build)");
+static_assert(__builtin_offsetof(netadr_s, port) == 0x8, "netadr_s layout");
+static_assert(__builtin_offsetof(netadr_s, addrHandleIndex) == 0xC, "netadr_s layout");
+
 struct playerState_s;
 struct usercmd_s;
 
