@@ -3,8 +3,10 @@
 What must hold:
 - the factory comes from CreateDXGIFactory1 (DXGI 1.1), whatever interface is asked for;
 - R_CreateDevice creates a DXGI_SWAP_EFFECT_FLIP_DISCARD swap chain with two buffers, with ALLOW_TEARING exactly
-  when IDXGIFactory5 reports tearing support, and limits the device to one queued frame;
-- when the system refuses a flip-model swap chain, the original description is used and nothing else changes;
+  when IDXGIFactory5 reports tearing support and FRAME_LATENCY_WAITABLE_OBJECT (P0004, tests in
+  test_frame_wait.py), and limits the device to one queued frame;
+- when the system refuses the waitable flag, the flip-model swap chain is made without it; when it refuses a
+  flip-model swap chain, the original description is used and nothing else changes;
 - RB_SwapBuffers presents with DXGI_PRESENT_ALLOW_TEARING only for a windowed sync interval 0 with tearing allowed,
   and binds the render targets that were bound before the present again after it (flip model unbinds the back
   buffer), releasing the references it took;
@@ -35,13 +37,14 @@ SIGS = {
     (DEV, QI): "pp", (DEV, 30 * 8): "iip", (DEV, RELEASE): "",
     (ADP, 8 * 8): "p",
     (UNK, CHECK_FEATURE): "ipi", (UNK, SET_LATENCY): "i", (UNK, RELEASE): "",
-    (SWC, PRESENT): "ii", (SWC, GET_FULLSCREEN): "pp",
+    (SWC, PRESENT): "ii", (SWC, GET_FULLSCREEN): "pp", (SWC, QI): "pp",
+    (UNK, 31 * 8): "i", (UNK, 33 * 8): "",  # IDXGISwapChain2: SetMaximumFrameLatency, GetFrameLatencyWaitableObject
     (CTX, OM_GET): "ipp", (CTX, OM_SET): "ipp", (CTX, CLEAR_STATE): "", (CTX, FLUSH): "",
     (CTX, GET_DATA): "ppii", (CTX, END): "p",
     (QRY, 7 * 8): "",
     (VIEW, RELEASE): "",
 }
-DUMPS = {(FAC, QI): {0: 16}, (DEV, QI): {0: 16}}
+DUMPS = {(FAC, QI): {0: 16}, (DEV, QI): {0: 16}, (SWC, QI): {0: 16}}
 
 # dx fields (gfx_d3d/r_dx.h)
 DEVICE, CONTEXT, LOCK_COUNT, FACTORY, ADAPTER = 0x08, 0x10, 0x18, 0x20, 0x28
@@ -68,7 +71,11 @@ def _scratch_dvar(w, value):
 
 # ---- R_CreateDevice ------------------------------------------------------------------------------------------
 
-def _create_device(env, tearing=True, factory5=True, flip_ok=True, device1=True):
+WAITABLE = 0xABC0  # the handle GetFrameLatencyWaitableObject returns
+
+
+def _create_device(env, tearing=True, factory5=True, flip_ok=True, device1=True, waitable_ok=True, swapchain2=True,
+                   old_waitable=0):
     descs = []
 
     def setup(w):
@@ -92,15 +99,23 @@ def _create_device(env, tearing=True, factory5=True, flip_ok=True, device1=True)
             descs.append(_desc(call.mu, call.arg(1)))
             if not flip_ok and descs[-1][2] == 4:
                 return 0x887A0001  # DXGI_ERROR_INVALID_CALL
+            if not waitable_ok and descs[-1][3] & 0x40:
+                return 0x887A0001
             m._emulated_write(call.arg(2), struct.pack("<Q", model.new(SWC, call.mu)))
             return 0
+
+        def qi_swap_chain(call):
+            if not swapchain2:
+                return 0x80004002
+            return call.out_object(1, UNK) and 0
 
         def adapter_desc(call):
             call.write(call.arg(0), bytes(0x100) + struct.pack("<I", 0x10DE) + bytes(0x2C))
             return 0
 
         model = ComModel(SIGS, {(FAC, QI): qi_factory, (UNK, CHECK_FEATURE): check_feature, (DEV, QI): qi_device,
-                                (FAC, CREATE_SWAP_CHAIN): create_swap_chain, (ADP, 8 * 8): adapter_desc}, DUMPS)
+                                (FAC, CREATE_SWAP_CHAIN): create_swap_chain, (ADP, 8 * 8): adapter_desc,
+                                (SWC, QI): qi_swap_chain, (UNK, 33 * 8): lambda call: WAITABLE}, DUMPS)
         model.install(m)
         display = Display(mutex=MUTEX)
         display.com = model
@@ -112,6 +127,11 @@ def _create_device(env, tearing=True, factory5=True, flip_ok=True, device1=True)
             w.u64(va(name), _scratch_dvar(w, 0))
         w.write(env.data("s_flipModel"), b"\x01")
         w.write(env.data("s_allowTearing"), b"\x00")
+        w.write(env.data("s_latencyWaitable"), b"\x01")
+        w.u64(env.data("s_frameLatencyWaitable"), old_waitable)
+        w.u32(env.data("s_presentCount"), 7)
+        w.u32(env.data("s_waitedPresentCount"), 6)
+        w.write(env.data("s_resyncFrameLatency"), b"\x01")
 
     parms = struct.pack("<QIIiiifHHiiiiBBxxi", 0x10010, 60, 1, 0, 0, 0, 1.7777778, 0x200, 0x400, 1920, 1080,
                         1920, 1080, 0, 0, 0)
@@ -134,7 +154,8 @@ def _coms(observed, kind=None, offset=None):
 def test_flip_swap_chain_with_tearing(env):
     value, descs, written, observed = _create_device(env, tearing=True)
     assert value == 1, value
-    assert descs == [(2, 1, 4, 0x802)], descs  # two buffers, windowed, FLIP_DISCARD, ALLOW_MODE_SWITCH|ALLOW_TEARING
+    # two buffers, windowed, FLIP_DISCARD, ALLOW_MODE_SWITCH | ALLOW_TEARING | FRAME_LATENCY_WAITABLE_OBJECT
+    assert descs == [(2, 1, 4, 0x842)], descs
     qi = _coms(observed, FAC, QI)
     assert qi and qi[0][4] == ("bytes", FACTORY5), qi
     assert _coms(observed, UNK, CHECK_FEATURE)[0][4:6] == (0, ("ptr",))
@@ -146,22 +167,32 @@ def test_flip_swap_chain_with_tearing(env):
 def test_flip_swap_chain_without_tearing(env):
     for kwargs in ({"tearing": False}, {"factory5": False}):
         value, descs, written, observed = _create_device(env, **kwargs)
-        assert descs == [(2, 1, 4, 0x2)], (kwargs, descs)
-        assert env.data("s_allowTearing") not in written, kwargs  # stays false
+        assert descs == [(2, 1, 4, 0x42)], (kwargs, descs)
+        # stays false (the harness reports 8 bytes from each changed address, so compare the value)
+        assert written.get(env.data("s_allowTearing"), b"\x00") == b"\x00", kwargs
 
 
 def test_no_frame_latency_call_without_dxgi_device1(env):
     _, descs, _, observed = _create_device(env, device1=False)
-    assert descs == [(2, 1, 4, 0x802)]
+    assert descs == [(2, 1, 4, 0x842)]
     assert not _coms(observed, UNK, SET_LATENCY)
 
 
 def test_original_swap_chain_when_flip_is_refused(env):
     value, descs, written, observed = _create_device(env, flip_ok=False)
     assert value == 1
-    assert descs == [(2, 1, 4, 0x802), (2, 1, 0, 0x2)], descs  # then the original: DISCARD, ALLOW_MODE_SWITCH
+    # flip with and without the waitable object, then the original: DISCARD, ALLOW_MODE_SWITCH
+    assert descs == [(2, 1, 4, 0x842), (2, 1, 4, 0x802), (2, 1, 0, 0x2)], descs
     assert written[env.data("s_flipModel")] == b"\x00"
     assert written.get(env.data("s_allowTearing"), b"\x00") == b"\x00"
+
+
+def test_flip_without_waitable_when_refused(env):
+    value, descs, written, observed = _create_device(env, waitable_ok=False)
+    assert value == 1
+    assert descs == [(2, 1, 4, 0x842), (2, 1, 4, 0x802)], descs
+    assert written[env.data("s_latencyWaitable")] == b"\x00"
+    assert written.get(env.data("s_flipModel"), b"\x01") == b"\x01"
 
 
 def test_factory_is_dxgi_1_1(env):
@@ -175,7 +206,9 @@ def test_factory_is_dxgi_1_1(env):
 
 # ---- RB_SwapBuffers ------------------------------------------------------------------------------------------
 
-def _swap(env, flip=True, tearing=True, vsync=0, fullscreen=False, bound=True):
+def _swap(env, flip=True, tearing=True, vsync=0, fullscreen=False, bound=True, extra=None, written=False,
+          display_mode=None):
+    """extra: {static name: (format letter, value)} written before the call; written: also return the writes."""
     def setup(w):
         m = w.m
 
@@ -207,20 +240,26 @@ def _swap(env, flip=True, tearing=True, vsync=0, fullscreen=False, bound=True):
         w.u32(dx(NEXT_FENCE), 0)
         w.u64(dx(FENCE_POOL), model.new(QRY))
         w.u64(va("r_vsync"), _scratch_dvar(w, vsync))
-        w.u64(va("r_displayMode"), _scratch_dvar(w, 0 if fullscreen else 2))
+        w.u64(va("r_displayMode"), _scratch_dvar(w, display_mode if display_mode is not None else
+                                                     0 if fullscreen else 2))
         w.u32(va("unk_14A37D568"), 0)
         w.u32(va("unk_149D62D6C"), 0)
         w.u64(va("unk_14A107B60"), w.alloc(bytes(8)))
         w.write(env.data("s_flipModel"), bytes([flip]))
         w.write(env.data("s_allowTearing"), bytes([tearing]))
+        w.u64(env.data("s_frameLatencyWaitable"), 0)
+        for name, (fmt, value) in (extra or {}).items():
+            w.write(env.data(name), struct.pack("<" + fmt.replace("i", "I").replace("b", "B").replace("q", "Q"),
+                                                value))
 
     fakes = {
         "?sub_1406968F0@@YA_NXZ": logged_fake("sub_1406968F0", "", 0),
         "?Sys_IsMainThread@@YA_NXZ": logged_fake("Sys_IsMainThread", "", 0),
         "?sub_14062EC80@@YAXPEAUID3D11Query@@@Z": logged_fake("sub_14062EC80", "q"),
     }
-    _, _, _, observed = env.call("?RB_SwapBuffers@@YAXXZ", [], setup=setup, fakes=fakes)
-    return [o for o in observed if o[0] == "com" and o[2] in (OM_GET, OM_SET, PRESENT, RELEASE)]
+    _, _, writes, observed = env.call("?RB_SwapBuffers@@YAXXZ", [], setup=setup, fakes=fakes)
+    calls = [o for o in observed if o[0] == "com" and o[2] in (OM_GET, OM_SET, PRESENT, RELEASE)]
+    return (calls, writes) if written else calls
 
 
 def test_present_rebinds_render_targets(env):
@@ -273,7 +312,8 @@ RECOVER_CALLEES = ("?R_PopRemoteScreenUpdate@@YAHXZ", "?R_SyncRenderThread@@YAXX
                    "?R_SetRenderTarget@@YAXUGfxCmdBufContext@@W4GfxRenderTargetId@@@Z")
 
 
-def _recover(env, flip=True, tearing=True):
+def _recover(env, flip=True, tearing=True, old_waitable=None):
+    """old_waitable: also returns (written, observed), with that waitable object before the call."""
     descs = []
 
     def setup(w):
@@ -285,7 +325,9 @@ def _recover(env, flip=True, tearing=True):
             m._emulated_write(call.arg(2), struct.pack("<Q", model.new(SWC, call.mu)))
             return 0
 
-        model = ComModel(SIGS, {(FAC, CREATE_SWAP_CHAIN): create_swap_chain}, DUMPS)
+        model = ComModel(SIGS, {(FAC, CREATE_SWAP_CHAIN): create_swap_chain,
+                                (SWC, QI): lambda call: call.out_object(1, UNK) and 0,
+                                (UNK, 33 * 8): lambda call: WAITABLE}, DUMPS)
         model.install(m)
         display = Display(mutex=MUTEX)
         display.com = model
@@ -296,17 +338,21 @@ def _recover(env, flip=True, tearing=True):
         w.u64(dx(WINDOW0_HWND), 0x10010)
         w.write(env.data("s_flipModel"), bytes([flip]))
         w.write(env.data("s_allowTearing"), bytes([tearing]))
+        w.write(env.data("s_latencyWaitable"), bytes([flip]))
+        w.u64(env.data("s_frameLatencyWaitable"), old_waitable or 0)
 
     fakes = {s: logged_fake(s[1:].split("@", 1)[0], "") for s in RECOVER_CALLEES}
     fakes["?R_CreateForInitOrReset@@YA_NH@Z"] = logged_fake("R_CreateForInitOrReset", "i", 1)
-    _, _, _, observed = env.call("?R_RecoverLostDevice@@YA_NXZ", [], "char", setup=setup, fakes=fakes)
+    _, _, written, observed = env.call("?R_RecoverLostDevice@@YA_NXZ", [], "char", setup=setup, fakes=fakes)
     order = [o[1] if o[0] == "call" else (o[2] if o[0] == "com" else o[0]) for o in observed]
+    if old_waitable is not None:
+        return descs, order, written, observed
     return descs, order
 
 
 def test_lost_device_clears_context_before_new_swap_chain(env):
     descs, order = _recover(env)
-    assert descs == [(2, 1, 4, 0x802)], descs
+    assert descs == [(2, 1, 4, 0x842)], descs
     release = order.index("R_ReleaseForShutdownOrReset")
     clear, flush, create = order.index(CLEAR_STATE), order.index(FLUSH), order.index("create swap chain")
     assert release < clear < flush < create, order

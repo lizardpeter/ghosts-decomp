@@ -293,6 +293,39 @@ So pair by counting, not by call:
   *Unverified:* that no key binding has an effect that is unsafe in the middle of the cgame frame. Bindings that run console commands only queue them (`Cbuf_AddText`), which is safe. Menu keys (`UI_KeyEvent`) are the case to check.
 - **The alternative, rejected:** waiting at the top of `Com_Frame` before its first `Com_EventLoop` would make keys fresh without moving anything. But then the com_maxfps sleep and the back-end wait in `R_SyncGpu` would come after the input, adding up to a frame of latency whenever com_maxfps limits, and the listen server's frame would run in between.
 
+### As implemented (P0004)
+
+`enhanced/gfx_d3d/r_init.cpp` follows the placement above, with these choices:
+
+- **Pairing by counted presents, not registered frames.** The render thread counts each successful `Present` on the
+  waitable swap chain, and `R_SyncGpu` waits once for each present counted since its last wait. A frame that was
+  registered but not presented then needs no bookkeeping: no override of 140674970 and no `s_droppedSwapFrames`.
+  Loading screens are counted too, and their waits return at once.
+  - With latency 1, the wait for present p returns once present p-1 is on screen.
+  - In the steady state the back end has presented frame N by the start of frame N+1, so this is the same wait as
+    above. If the back end is still on frame N, the wait is for frame N-2, and the original's own back-end wait in
+    `R_SyncGpu` (`g_gpuFrameWait`) still holds the front end one frame ahead.
+- **Signals no count pairs with.** Two cases:
+  - a present made by the window procedure after a fullscreen switch (`RB_SwapBuffers` posts `WM_USER`);
+  - a wait that timed out, whose signal may still come.
+
+  Either would let one more frame queue up for good. The next frame therefore takes every pending signal (zero-timeout
+  waits) instead of counting. That frame may wait up to one refresh longer, once.
+- **Timeout:** two refresh periods from `vidConfig.displayFrequency`, at least 50 ms and at most 1 s. The wait is
+  alertable, and a wait ended by an APC is repeated.
+- **Reset:** a lost device's new swap chain gets its own object (the old handle is closed) and the counts start
+  again. `R_FlushSwap` needs nothing, because presents are counted, not swap frames.
+- **Start time:** the wait comes after `R_SyncGpu`'s first clock read, so time spent waiting counts against
+  com_maxfps' frame time.
+- **The rest of `R_SyncGpu` is the original,** compared call for call with the Store build on the differential
+  test's inputs (tests/enhanced/test_frame_wait.py).
+- **Fallbacks:** without `IDXGISwapChain2` there is no object and no wait. If the system refuses the flag, a flip-model
+  swap chain is made without it, then the original swap chain.
+- **Keys are not moved yet** (the re-pump described above). The mouse is read right after the wait.
+- **Unverified on hardware:** that the waitable object behaves as documented on this game's swap chain (signal rate
+  when minimized or occluded, a `DXGI_STATUS_OCCLUDED` present). Check with PresentMon: one frame queued, and the
+  latency between the mouse and the photon.
+
 ## Findings for the enhanced build
 
 These are not recorded in `records/bugs.tsv`.
