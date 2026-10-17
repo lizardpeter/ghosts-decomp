@@ -22,7 +22,7 @@
     },
     {
       "file": "iw6/functions-iw6mp64_MSStore_ship.jsonl",
-      "sha256": "c7b62045f97f9de0ea3d23ab5197211aa23b0caed1f3457b92eb82f46e532266",
+      "sha256": "bcc0f56b2ab553215d5d5fc48ccba577880991319f0594c176d5e5abb3cd86d7",
       "rows": 23588,
       "cypher": "UNWIND {{ROWS}} AS r MATCH (b:Build {id:r.build}) MERGE (fn:Function {key:r.key}) SET fn.name = coalesce(fn.name, r.name), fn.symbol = r.symbol MERGE (fi:FunctionInstance {id:r.id}) SET fi.build=r.build, fi.va=r.va, fi.size=r.size, fi.status=r.status, fi.type=r.type, fi.src=r.src, fi.bytes_sha256=r.sha MERGE (fi)-[:INSTANCE_OF]->(fn) MERGE (fi)-[:IN_BUILD]->(b) WITH fn, r WHERE r.source <> '' MATCH (sf:SourceFile {path:r.source}) MERGE (fn)-[d:DEFINED_IN]->(sf) SET d.line=r.line"
     },
@@ -34,7 +34,7 @@
     },
     {
       "file": "iw6/functions-iw6_ds_ps4.jsonl",
-      "sha256": "ffd813d6e2b59e7cbf7e35901f96db00e53b740c31a80d19944df52daf8843db",
+      "sha256": "91e69f4a41ceedfc80fa477b36f43f8a8cdc6ffd4f6f2f3d585fb48d2e36b48e",
       "rows": 18063,
       "cypher": "UNWIND {{ROWS}} AS r MATCH (b:Build {id:r.build}) MERGE (fn:Function {key:r.key}) SET fn.name = coalesce(fn.name, r.name), fn.symbol = r.symbol MERGE (fi:FunctionInstance {id:r.id}) SET fi.build=r.build, fi.va=r.va, fi.size=r.size, fi.status=r.status, fi.type=r.type, fi.src=r.src, fi.bytes_sha256=r.sha MERGE (fi)-[:INSTANCE_OF]->(fn) MERGE (fi)-[:IN_BUILD]->(b) WITH fn, r WHERE r.source <> '' MATCH (sf:SourceFile {path:r.source}) MERGE (fn)-[d:DEFINED_IN]->(sf) SET d.line=r.line"
     },
