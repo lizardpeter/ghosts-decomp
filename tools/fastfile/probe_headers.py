@@ -8,11 +8,13 @@ assets. Produces small machine-readable JSON without copying proprietary data.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import pathlib
 import struct
 import sys
 import unittest
+import zlib
 from dataclasses import asdict, dataclass
 
 MAGIC = b"IWffu100"
@@ -90,6 +92,56 @@ def read_header(source: bytes, name: str = "source.ff") -> Header:
                   count, stream, a, b, cmf, flg, packages, len(source))
 
 
+AUTH_BLOCK_BYTES = 8192
+ZONE_PREFIX_BYTES = 112
+
+
+def probe_source_prefix(source: bytes, header: Header) -> dict:
+    """Verify first authenticated data block and inspect only XFile prefix.
+
+    This is evidence about the source, not an asset/geometry decoder. The
+    complete compressed zone is never fetched by this survey.
+    """
+    offset = header.stream_offset
+    authenticated = None
+    if header.envelope == "sha256-master-blocks":
+        need = offset + 3 * AUTH_BLOCK_BYTES
+        if len(source) < need:
+            return {"first_block_sha256_valid": None, "xfile_prefix": None}
+        master = source[offset + AUTH_BLOCK_BYTES:offset + 2 * AUTH_BLOCK_BYTES]
+        block = source[offset + 2 * AUTH_BLOCK_BYTES:need]
+        authenticated = hashlib.sha256(block).digest() == master[:32]
+        if not authenticated:
+            raise ValueError("first original IW6 authenticated data block SHA-256 mismatch")
+        compressed_prefix = block
+    else:
+        compressed_prefix = source[offset:]
+    try:
+        decoded = zlib.decompressobj().decompress(
+            compressed_prefix, ZONE_PREFIX_BYTES
+        )
+    except zlib.error as exc:
+        raise ValueError(f"original IW6 compressed zone prefix rejected: {exc}") from exc
+    if len(decoded) < ZONE_PREFIX_BYTES:
+        return {"first_block_sha256_valid": authenticated, "xfile_prefix": None}
+    words = struct.unpack_from("<9Q", decoded, 0)
+    strings, string_ref, assets, asset_ref, graphics_ref = struct.unpack_from(
+        "<5Q", decoded, 72
+    )
+    xfile = {
+        "declared_content_bytes": words[0],
+        "external_bytes": words[1],
+        "seven_block_bytes": list(words[2:]),
+        "script_string_count": strings,
+        "asset_count": assets,
+        "string_ref_tag": hex(string_ref >> 32),
+        "asset_ref_tag": hex(asset_ref >> 32),
+        "graphics_ref_tag": hex(graphics_ref >> 32),
+        "inspection": "first_112_inflated_bytes_only",
+    }
+    return {"first_block_sha256_valid": authenticated, "xfile_prefix": xfile}
+
+
 def audit(path: pathlib.Path) -> dict:
     if path.stat().st_size > MAX_SAMPLE_BYTES:
         raise ValueError("refusing to read a sample over the bounded maximum")
@@ -98,6 +150,7 @@ def audit(path: pathlib.Path) -> dict:
         raise ValueError(f"range probe exceeded {MAX_SAMPLE_BYTES} bytes; HTTP Range may have been ignored")
     header = read_header(source, path.name)
     result = asdict(header)
+    result.update(probe_source_prefix(source, header))
     result["validation"] = "range_header_only"
     result["payload_decoded"] = False
     return result
@@ -138,6 +191,31 @@ class HeaderTests(unittest.TestCase):
         value = read_header(self.sample(8160))
         self.assertEqual(value.image_count, 8160)
         self.assertEqual(value.stream_offset, 44 + 24 * 8160)
+
+    def test_signed_master_block_authenticates_first_zone_prefix(self):
+        original = bytearray(self.sample())
+        original[:8] = SIGNED_MAGIC
+        original[MIN_HEADER:] = b""
+        auth = bytearray(AUTH_BLOCK_BYTES)
+        auth[:8] = AUTH_MAGIC
+        zone = bytearray(ZONE_PREFIX_BYTES)
+        struct.pack_into("<Q", zone, 0, ZONE_PREFIX_BYTES - 72)
+        struct.pack_into("<Q", zone, 88, 17)
+        block = bytearray(AUTH_BLOCK_BYTES)
+        packed = zlib.compress(zone)
+        block[:len(packed)] = packed
+        master = bytearray(AUTH_BLOCK_BYTES)
+        master[:32] = hashlib.sha256(block).digest()
+        original.extend(auth)
+        original.extend(master)
+        original.extend(block)
+        hdr = read_header(bytes(original))
+        evidence = probe_source_prefix(bytes(original), hdr)
+        self.assertTrue(evidence["first_block_sha256_valid"])
+        self.assertEqual(evidence["xfile_prefix"]["asset_count"], 17)
+        original[-1] ^= 0x01
+        with self.assertRaises(ValueError):
+            probe_source_prefix(bytes(original), hdr)
 
     def test_bad_prefix_rejected(self):
         with self.assertRaises(ValueError):
