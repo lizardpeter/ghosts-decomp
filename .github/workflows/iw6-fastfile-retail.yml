@@ -26,6 +26,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout: |
+            tools/fastfile
+          fetch-depth: 1
       - name: Regression-test IW6 unsigned and authenticated prefix parsers
         run: python3 tools/fastfile/probe_headers.py --test
       - name: Verify original FastFile headers, first authenticated SHA blocks and XFile prefixes
