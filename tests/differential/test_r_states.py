@@ -486,8 +486,8 @@ def _wait_query_input(r, seed):
 INIT_CALLEES = ("?R_BuildSubDomainRangeConstantBuffers@@YAXXZ", "?sub_1401B6130@@YAXXZ", "?sub_140640510@@YAXXZ",
                 "?sub_1406310F0@@YAXXZ", "?sub_1406508E0@@YAXXZ", "?sub_14068C300@@YAXXZ",
                 "?R_InitRenderBuffers@@YAXXZ", "?sub_14063EBD0@@YAXXZ", "?sub_1401B1400@@YAXXZ",
-                "?sub_140601BC0@@YAXXZ", "?R_SetupPrecompiledConstantBuffer@@YAXXZ", "?R_InitDefaultDepthImage@@YAXXZ",
-                "?R_InitDaltonize@@YAXXZ", "?sub_14068EAE0@@YAXXZ", "?sub_140601E00@@YAXXZ", "?sub_14068BC80@@YAXXZ",
+                "?R_CreateDynamicBuffers@@YAXXZ", "?R_SetupPrecompiledConstantBuffer@@YAXXZ", "?R_InitDefaultDepthImage@@YAXXZ",
+                "?R_InitDaltonize@@YAXXZ", "?sub_14068EAE0@@YAXXZ", "?R_CreateParticleCloudBuffer@@YAXXZ", "?sub_14068BC80@@YAXXZ",
                 "?sub_14068D600@@YAXXZ", "?sub_1401AAEF0@@YAXXZ", "?sub_1401AB1C0@@YAXXZ")
 CREATE_BUFFER = ("?R_CreateBufferInternal@@YAJPEBUD3D11_BUFFER_DESC@@PEBUD3D11_SUBRESOURCE_DATA@@"
                  "PEAPEAUID3D11Buffer@@@Z")
@@ -660,13 +660,13 @@ CASES = [
           observe={"?Material_BuildVertexDecl@@YAPEAUID3D11InputLayout@@PEBUMaterialStreamRouting@@IPEBU"
                    "GfxVertexDeclSources@@PEBUMaterialVertexShader@@@Z": "qiqq"}),
     _case("?sub_14068BC80@@YAXXZ", "void", _inputs(_occlusion_create_input, 0xBC80, 25), observe=CRITSECT_OBSERVE),
-    _case("?sub_14065BE70@@YAXXZ", "void", _inputs(_swap_fence_input, 0xBE70, 60)),
+    _case("?R_FinishGpuFence@@YAXXZ", "void", _inputs(_swap_fence_input, 0xBE70, 60)),
     # the Store build inlines the lock here (its imports are logged)
     _case("?sub_14067D210@@YAXPEAPEAUID3D11Query@@@Z", "void", _inputs(_insert_fence_input, 0xD210, 60)),
     _case("?sub_14062DFF0@@YAHXZ", "int", _inputs(_wait_query_input, 0xDFF0, 60),
           fakes={"?Sys_CheckQuitRequest@@YAXXZ": _recorder("Sys_CheckQuitRequest")},
           observe={"?R_LockImmediateContextWithPumpOnMain@@YAXXZ": ""}),
-    _case("?sub_14062F700@@YA_NH@Z", "char", _inputs(_init_input, 0xF700, 80),
+    _case("?R_CreateForInitOrReset@@YA_NH@Z", "char", _inputs(_init_input, 0xF700, 80),
           fakes={**{s: _recorder(s) for s in INIT_CALLEES}, CREATE_BUFFER: _create_buffer}),
     _case("?sub_14068C260@@YA_KPEAUID3D11Query@@@Z", "int64", _inputs(_query_result_input, 0xC260, 80)),
     _case("?sub_14068BE20@@YAXPEAUOcclusionViewData@@@Z", "void", _inputs(_occlusion_update_input, 0xBE20, 80),

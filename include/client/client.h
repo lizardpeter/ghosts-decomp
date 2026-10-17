@@ -240,6 +240,7 @@ struct vidConfig_t
 	unsigned int displayWidth;
 	unsigned int displayHeight;
 	unsigned char omitRTFlags;
+	bool letterbox4x3;  // Store build only (in the servers' padding): GfxWindowParms::letterbox4x3 (gfx_d3d)
 	unsigned short shadowTileResSmall;
 	unsigned short shadowTileResLarge;
 	unsigned int displayFrequency[2];  // displayFreq_t: numerator, denominator

@@ -153,34 +153,8 @@ struct GfxDrawConsts
 };
 static_assert(__builtin_offsetof(GfxDrawConsts, particleCloudVertexBuffer) == 0x68, "GfxDrawConsts");
 
-union GfxZoneTableEntry
-{
-	void *voidPtr;
-	ID3D11Buffer *buffer;
-};
+// GfxZoneTableEntry and the DxGlobals members used here are in gfx_d3d/r_dx.h.
 
-// DxGlobals members past the ones gfx_d3d/r_dx.h spells out, at their Store offsets (xb3 PDB names; the Store
-// build has 8 more bytes before constantBufferCounts than the servers: 0x60, not 0x58). Reached through `dxb` so
-// this file doesn't change the shared struct; they belong in DxGlobals.
-struct DxGlobalsBuffers
-{
-	unsigned char head[0x48];
-	ID3D11Buffer *smodelWorldMatrixConstantBuffer;
-	ID3D11Buffer *smodelLightingOrAmbientConstantBuffer;
-	unsigned char unknown58[8];
-	unsigned int constantBufferCounts[3][81];
-	const GfxZoneTableEntry *constantBufferTables[3][81];
-	unsigned char states[0x2760 - 0xBC8];
-	GfxZoneTableEntry defaultConstantBuffers[3][128];
-	unsigned char samplers[0x3B68 - 0x3360];
-	void *immediateContextMutex;
-};
-static_assert(__builtin_offsetof(DxGlobalsBuffers, smodelWorldMatrixConstantBuffer) == 0x48, "DxGlobals (Store)");
-static_assert(__builtin_offsetof(DxGlobalsBuffers, constantBufferCounts) == 0x60, "DxGlobals (Store)");
-static_assert(__builtin_offsetof(DxGlobalsBuffers, constantBufferTables) == 0x430, "DxGlobals (Store)");
-static_assert(__builtin_offsetof(DxGlobalsBuffers, defaultConstantBuffers) == 0x2760, "DxGlobals (Store)");
-static_assert(__builtin_offsetof(DxGlobalsBuffers, immediateContextMutex) == 0x3B68, "DxGlobals (Store)");
-#define dxb (*(DxGlobalsBuffers *)&dx)
 
 extern GfxBuffers gfxBuf;
 extern GfxDrawConsts g_drawConsts;

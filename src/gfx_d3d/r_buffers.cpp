@@ -55,7 +55,7 @@ HRESULT sub_1401AC380(ID3D11Buffer *buffer, const char *name, ID3D11UnorderedAcc
 HRESULT sub_1401AC3F0(ID3D11Buffer *buffer, const char *name, ID3D11ShaderResourceView **view);   // raw R32 SRV
 void sub_1401B1EC0(GfxReactiveMotionBufferState *state);      // releases the reactive motion constant buffers
 bool sub_140631780(ID3D11Device *device, ID3D11Buffer *buffer);  // gfx_d3d/r_init.cpp area: a driver hint
-void sub_14063DB80();                                          // unlocks the skinned vertex cache
+void R_UnlockSkinnedCache();                                          // unlocks the skinned vertex cache
 
 HRESULT R_CreateBufferInternal(const D3D11_BUFFER_DESC *pDesc, const D3D11_SUBRESOURCE_DATA *pInitialData,
                                ID3D11Buffer **ppBuffer);
@@ -306,7 +306,7 @@ void R_CreateParticleCloudBuffer()
 {
 	short sparkQuadIndices[18] = {0, 2, 1, 1, 2, 3, 2, 4, 3, 3, 4, 5, 4, 6, 5, 5, 6, 7};
 
-	WaitForSingleObject(dxb.immediateContextMutex, 0xFFFFFFFF);
+	WaitForSingleObject(dx.immediateContextMutex, 0xFFFFFFFF);
 	if (!dx.immediateContextLockCount)
 		dx.immediateContextThreadId = GetCurrentThreadId();
 	++dx.immediateContextLockCount;
@@ -380,13 +380,13 @@ void R_CreateParticleCloudBuffer()
 
 	if (!--dx.immediateContextLockCount)
 		dx.immediateContextThreadId = 0xFFFFFFFF;
-	ReleaseMutex(dxb.immediateContextMutex);
+	ReleaseMutex(dx.immediateContextMutex);
 }
 
 // Store 140602360 (xb3 PDB gfx_d3d/r_buffers.cpp:1117, stubbed there)
 void R_DestroyDynamicBuffers()
 {
-	sub_14063DB80();
+	R_UnlockSkinnedCache();
 	if (gfxBuf.dynamicIndexBufferPool[0].buffer)
 	{
 		sub_1401B0000(gfxBuf.dynamicIndexBufferPool[0].buffer);
@@ -585,13 +585,13 @@ unsigned char R_GetConstantBufferHandleOfSize(unsigned int type, unsigned int si
 	unsigned char index;
 	for (zone = 0; zone < 80; ++zone)
 	{
-		unsigned int count = dxb.constantBufferCounts[type][zone];
+		unsigned int count = dx.constantBufferCounts[type][zone];
 		if (!count)
 			continue;
 		for (index = 0; index < count; ++index)
 		{
 			D3D11_BUFFER_DESC desc;
-			ComCall<void>(dxb.constantBufferTables[type][zone][index].buffer, BUF_GetDesc, &desc);
+			ComCall<void>(dx.constantBufferTables[type][zone][index].buffer, BUF_GetDesc, &desc);
 			if (desc.ByteWidth == size)
 			{
 				found = true;
@@ -602,14 +602,14 @@ unsigned char R_GetConstantBufferHandleOfSize(unsigned int type, unsigned int si
 		}
 	}
 add:
-	unsigned char handle = (unsigned char)dxb.constantBufferCounts[type][0];
+	unsigned char handle = (unsigned char)dx.constantBufferCounts[type][0];
 	if (handle >= 0x80)
 		Com_Error(ERR_FATAL, "Out of %s constant buffer size configurations", constantBufferNames[type]);
-	dxb.constantBufferCounts[type][0] = handle + 1;
+	dx.constantBufferCounts[type][0] = handle + 1;
 	if (found)
 	{
-		ID3D11Buffer *buffer = dxb.constantBufferTables[type][zone][index].buffer;
-		dxb.defaultConstantBuffers[type][handle].buffer = buffer;
+		ID3D11Buffer *buffer = dx.constantBufferTables[type][zone][index].buffer;
+		dx.defaultConstantBuffers[type][handle].buffer = buffer;
 		ComCall<unsigned long>(buffer, UNK_AddRef);
 	}
 	else
@@ -623,7 +623,7 @@ add:
 		desc.StructureByteStride = 0;
 		ID3D11Buffer *buffer;
 		R_CreateBufferInternal(&desc, nullptr, &buffer);
-		dxb.defaultConstantBuffers[type][handle].buffer = buffer;
+		dx.defaultConstantBuffers[type][handle].buffer = buffer;
 	}
 	return handle;
 }
@@ -633,5 +633,5 @@ ID3D11Buffer *R_GetPerPrimConstantBufferOfSize(unsigned int size)
 {
 	if (!size)
 		return nullptr;
-	return dxb.defaultConstantBuffers[0][R_GetConstantBufferHandleOfSize(0, size)].buffer;
+	return dx.defaultConstantBuffers[0][R_GetConstantBufferHandleOfSize(0, size)].buffer;
 }

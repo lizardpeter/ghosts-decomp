@@ -85,3 +85,64 @@ enum ComObjectStateSlot : unsigned int
 	ASYNC_GetDataSize = 7,        // 14065BE70, 14067D210, 14062DFF0, 14068C260, 14068BE20
 };
 // ---- END states ----
+
+// ---- device ----
+// Slots used by the device and swap chain code (gfx_d3d/r_init.cpp); each checked against a call in the Store build.
+enum ComUnknownSlot : unsigned int
+{
+	UNKNOWN_Release = 2,
+};
+
+// IDXGIFactory
+enum DXGIFactorySlot : unsigned int
+{
+	FACTORY_EnumAdapters = 7,
+	FACTORY_MakeWindowAssociation = 8,
+	FACTORY_CreateSwapChain = 10,
+};
+
+// IDXGIAdapter
+enum DXGIAdapterSlot : unsigned int
+{
+	ADAPTER_EnumOutputs = 7,
+	ADAPTER_GetDesc = 8,
+};
+
+// IDXGIOutput
+enum DXGIOutputSlot : unsigned int
+{
+	OUTPUT_GetDesc = 7,
+	OUTPUT_GetDisplayModeList = 8,
+};
+
+// IDXGISwapChain
+enum DXGISwapChainSlot : unsigned int
+{
+	SWAPCHAIN_Present = 8,
+	SWAPCHAIN_GetBuffer = 9,
+	SWAPCHAIN_SetFullscreenState = 10,
+	SWAPCHAIN_GetFullscreenState = 11,
+	SWAPCHAIN_GetDesc = 12,
+};
+
+// ID3D11Device
+enum D3D11DeviceLifecycleSlot : unsigned int
+{
+	DEVICE_CreateQuery = 24,
+	DEVICE_CreateDeferredContext = 27,
+	DEVICE_CheckMultisampleQualityLevels = 30,
+	DEVICE_GetDeviceRemovedReason = 39,
+};
+
+// ID3D11DeviceContext
+enum D3D11ContextLifecycleSlot : unsigned int
+{
+	CTX_ClearState = 110,  // End (28) and GetData (29) are in the states block
+	CTX_Flush = 111,
+};
+
+// ID3D11Query (ID3D11Asynchronous)
+enum D3D11QuerySlot : unsigned int
+{
+	QUERY_GetDataSize = 7,
+};

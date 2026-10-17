@@ -190,8 +190,8 @@ void sub_140631250(unsigned char zoneIndex, GfxZoneTableEntry *table, const unsi
 {
 	for (unsigned int index = 0; index < count; index++)
 		table[index].blendState = sub_140630A70(&blendBits[index], 1);
-	dxs.blendStateTables[zoneIndex] = table;
-	dxs.blendStateCounts[zoneIndex] = count;
+	dx.blendStateTables[zoneIndex] = table;
+	dx.blendStateCounts[zoneIndex] = count;
 }
 
 // Store 14065BED0 (name unknown): a depth-stencil state from 64 state bits
@@ -224,8 +224,8 @@ void sub_1406314C0(unsigned char zoneIndex, GfxZoneTableEntry *table, const unsi
 {
 	for (unsigned int index = 0; index < count; index++)
 		table[index].depthStencilState = sub_14065BED0(stateBits[index]);
-	dxs.depthStencilStateTables[zoneIndex] = table;
-	dxs.depthStencilStateCounts[zoneIndex] = count;
+	dx.depthStencilStateTables[zoneIndex] = table;
+	dx.depthStencilStateCounts[zoneIndex] = count;
 }
 
 // gfx_d3d/r_setstate_d3d.h:562 (xb3 PDB), inlined. rasterBits: bit 5 solid (else wireframe), bits 3-4 cull;
@@ -272,7 +272,7 @@ void sub_1406310F0()
 {
 	for (unsigned char stateIndex = 0; stateIndex < 32; stateIndex++)
 	{
-		dxs.rasterizerStates[stateIndex] =
+		dx.rasterizerStates[stateIndex] =
 			R_HW_CreateRasterizerState(((stateIndex & 3) << 3) | ((stateIndex & 0x10) * 2), (stateIndex & 0xC) << 2);
 	}
 }
@@ -294,7 +294,7 @@ void sub_140662850(D3D11_SAMPLER_DESC *desc, unsigned int samplerBits)
 	desc->AddressW = (samplerBits >> 24) & 3;
 	desc->MinLOD = 0;
 	desc->MaxLOD = D3D11_FLOAT32_MAX;
-	desc->MipLODBias = dxs.mipBias;
+	desc->MipLODBias = dx.mipBias;
 	desc->BorderColor[0] = 0;
 	desc->BorderColor[1] = 0;
 	desc->BorderColor[2] = 0;
@@ -311,7 +311,7 @@ void sub_14065FE60()
 
 	for (int samplerIndex = 0; samplerIndex < 256; samplerIndex++)
 	{
-		ID3D11SamplerState **state = &dxs.samplerStates[samplerIndex];
+		ID3D11SamplerState **state = &dx.samplerStates[samplerIndex];
 		if (*state)
 			ComCall<unsigned long>(*state, UNK_Release);
 		*state = nullptr;
@@ -328,7 +328,7 @@ void sub_14065FE60()
 				desc.BorderColor[2] = 0;
 				desc.BorderColor[3] = 0;
 				ComCall<long>(dx.d3d11device, DEV_CreateSamplerState, (const D3D11_SAMPLER_DESC *)&desc,
-				              &dxs.samplerStates[samplerIndex]);
+				              &dx.samplerStates[samplerIndex]);
 			}
 		}
 		else if ((samplerIndex & 0x1F) < 0x18)

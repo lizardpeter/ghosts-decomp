@@ -192,7 +192,7 @@ FAKES = {
     "?R_InitReactiveMotionConstantBufferState@@YAXPEAUGfxReactiveMotionBufferState@@@Z":
         _fake_record("R_InitReactiveMotionConstantBufferState", "q"),
     "?sub_1401B1EC0@@YAXPEAUGfxReactiveMotionBufferState@@@Z": _fake_record("sub_1401B1EC0", "q"),
-    "?sub_14063DB80@@YAXXZ": _fake_record("sub_14063DB80", ""),
+    "?R_UnlockSkinnedCache@@YAXXZ": _fake_record("R_UnlockSkinnedCache", ""),
 }
 # the accounting functions run for real; their arguments are compared too
 OBSERVE = {"?sub_1401AFFE0@@YAXPEAUID3D11Buffer@@@Z": "q", "?sub_1401B0000@@YAXPEAUID3D11Buffer@@@Z": "q",

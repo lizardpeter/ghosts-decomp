@@ -68,20 +68,14 @@ void sub_1406508E0();
 void sub_14068C300();
 void sub_14063EBD0();
 void sub_1401B1400();
-void sub_140601BC0();
+void R_CreateDynamicBuffers();
 void sub_14068EAE0();
-void sub_140601E00();
+void R_CreateParticleCloudBuffer();
 void sub_14068D600();
 void sub_1401AAEF0();
 void sub_1401AB1C0();
 
-// R_LockImmediateContextWithPumpOnMain's counterpart, inline in the original (gfx_d3d/r_globals_d3d.h)
-static inline void R_UnlockImmediateContext()
-{
-	if (--dx.immediateContextLockCount == 0)
-		dx.immediateContextThreadId = 0xFFFFFFFF;
-	ReleaseMutex(dxs.immediateContextMutex);
-}
+// R_UnlockImmediateContext is inline in gfx_d3d/r_dx.h.
 
 // Store 14068BC80 (name unknown): creates the four occlusion queries of every occlusionQueryArray entry; a query
 // that fails to create stays NULL.
@@ -105,15 +99,15 @@ void sub_14068BC80()
 }
 
 // Store 14065BE70 (name unknown): waits for the swap fence while it is in flight
-void sub_14065BE70()
+void R_FinishGpuFence()
 {
-	while (dxs.unk_7D00)
+	while (dx.flushGpuFenceIssued)
 	{
-		ID3D11Query *fence = dxs.swapFence;
+		ID3D11Query *fence = dx.flushGpuFence;
 		ComCall<unsigned int>(fence, ASYNC_GetDataSize);
 		if (ComCall<long>(dx.immediateContext, CTX_GetData, fence, (void *)nullptr, 0u, 0u) != S_FALSE)
 		{
-			dxs.unk_7D00 = false;
+			dx.flushGpuFenceIssued = false;
 			break;
 		}
 	}
@@ -124,8 +118,8 @@ void sub_14065BE70()
 void sub_14067D210(ID3D11Query **fence)
 {
 	R_LockImmediateContextWithPumpOnMain();
-	*fence = dxs.fencePool[dxs.nextFence];
-	dxs.nextFence = (dxs.nextFence + 1) & 31;
+	*fence = dx.fencePool[dx.nextFence];
+	dx.nextFence = (dx.nextFence + 1) & 31;
 	ID3D11Query *query;
 	do
 	{
@@ -161,95 +155,7 @@ int sub_14062DFF0()
 	return waited;
 }
 
-// Store 14062F700 (name unknown; Black Ops' R_CreateForInitOrReset, gfx_d3d/r_init.cpp): creates the renderer's
-// device resources after the device is created or reset. With isReset, the GPU fences, the occlusion queries and
-// the resources a reset keeps are left alone. Returns false when a fence can't be created.
-bool sub_14062F700(int isReset)
-{
-	D3D11_BUFFER_DESC bufferDesc;
-	ID3D11Buffer *buffer;
-
-	dxs.constantBufferTables[0][0] = dxs.defaultConstantBuffers[0];
-	dxs.constantBufferTables[1][0] = dxs.defaultConstantBuffers[1];
-	dxs.constantBufferTables[2][0] = dxs.defaultConstantBuffers[2];
-	R_BuildSubDomainRangeConstantBuffers();
-	sub_1401B6130();
-	bufferDesc.ByteWidth = 0x2000;
-	bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
-	bufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	bufferDesc.MiscFlags = 0;
-	bufferDesc.StructureByteStride = 0;
-	R_CreateBufferInternal(&bufferDesc, nullptr, &buffer);
-	dxs.smodelWorldMatrixConstantBuffer = buffer;
-	bufferDesc.ByteWidth = 0x800;
-	bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
-	bufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	bufferDesc.MiscFlags = 0;
-	bufferDesc.StructureByteStride = 0;
-	R_CreateBufferInternal(&bufferDesc, nullptr, &buffer);
-	dxs.smodelLightingOrAmbientConstantBuffer = buffer;
-	sub_140640510();
-	sub_1406310F0();
-	dxs.depthStencilStateTables[0] = dxs.defaultDepthStencilStates;
-	dxs.blendStateTables[0] = dxs.defaultBlendStates;
-	sub_1406508E0();
-	sub_14068C300();
-	if (!g_allocateMinimalResources)
-	{
-		R_InitRenderBuffers();
-		if (!isReset)
-		{
-			sub_14063EBD0();
-			sub_1401B1400();
-		}
-	}
-	sub_140601BC0();
-	R_SetupPrecompiledConstantBuffer();
-	R_InitDefaultDepthImage();
-	R_InitDaltonize();
-	sub_14068EAE0();
-	if (!g_allocateMinimalResources)
-		sub_140601E00();
-	dxs.unk_7D00 = false;
-	if (!isReset)
-	{
-		D3D11_QUERY_DESC queryDesc;
-		queryDesc.Query = D3D11_QUERY_EVENT;
-		queryDesc.MiscFlags = 0;
-		if (ComCall<long>(dx.d3d11device, DEV_CreateQuery, (const D3D11_QUERY_DESC *)&queryDesc, &dxs.swapFence) < 0)
-			return false;
-		dxs.nextFence = 0;
-		for (unsigned int fenceIter = 0; fenceIter < 32; fenceIter++)
-		{
-			queryDesc.Query = D3D11_QUERY_EVENT;
-			queryDesc.MiscFlags = 0;
-			if (ComCall<long>(dx.d3d11device, DEV_CreateQuery, (const D3D11_QUERY_DESC *)&queryDesc,
-			                  &dxs.fencePool[fenceIter]) < 0)
-				return false;
-		}
-	}
-	if (!g_allocateMinimalResources && !isReset)
-	{
-		sub_14068BC80();
-		sub_14068D600();
-		D3D11_QUERY_DESC queryDesc;
-		ID3D11Query *query;
-		queryDesc.Query = D3D11_QUERY_OCCLUSION;
-		queryDesc.MiscFlags = 0;
-		long hr = ComCall<long>(dx.d3d11device, DEV_CreateQuery, (const D3D11_QUERY_DESC *)&queryDesc, &query);
-		unk_14A346A98 = hr < 0 ? nullptr : query;
-		sub_1401AAEF0();
-	}
-	else
-	{
-		sub_1401AAEF0();
-		if (isReset)
-			sub_1401AB1C0();
-	}
-	return true;
-}
+// Store 14062F700 is R_CreateForInitOrReset, in gfx_d3d/r_init.cpp.
 
 // ---- occlusion queries --------------------------------------------------------------------------------------------
 
@@ -378,7 +284,7 @@ void sub_14068BE20(OcclusionViewData *view)
 					query->nextQueryIndexPlusOne = queryIndex + 1;
 					if (samples == (unsigned long long)-1)
 						query->error = true;
-					unsigned int maxSamples = view->unk_18B4 ? dxs.multiSampleType << 8 : 0x100;
+					unsigned int maxSamples = view->unk_18B4 ? dx.multiSampleType << 8 : 0x100;
 					if (samples > maxSamples)
 					{
 						query->error = true;
