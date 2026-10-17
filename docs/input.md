@@ -100,3 +100,28 @@ client rectangles, the cursor display count) and logs them, so the reconstructio
 the same arguments. Functions the Store build inlines everywhere (`IN_MouseMove`, `IN_ClampMouseMove`,
 `IN_ActivateMouse` inside `IN_Frame`, `IN_DeactivateMouse`, `IN_IsForegroundWindow`) are verified through their
 callers.
+
+## The enhanced build
+
+The enhanced build (docs/variants.md) aims with raw input only, in MW2019 units (records/patches.tsv P0001, P0002).
+
+- **Raw input:**
+  - A thread of its own owns a message-only window registered for the mouse with RIDEV_INPUTSINK. It adds every
+    relative report, in device counts, to 64-bit counters.
+  - Each frame, IN_MouseMove gives CL_MouseEvent exactly the counts since the last frame.
+  - Windows' pointer speed and acceleration don't apply, and there's no fullscreen clamp.
+  - Absolute reports (tablets, remote desktop) are ignored.
+  - Movement made while the game is in the background is dropped, and so is the frame focus comes back on.
+  - The cursor is still read, but only to place the menus' cursor and keep the cursor in the window.
+- **Sensitivity:**
+  - One count turns the view by `m_sens` × 0.0066 degrees. `m_sens` defaults to 1.5 and is saved: about 28.9 cm
+    per 360° at 3200 DPI.
+  - The field of view doesn't change it, for hip fire or ADS. There is no `cl_mouseAccel`, `m_filter`, `m_yaw` or
+    `m_pitch`.
+  - `m_invertPitch` inverts vertical look.
+- **Precision:**
+  - The view angles are kept in double precision between frames, so the same movement split over more frames ends
+    at the same angle.
+  - They are re-read whenever something else moves the view (spawning, the cgame's pitch limits, aim assist).
+  - The game's own turn-speed limits (vehicles, turrets) still apply.
+

@@ -30,11 +30,15 @@ jobs:
         run: |
           python3 tools/build_recon.py
           IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship
+          IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --enhanced
       - name: Differential tests
         if: steps.recon.outputs.any == '1'
         run: |
           IW6_ORIGINALS=.work/originals python3 tests/differential/run.py --check-records
           IW6_ORIGINALS=.work/originals python3 tests/differential/run.py --build iw6mp64_MSStore_ship --check-records
+      - name: Enhanced build tests
+        if: steps.recon.outputs.any == '1'
+        run: IW6_ORIGINALS=.work/originals python3 tests/enhanced/run.py
       - name: Generated files are current
         run: |
           python3 tools/status.py >/dev/null

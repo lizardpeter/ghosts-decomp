@@ -38,6 +38,98 @@ typedef struct tagRECT
 #define WM_LBUTTONDOWN 0x0201
 #define MK_LBUTTON 0x0001
 
+typedef unsigned long DWORD;
+typedef unsigned short USHORT;
+typedef unsigned long ULONG;
+typedef long long LRESULT;
+typedef void *HANDLE;
+typedef struct HRAWINPUT__ *HRAWINPUT;
+typedef LRESULT (*WNDPROC)(HWND, UINT, WPARAM, LPARAM);
+typedef DWORD (*LPTHREAD_START_ROUTINE)(void *);
+
+typedef struct tagMSG
+{
+	HWND hwnd;
+	UINT message;
+	WPARAM wParam;
+	LPARAM lParam;
+	DWORD time;
+	POINT pt;
+} MSG;
+
+typedef struct tagWNDCLASSA
+{
+	UINT style;
+	WNDPROC lpfnWndProc;
+	int cbClsExtra;
+	int cbWndExtra;
+	HINSTANCE hInstance;
+	void *hIcon;
+	void *hCursor;
+	void *hbrBackground;
+	const char *lpszMenuName;
+	const char *lpszClassName;
+} WNDCLASSA;
+
+// Raw input (winuser.h)
+typedef struct tagRAWINPUTDEVICE
+{
+	USHORT usUsagePage;
+	USHORT usUsage;
+	DWORD dwFlags;
+	HWND hwndTarget;
+} RAWINPUTDEVICE;
+
+typedef struct tagRAWINPUTHEADER
+{
+	DWORD dwType;
+	DWORD dwSize;
+	HANDLE hDevice;
+	WPARAM wParam;
+} RAWINPUTHEADER;
+
+typedef struct tagRAWMOUSE
+{
+	USHORT usFlags;
+	union
+	{
+		ULONG ulButtons;
+		struct
+		{
+			USHORT usButtonFlags;
+			USHORT usButtonData;
+		};
+	};
+	ULONG ulRawButtons;
+	LONG lLastX;
+	LONG lLastY;
+	ULONG ulExtraInformation;
+} RAWMOUSE;
+
+typedef struct tagRAWINPUT
+{
+	RAWINPUTHEADER header;
+	union
+	{
+		RAWMOUSE mouse;
+		unsigned char other[24];  // RAWKEYBOARD, RAWHID: not used
+	} data;
+} RAWINPUT;
+
+#define WM_INPUT 0x00FF
+#define RIM_TYPEMOUSE 0
+#define RID_INPUT 0x10000003
+#define RIDEV_INPUTSINK 0x00000100
+#define MOUSE_MOVE_ABSOLUTE 0x01
+#define HID_USAGE_PAGE_GENERIC 0x01
+#define HID_USAGE_GENERIC_MOUSE 0x02
+#define HWND_MESSAGE ((HWND)(long long)-3)
+#define INFINITE 0xFFFFFFFF
+#define WAIT_OBJECT_0 0
+
+BOOL RegisterRawInputDevices(const RAWINPUTDEVICE *pRawInputDevices, UINT uiNumDevices, UINT cbSize);
+UINT GetRawInputData(HRAWINPUT hRawInput, UINT uiCommand, void *pData, UINT *pcbSize, UINT cbSizeHeader);
+
 HWND GetForegroundWindow(void);
 BOOL GetCursorPos(POINT *lpPoint);
 BOOL SetCursorPos(int X, int Y);

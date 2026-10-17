@@ -45,7 +45,8 @@ applies to hip fire as well as ADS. That has two consequences (B0023):
 - **Hip-fire sensitivity grows with `cg_fov`.** It is ×1.0 at 65, ×1.099 at 70 and ×1.317 at 80.
 - **ADS sensitivity does not depend on `cg_fov`.** It is tan(adsFov/2)/tan(32.5°) whatever the hip FOV.
 
-For the same turn per mouse count as MW2019 sensitivity 1.5 (0.0099° per count, 28.9 cm/360 at 3200 DPI), divide
+The enhanced build drops the coupling: its `m_sens` is in MW2019 units at any FOV (docs/input.md, P0002). For the
+faithful game, to get the same turn per mouse count as MW2019 sensitivity 1.5 (0.0099° per count, 28.9 cm/360 at 3200 DPI), divide
 0.45 by the factor:
 
 | cg_fov | factor | sensitivity |

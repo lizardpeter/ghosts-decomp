@@ -3,6 +3,7 @@
 
     python3 tools/build_recon.py                 # -> build/recon.dll, build/recon.symbols.tsv, build/hybrid.tsv
     python3 tools/build_recon.py --build <id>    # the same against another build -> build/<id>/
+    python3 tools/build_recon.py --build <id> --enhanced   # the enhanced build -> build/<id>/enhanced/
 
   The default links against the reference build (MAP + PDB). Another build (the Store build) resolves names
   through tools/symbols.py: records/names.tsv and the matcher's identifications.
@@ -19,6 +20,12 @@
   offset into the TLS block, not an address. The original's `_tls_index` is linked like any data; each original
   TLS variable is placed in the DLL's own .tls section at the same offset it has in the original's, so the
   offsets the compiler emits are the original's. Nothing else in the reconstruction may use TLS.
+
+The enhanced build (--enhanced) compiles src/ and enhanced/ together. A function defined in enhanced/ replaces the
+src/ function of the same decorated name everywhere, calls from src/ included: enhanced objects link first and
+the linker keeps the first definition (/force:multiple; any other duplicate is caught by the faithful build,
+which links without it). enhanced/ functions are exported whether or not the original has them, for
+tests/enhanced/.
 
 This is the `compiles` gate. It is not byte matching: that needs the original VC11 (VS2012) x64 compiler.
 
@@ -49,8 +56,25 @@ def out_dir(build: str) -> Path:
     return ROOT / "build" if build == symbols.reference_build() else ROOT / "build" / build
 
 
-def run(*cmd):
-    subprocess.run([str(c) for c in cmd], check=True)
+def run(*cmd, quiet_duplicates=False):
+    if not quiet_duplicates:
+        subprocess.run([str(c) for c in cmd], check=True)
+        return
+    # the enhanced link: its intended duplicates (enhanced/ replacing src/) are not news
+    r = subprocess.run([str(c) for c in cmd], capture_output=True, text=True)
+    lines, skip = [], False
+    for line in (r.stdout + r.stderr).splitlines():
+        if "duplicate symbol" in line:
+            skip = True
+            continue
+        if skip and line.startswith(">>>"):
+            continue
+        skip = False
+        lines.append(line)
+    if lines:
+        print("\n".join(lines))
+    if r.returncode:
+        raise subprocess.CalledProcessError(r.returncode, cmd)
 
 
 def nm(obj, *flags):
@@ -86,8 +110,9 @@ def import_slots(build):
 
 def main():
     build = sys.argv[sys.argv.index("--build") + 1] if "--build" in sys.argv else symbols.reference_build()
+    enhanced = "--enhanced" in sys.argv
     reference = symbols.has_map(build)
-    BUILD = out_dir(build)
+    BUILD = out_dir(build) / "enhanced" if enhanced else out_dir(build)
     BUILD.mkdir(parents=True, exist_ok=True)
     objs, sources = [], []
     for src in sorted((ROOT / "src").rglob("*.cpp")):
@@ -99,6 +124,18 @@ def main():
         sources.append(obj)
     if not objs:
         sys.exit("no sources")
+    enhanced_defs = set()
+    if enhanced:
+        enhanced_objs = []
+        for src in sorted((ROOT / "enhanced").rglob("*.cpp")):
+            rel = src.relative_to(ROOT / "enhanced")
+            obj = BUILD / "obj" / "enhanced" / rel.with_suffix(".obj")
+            obj.parent.mkdir(parents=True, exist_ok=True)
+            run("clang++", "-std=c++17", f"-I{ROOT / 'enhanced' / 'include'}", *CFLAGS, "-c", src, "-o", obj)
+            enhanced_objs.append(obj)
+            enhanced_defs |= {p[2] for p in nm(obj, "--defined-only", "--extern-only") if len(p) == 3 and p[1] in ("T", "t")}
+        objs = enhanced_objs + objs  # first definition wins: enhanced/ replaces src/
+        sources = enhanced_objs + sources
 
     # build environment: the MSVC float marker
     (BUILD / "fltused.c").write_text("int _fltused = 0;\n")
@@ -145,9 +182,10 @@ def main():
     if other_file:
         print(f"note: {len(other_file)} function(s) in {build} come from another source file (not exported):",
               ", ".join(sorted(other_file)))
-    stray = [e for e in stray if e not in other_file]
-    exports = [e for e in exports if e in orig and e not in other_file]
-    rows = [r for r in rows if r.split("\t")[0] in orig and r.split("\t")[0] not in other_file]
+    stray = [e for e in stray if e not in other_file and e not in enhanced_defs]
+    exports = list(dict.fromkeys(e for e in exports if (e in orig or e in enhanced_defs) and e not in other_file))
+    rows = [r for r in rows if (r.split("\t")[0] in orig or r.split("\t")[0] in enhanced_defs)
+            and r.split("\t")[0] not in other_file]
     # A stray symbol whose plain name matches an original function is a prototype mismatch (wrong parameter
     # or return type, constness, calling convention): the function would silently drop out of testing.
     def base_name(sym):
@@ -168,6 +206,17 @@ def main():
     # running the wrong code. Imports (Win32, and the CRT for a build that links it dynamically) go through the
     # exe's import address table.
     slots = import_slots(build)
+    # The enhanced build may call Win32 functions the original exe doesn't import: real DLL imports, from
+    # tools/recon/lib/*.def (the harness stubs recon.dll's imports like the original's)
+    import_libs, dll_imports = [], set()
+    if enhanced:
+        for d in sorted((ROOT / "tools" / "recon" / "lib").glob("*.def")):
+            lib = BUILD / f"{d.stem}.lib"
+            run("llvm-dlltool", "-m", "i386:x86-64", "-d", d, "-l", lib)
+            import_libs.append(lib)
+            names = [l.strip() for l in d.read_text().splitlines()]
+            dll_imports |= {n for n in names[names.index("EXPORTS") + 1:] if n and not n.startswith(";")}
+    undefined = [u for u in undefined if not (u in dll_imports and u not in slots)]
     asm = ["\t.text"]
     hybrid = ["symbol\tkind\tva"]
     ref_build = symbols.reference_build()
@@ -215,8 +264,9 @@ def main():
 
     dll = BUILD / "recon.dll"
     run("lld-link", "/dll", "/noentry", "/nodefaultlib", "/base:0x180000000", "/fixed", f"/out:{dll}",
+        *(["/force:multiple", f"/map:{BUILD / 'recon.map'}"] if enhanced else []),
         *[f"/export:{e}" for e in exports],  # x64: no leading underscore on C names
-        *objs, *env_objs, BUILD / "hybrid.obj")
+        *objs, *env_objs, BUILD / "hybrid.obj", *import_libs, quiet_duplicates=enhanced)
     (BUILD / "recon.symbols.tsv").write_text("symbol\tsource\n" + "\n".join(rows) + "\n")
     unresolved = sum(1 for h in hybrid if "\tunresolved" in h)
     if unresolved and reference:

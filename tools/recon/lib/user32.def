@@ -1,0 +1,6 @@
+; Imports the enhanced build makes that the original exe doesn't (linked as real DLL imports; the test harness
+; stubs every import of recon.dll like the original's).
+LIBRARY user32.dll
+EXPORTS
+RegisterRawInputDevices
+GetRawInputData
