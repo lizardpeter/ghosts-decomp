@@ -1,0 +1,71 @@
+name: IW6 Point of Contact complete source stream validation
+
+on:
+  push:
+    branches: [iw6-fastfile-retail-probes]
+    paths:
+      - .github/workflows/iw6-zone-stream-audit.yml
+      - tools/fastfile/probe_zone.py
+      - tools/fastfile/probe_headers.py
+  pull_request:
+    paths:
+      - .github/workflows/iw6-zone-stream-audit.yml
+      - tools/fastfile/probe_zone.py
+      - tools/fastfile/probe_headers.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iw6-zones-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout: |
+            tools/fastfile
+          fetch-depth: 1
+      - name: Test synthetic signed and unsigned IW6 full-stream verification
+        run: python3 tools/fastfile/probe_zone.py --test
+      - name: Validate all four original Point of Contact zones
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/iw6-poc
+          : > /tmp/iw6-poc-report.jsonl
+          while IFS=' ' read -r name expected; do
+            [[ -n "$name" ]] || continue
+            file="/tmp/iw6-poc/$name"
+            curl --fail --show-error --silent --location --retry 3 \
+              --retry-delay 2 --connect-timeout 20 --max-time 600 \
+              --output "$file" \
+              "https://r2.houseofkublai.com/ghosts/DUMP/$name"
+            actual="$(stat -c%s "$file")"
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::$name length $actual disagrees with R2 manifest $expected" >&2
+              exit 1
+            fi
+            python3 tools/fastfile/probe_zone.py "$file" \
+              | tee -a /tmp/iw6-poc-report.jsonl
+            rm -f "$file"
+          done <<'SOURCE_ZONES'
+          mp_alien_town_path.ff 385068
+          techsets_mp_alien_town.ff 7479340
+          mp_alien_town_load.ff 1957932
+          mp_alien_town.ff 186301740
+          SOURCE_ZONES
+      - name: Publish decoded metadata only, not game files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iw6-point-of-contact-source-summary
+          path: /tmp/iw6-poc-report.jsonl
+          retention-days: 7
+          if-no-files-found: warn
