@@ -236,3 +236,8 @@ iw6mp64_MSStore_ship	140630520	matches	src/gfx_d3d/r_buffers.cpp	differential te
 iw6_ds_ps4	1401B1230	compiles	src/gfx_d3d/r_buffers.cpp	the server build's renderer back end is stubbed or reduced here (folded stub or different body); src follows the Store build and matches there
 iw6_ds_ps4	1402CEF50	compiles	src/gfx_d3d/r_buffers.cpp	the server build's renderer back end is stubbed or reduced here (folded stub or different body); src follows the Store build and matches there
 iw6_ds_ps4	1402CEF70	compiles	src/gfx_d3d/r_buffers.cpp	the server build's renderer back end is stubbed or reduced here (folded stub or different body); src follows the Store build and matches there
+iw6_ds_ps4	1402CEA40	compiles	src/gfx_d3d/r_buffers.cpp	untestable in the server build (its renderer has no device, and the original faults on every generated input); src follows the Store build and matches there
+iw6_ds_ps4	1402CEA80	compiles	src/gfx_d3d/r_buffers.cpp	untestable in the server build (its renderer has no device, and the original faults on every generated input); src follows the Store build and matches there
+iw6_ds_ps4	1402CEB60	compiles	src/gfx_d3d/r_buffers.cpp	untestable in the server build (its renderer has no device, and the original faults on every generated input); src follows the Store build and matches there
+iw6_ds_ps4	1402CEF80	compiles	src/gfx_d3d/r_buffers.cpp	untestable in the server build (its renderer has no device, and the original faults on every generated input); src follows the Store build and matches there
+iw6_ds_ps4	1402E9EC0	compiles	src/gfx_d3d/r_buffers.cpp	untestable in the server build (its renderer has no device, and the original faults on every generated input); src follows the Store build and matches there
