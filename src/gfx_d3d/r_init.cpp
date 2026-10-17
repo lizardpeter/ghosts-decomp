@@ -1096,6 +1096,201 @@ void sub_14062EC80(ID3D11Query *fence)
 	++g_gpuSubmitSwapFrame;
 }
 
+// ---- Frame pacing between the front end, the back end and the GPU (docs/frame.md) ----
+//
+// g_frontEndSwapFrame counts the frames the front end registered for presenting (R_RegisterRenderFrame),
+// g_gpuSubmitSwapFrame the frames the back end presented (sub_14062EC80, after RB_SwapBuffers' Present), and
+// g_gpuSwapFrame the frames the GPU is known to have finished. The shipped build never reads the swap fences it stores in
+// g_gpuSwapFence: every check below moves g_gpuSwapFrame straight up to g_gpuSubmitSwapFrame (the PS4 server has the
+// same loops), so "finished on the GPU" means "Present returned". The GPU's own queue is bounded only by DXGI.
+
+IW6_STATIC volatile long s_beginSmpFrameTime IW6_AT("", "s_beginSmpFrameTime");          // when the last present began
+IW6_STATIC volatile long s_prevBeginSmpFrameTime IW6_AT("", "s_prevBeginSmpFrameTime");  // the one before
+IW6_STATIC volatile int s_beginSmpFrameTimeValid IW6_AT("", "s_beginSmpFrameTimeValid");  // 0 while a present is under way
+IW6_STATIC volatile long s_renderCompleteTime IW6_AT("", "s_renderCompleteTime");        // when the last present returned
+IW6_STATIC int g_gpuFrameWait IW6_AT("", "g_gpuFrameWait");  // frames the front end may run ahead of the presents
+IW6_STATIC int g_waitRendererTime IW6_AT("", "g_waitRendererTime");      // R_SyncGpu's end time
+IW6_STATIC int s_gpuStartCatchUpTime IW6_AT("", "s_gpuStartCatchUpTime");  // while R_SyncGpu waits for the back end
+IW6_STATIC int s_gpuEndCatchUpTime IW6_AT("", "s_gpuEndCatchUpTime");
+
+extern int g_maxFpsWaitTime;          // gfx_d3d/r_init.cpp: the rest of com_maxfps' frame time (Com_Frame sets it)
+extern double msecPerRawTimerTick;    // qcommon/timing.cpp
+extern int unk_14B2C59A0;             // a sound update is due (set by 14065BE30; name unknown)
+void sub_140316AD0(int unused);       // client_mp: updates the sound system unless it is already updating (name unknown)
+int Sys_Milliseconds();
+int sub_14046F5C0();                  // qcommon/threads.cpp: the render thread has fewer than two frames to finish
+void Sys_Sleep(int msec);
+void R_ProcessWorkerCmdsWithTimeout(int (*isDone)(), int timeout);
+extern "C" long _InterlockedIncrement(long volatile *addend);
+extern "C" long _InterlockedExchange(long volatile *target, long value);
+extern "C" unsigned long long __rdtsc();
+
+// Store 140632BC0 (name unknown; the loop R_RegisterRenderFrame and R_SyncGpu's helpers start with): counts every
+// presented frame as finished on the GPU (a swap-fence check compiled out of the shipped build)
+void sub_140632BC0()
+{
+	while (g_gpuSwapFrame != g_gpuSubmitSwapFrame)
+	{
+		const long frame = g_gpuSwapFrame;
+		_InterlockedCompareExchange(&g_gpuSwapFrame, frame + 1, frame);
+	}
+}
+
+// Store 140631D10 (PS4 PDB R_RegisterRenderFrame, gfx_d3d/r_init.cpp:7319): a frame that will be presented. Waits
+// while the front end is three frames ahead of the presents, then counts it and stamps frontEndDataOut with it.
+void R_RegisterRenderFrame()
+{
+	for (;;)
+	{
+		sub_140632BC0();
+		if ((int)((unsigned long)g_frontEndSwapFrame - (unsigned long)g_gpuSwapFrame) <= 2)
+			break;
+		Sys_Sleep(1);
+	}
+	_InterlockedIncrement(&g_frontEndSwapFrame);
+	if (frontEndDataOut)
+		*(int *)((char *)frontEndDataOut + 0x151468) = g_frontEndSwapFrame;  // endSwapFrame
+}
+
+// Store 1406301A0 (name unknown): the back end has caught up: fewer than two frames to finish and at most one
+// registered frame not yet presented
+int sub_1406301A0()
+{
+	sub_140632BC0();
+	if (sub_14046F5C0() && (int)((unsigned long)g_frontEndSwapFrame - (unsigned long)g_gpuSwapFrame) <= 1)
+		return 1;
+	return 0;
+}
+
+// Store 140630210 (name unknown): R_SyncGpu's wait condition. Like sub_1406301A0 with g_gpuFrameWait frames allowed
+// between registering and presenting; times how long the front end waits while it is further behind.
+int sub_140630210()
+{
+	sub_140632BC0();
+	const int rendererReady = sub_14046F5C0();
+	const int behind = (int)((unsigned long)g_frontEndSwapFrame - (unsigned long)g_gpuSwapFrame) > g_gpuFrameWait;
+	if (s_gpuStartCatchUpTime > 0)
+		s_gpuEndCatchUpTime = Sys_Milliseconds();
+	if (behind && s_gpuStartCatchUpTime < 0)
+	{
+		s_gpuStartCatchUpTime = Sys_Milliseconds();
+		s_gpuEndCatchUpTime = s_gpuStartCatchUpTime;
+	}
+	if (rendererReady && !behind)
+		return 1;
+	return 0;
+}
+
+// Store 1406302D0 (name unknown): R_SyncGpu's end time has come
+int sub_1406302D0()
+{
+	return (int)((unsigned int)Sys_Milliseconds() - (unsigned int)g_waitRendererTime) >= 0;
+}
+
+// Store 140632160 (name unknown): RB_SwapBuffers is about to present
+void sub_140632160()
+{
+	_InterlockedExchange(&s_prevBeginSmpFrameTime, s_beginSmpFrameTime);
+	s_beginSmpFrameTimeValid = 0;
+	_InterlockedExchange(&s_beginSmpFrameTime, Sys_Milliseconds());
+}
+
+// Store 140632190 (name unknown): RB_SwapBuffers has presented
+void sub_140632190()
+{
+	_InterlockedExchange(&s_renderCompleteTime, Sys_Milliseconds());
+	s_beginSmpFrameTimeValid = 1;
+}
+
+// Store 1406321B0 (name unknown): sets g_gpuFrameWait (SCR_UpdateFrame: 1, or 0 while a cinematic plays)
+void sub_1406321B0(int frames)
+{
+	g_gpuFrameWait = frames;
+}
+
+// One millisecond of the time-stamp counter, the deadline R_SyncGpu gives its work callback
+static unsigned long long R_SyncGpuDeadline()
+{
+	const unsigned long long now = __rdtsc();
+	return now + (unsigned long long)(1.0 / msecPerRawTimerTick);
+}
+
+// Store 1406327D0 (Black Ops' R_SyncGpu(WorkCallback), gfx_d3d/r_init.cpp:3559; called once a client frame through
+// CL_SyncGpu): the front end's wait at the start of a frame, before the frame's input is read.
+// 1. A lost device is recovered (R_CheckLostDevice) and the frame skipped.
+// 2. With a work callback, it is given 1 ms slices until the back end has caught up (sub_1406301A0).
+// 3. Worker commands run until the render thread has fewer than two frames to finish and the registered frames are at
+//    most g_gpuFrameWait ahead of the presents (sub_140630210).
+// 4. The rest of com_maxfps' frame time (g_maxFpsWaitTime, from Com_Frame) is slept out, less the time step 3 waited
+//    while behind; with a frame still in flight, at least min(12 ms, time since the last present began) less the time
+//    since it returned. Pending sound updates run first. The callback gets the time, then worker commands run until
+//    the end time (sub_1406302D0).
+void R_SyncGpu(int (*WorkCallback)(unsigned long long))
+{
+	if (!R_CheckLostDevice())
+		return;
+	const int start = Sys_Milliseconds();
+	s_gpuStartCatchUpTime = -1;
+	s_gpuEndCatchUpTime = -1;
+	if (unk_14B2C59A0)
+	{
+		const int caughtUp = sub_1406301A0();
+		if (!caughtUp)
+		{
+			unk_14B2C59A0 = caughtUp;
+			sub_140316AD0(0);
+		}
+	}
+	if (WorkCallback)
+	{
+		do
+		{
+			sub_140632BC0();
+			if (sub_14046F5C0() && (int)((unsigned long)g_frontEndSwapFrame - (unsigned long)g_gpuSwapFrame) <= 1)
+				break;
+		} while (WorkCallback(R_SyncGpuDeadline()));
+	}
+	R_ProcessWorkerCmdsWithTimeout(sub_140630210, 1);
+
+	const int now = Sys_Milliseconds();
+	unsigned int waited = (unsigned int)now;
+	if (s_gpuStartCatchUpTime >= 0)
+		waited = (unsigned int)s_gpuStartCatchUpTime - (unsigned int)s_gpuEndCatchUpTime + (unsigned int)now;
+	const int maxFpsWaitTime = g_maxFpsWaitTime;
+	g_maxFpsWaitTime = 0;
+	int waitTime = (int)((unsigned int)maxFpsWaitTime - waited + (unsigned int)start);
+	if (waitTime < 0)
+		waitTime = 0;
+	sub_140632BC0();
+	if (g_frontEndSwapFrame != g_gpuSwapFrame)
+	{
+		const int sincePresent = (int)((unsigned int)now - (unsigned int)s_renderCompleteTime);
+		const int frameStart = s_beginSmpFrameTimeValid ? s_beginSmpFrameTime : s_prevBeginSmpFrameTime;
+		int pace = (int)((unsigned int)start - (unsigned int)frameStart);
+		if (pace > 12)
+			pace = 12;
+		pace = (int)((unsigned int)pace - (unsigned int)sincePresent);
+		if (waitTime >= pace)
+			pace = waitTime;
+		waitTime = pace;
+	}
+	if (unk_14B2C59A0 && waitTime > 0)
+	{
+		unk_14B2C59A0 = 0;
+		sub_140316AD0(0);
+	}
+	g_waitRendererTime = (int)((unsigned int)waitTime + (unsigned int)now);
+	if (WorkCallback)
+	{
+		while ((int)((unsigned int)Sys_Milliseconds() - (unsigned int)g_waitRendererTime) < 0)
+		{
+			if (!WorkCallback(R_SyncGpuDeadline()))
+				break;
+		}
+	}
+	R_ProcessWorkerCmdsWithTimeout(sub_1406302D0, 1);
+}
+
 // PS4 PDB R_ResetDevice (gfx_d3d/r_init.cpp:7393), inlined into R_RecoverLostDevice in the Store build: releases
 // everything that depends on the swap chain, creates a new swap chain for the window on the same device and recreates
 // the resources

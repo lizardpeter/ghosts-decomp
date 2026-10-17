@@ -145,7 +145,6 @@ used by the original exe, so they can't be checked against it the way the recons
 falls back to the original behaviour when it fails. The tests check the calls and their arguments in the emulator;
 whether Windows actually uses independent flip has to be confirmed on a real machine, for example with PresentMon.
 
-Next is the frame-latency waitable object: wait for it once per presented frame, then read input. That needs the
-frame loop mapped (Com_Frame, the front end and back end hand-off), which is also where any remaining
-render-thread latency is.
+Next is the frame-latency waitable object: wait for it once per presented frame, then read input. The frame loop, the
+front end and back end hand-off and where to put that wait are in docs/frame.md.
 
