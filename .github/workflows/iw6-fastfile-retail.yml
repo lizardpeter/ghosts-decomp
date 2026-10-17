@@ -1,0 +1,81 @@
+name: IW6 FastFile retail header validation
+
+on:
+  push:
+    branches:
+      - iw6-fastfile-retail-probes
+    paths:
+      - .github/workflows/iw6-fastfile-retail.yml
+      - tools/fastfile/**
+  pull_request:
+    paths:
+      - .github/workflows/iw6-fastfile-retail.yml
+      - tools/fastfile/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iw6-fastfile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  header-survey:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regression-test IW6 unsigned and authenticated prefix parsers
+        run: python3 tools/fastfile/probe_headers.py --test
+      - name: Probe nine real Ghosts FastFiles by HTTP range (no game asset upload)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/iw6-source-headers
+          : > /tmp/iw6-header-survey.jsonl
+          while IFS=' ' read -r key expected; do
+            [[ -n "$key" ]] || continue
+            file="/tmp/iw6-source-headers/$key"
+            headfile="/tmp/iw6-source-headers/$key.headers"
+            url="https://r2.houseofkublai.com/ghosts/DUMP/$key"
+            http_code="$(curl --fail --silent --show-error --location --retry 2 \
+              --connect-timeout 15 --max-time 60 --range 0-65535 \
+              --max-filesize 65536 --dump-header "$headfile" \
+              --output "$file" --write-out '%{http_code}' "$url")"
+            if [[ "$http_code" != 206 ]]; then
+              echo "::error::HTTP range unsupported for $key (status $http_code)" >&2
+              exit 1
+            fi
+            actual="$(stat -c%s "$file")"
+            if [[ "$actual" != 65536 ]]; then
+              echo "::error::Incomplete header sample for $key ($actual bytes)" >&2
+              exit 1
+            fi
+            remote_total="$(grep -i '^content-range:' "$headfile" | tail -n 1 | sed -E 's|.*\/([0-9]+).*|\1|' | tr -d '\r')"
+            if [[ "$remote_total" != "$expected" ]]; then
+              echo "::error::R2 source manifest mismatch for $key: $remote_total vs $expected" >&2
+              exit 1
+            fi
+            python3 tools/fastfile/probe_headers.py "$file" \
+              | tee -a /tmp/iw6-header-survey.jsonl
+            rm -f "$file" "$headfile"
+          done <<'SOURCE_FASTFILES'
+          mp_alien_town.ff 186301740
+          mp_alien_armory.ff 249387180
+          mp_alien_beacon.ff 197856300
+          mp_strikezone.ff 138884972
+          black_ice.ff 333564502
+          common_mp.ff 181589932
+          common_core_mp.ff 163823660
+          techsets_mp_alien_town.ff 7479340
+          mp_alien_town_path.ff 385068
+          SOURCE_FASTFILES
+      - name: Upload diagnostic JSON only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghosts-iw6-header-survey
+          path: /tmp/iw6-header-survey.jsonl
+          retention-days: 7
+          if-no-files-found: warn
