@@ -25,3 +25,36 @@ enum D3D11ContextSlot : unsigned int
 	CTX_HSSetShader = 60,
 	CTX_DSSetShader = 64,
 };
+
+// ---- states ----
+// ID3D11Device methods that create pipeline state objects, shaders, input layouts and queries
+enum D3D11DeviceStateSlot : unsigned int
+{
+	DEV_CreateInputLayout = 11,       // 140665180
+	DEV_CreateVertexShader = 12,      // 14063AE60, 14063BC10
+	DEV_CreatePixelShader = 15,       // 14063ADD0, 14063BB80
+	DEV_CreateHullShader = 16,        // 14063AD70, 14063BB10
+	DEV_CreateDomainShader = 17,      // 14063AD10, 14063BAA0
+	DEV_CreateComputeShader = 18,     // 14063AC20, 14063BA50
+	DEV_CreateBlendState = 20,        // 140630A70
+	DEV_CreateDepthStencilState = 21, // 14065BED0
+	DEV_CreateRasterizerState = 22,   // 1406310F0
+	DEV_CreateSamplerState = 23,      // 14065FE60, 1401AAB70
+	DEV_CreateQuery = 24,             // 14062F700, 14068BC80
+};
+
+// ID3D11DeviceContext (ID3D11Asynchronous methods)
+enum D3D11ContextQuerySlot : unsigned int
+{
+	CTX_Begin = 27,    // 14068BE20
+	CTX_End = 28,      // 14067D210, 14068BE20
+	CTX_GetData = 29,  // 14065BE70, 14067D210, 14062DFF0, 14068C260, 14068BE20
+};
+
+// IUnknown / ID3D11Asynchronous (ID3D11Query)
+enum ComObjectStateSlot : unsigned int
+{
+	UNK_Release = 2,              // 14065FE60
+	ASYNC_GetDataSize = 7,        // 14065BE70, 14067D210, 14062DFF0, 14068C260, 14068BE20
+};
+// ---- END states ----
