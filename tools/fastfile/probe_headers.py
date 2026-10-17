@@ -22,8 +22,8 @@ VERSION = 0x235
 FIXED_PREFIX = 28
 STREAM_ROW_BYTES = 24
 MIN_HEADER = 44
-MAX_IMAGE_ROWS = 4096
-MAX_SAMPLE_BYTES = 65536
+MAX_IMAGE_ROWS = 131072
+MAX_SAMPLE_BYTES = 4 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -92,7 +92,7 @@ def read_header(source: bytes, name: str = "source.ff") -> Header:
 
 def audit(path: pathlib.Path) -> dict:
     if path.stat().st_size > MAX_SAMPLE_BYTES:
-        raise ValueError("refusing to read a sample over 64 KiB")
+        raise ValueError("refusing to read a sample over the bounded maximum")
     source = path.read_bytes()
     if len(source) > MAX_SAMPLE_BYTES:
         raise ValueError(f"range probe exceeded {MAX_SAMPLE_BYTES} bytes; HTTP Range may have been ignored")
@@ -132,6 +132,12 @@ class HeaderTests(unittest.TestCase):
         self.assertEqual(parsed.envelope, "sha256-master-blocks")
         self.assertEqual(parsed.stream_offset, at)
         self.assertIsNone(parsed.zlib_cmf)
+
+    def test_retail_sized_streamed_image_table(self):
+        # Point of Contact's retail FF reports 8,160 streamed images.
+        value = read_header(self.sample(8160))
+        self.assertEqual(value.image_count, 8160)
+        self.assertEqual(value.stream_offset, 44 + 24 * 8160)
 
     def test_bad_prefix_rejected(self):
         with self.assertRaises(ValueError):
