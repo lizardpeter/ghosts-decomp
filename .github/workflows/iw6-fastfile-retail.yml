@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Regression-test IW6 unsigned and authenticated prefix parsers
         run: python3 tools/fastfile/probe_headers.py --test
-      - name: Probe nine authentic IW6 variable-length FastFile headers (bounded R2 byte ranges)
+      - name: Verify original FastFile headers, first authenticated SHA blocks and XFile prefixes
         shell: bash
         run: |
           set -euo pipefail
@@ -52,7 +52,16 @@ jobs:
               echo "::error::IW6 image table count $count exceeds cap for $key" >&2
               exit 1
             fi
-            needed=$((44 + 24 * count + 8))
+            # Signed zones carry an 8192-byte authentication envelope,
+            # 8192-byte SHA master block and one 8192-byte source block.
+            # Unsigned zones need only an initial 8192-byte zlib prefix.
+            magic="$(head -c 8 "$file")"
+            base=$((44 + 24 * count))
+            if [[ "$magic" == "IWff0100" ]]; then
+              needed=$((base + 3 * 8192))
+            else
+              needed=$((base + 8192))
+            fi
             if (( needed > 4194304 )); then
               echo "::error::IW6 prefix needs $needed bytes; cap exceeded" >&2
               exit 1
@@ -76,7 +85,7 @@ jobs:
             python3 tools/fastfile/probe_headers.py "$file" \
               | tee -a /tmp/iw6-header-survey.jsonl
             rm -f "$file" "$headfile"
-                    done <<'SOURCE_FASTFILES'
+          done <<'SOURCE_FASTFILES'
           mp_alien_town.ff 186301740
           mp_alien_armory.ff 249387180
           mp_alien_beacon.ff 197856300
