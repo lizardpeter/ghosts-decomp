@@ -19,28 +19,6 @@ struct ID3D11UnorderedAccessView;
 
 #define E_OUTOFMEMORY ((HRESULT)0x8007000E)
 
-enum D3D11_USAGE
-{
-	D3D11_USAGE_DEFAULT = 0,
-	D3D11_USAGE_IMMUTABLE = 1,
-	D3D11_USAGE_DYNAMIC = 2,
-	D3D11_USAGE_STAGING = 3,
-};
-
-enum D3D11_BIND_FLAG
-{
-	D3D11_BIND_VERTEX_BUFFER = 0x1,
-	D3D11_BIND_INDEX_BUFFER = 0x2,
-	D3D11_BIND_CONSTANT_BUFFER = 0x4,
-	D3D11_BIND_SHADER_RESOURCE = 0x8,
-	D3D11_BIND_UNORDERED_ACCESS = 0x80,
-};
-
-enum D3D11_CPU_ACCESS_FLAG
-{
-	D3D11_CPU_ACCESS_WRITE = 0x10000,
-};
-
 enum D3D11_RESOURCE_MISC_FLAG
 {
 	D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS = 0x10,
@@ -56,23 +34,8 @@ enum D3D11_MAP
 	D3D11_MAP_WRITE_NO_OVERWRITE = 5,
 };
 
-struct D3D11_BUFFER_DESC
-{
-	unsigned int ByteWidth;
-	D3D11_USAGE Usage;
-	unsigned int BindFlags;
-	unsigned int CPUAccessFlags;
-	unsigned int MiscFlags;
-	unsigned int StructureByteStride;
-};
 static_assert(sizeof(D3D11_BUFFER_DESC) == 0x18, "D3D11_BUFFER_DESC");  // Load_IndexBuffer: fields at +0..+0x10
 
-struct D3D11_SUBRESOURCE_DATA
-{
-	const void *pSysMem;
-	unsigned int SysMemPitch;
-	unsigned int SysMemSlicePitch;
-};
 static_assert(sizeof(D3D11_SUBRESOURCE_DATA) == 0x10, "D3D11_SUBRESOURCE_DATA");  // Load_IndexBuffer
 
 struct D3D11_MAPPED_SUBRESOURCE

@@ -186,8 +186,8 @@ FAKES = {
     "?R_FatalLockError@@YAXJ@Z": _fake_record("R_FatalLockError", "i"),
     "?Com_Error@@YAXW4errorParm_t@@PEBDZZ": _fake_record("Com_Error", "iss"),
     "?sub_1401AC310@@YAXIIW4D3D11_USAGE@@PEBXPEBDPEAPEAUID3D11Buffer@@@Z": _fake_record("sub_1401AC310", "iiiqsq"),
-    "?sub_1401AC380@@YAJPEAUID3D11Buffer@@PEBDPEAPEAUID3D11UnorderedAccessView@@@Z": _fake_record("sub_1401AC380", "qsq"),
-    "?sub_1401AC3F0@@YAJPEAUID3D11Buffer@@PEBDPEAPEAUID3D11ShaderResourceView@@@Z": _fake_record("sub_1401AC3F0", "qsq"),
+    "?sub_1401AC380@@YAXPEAUID3D11Buffer@@PEBDPEAPEAUID3D11UnorderedAccessView@@@Z": _fake_record("sub_1401AC380", "qsq"),
+    "?sub_1401AC3F0@@YAXPEAUID3D11Buffer@@PEBDPEAPEAUID3D11ShaderResourceView@@@Z": _fake_record("sub_1401AC3F0", "qsq"),
     "?sub_140631780@@YA_NPEAUID3D11Device@@PEAUID3D11Buffer@@@Z": _fake_record("sub_140631780", "qq"),
     "?R_InitReactiveMotionConstantBufferState@@YAXPEAUGfxReactiveMotionBufferState@@@Z":
         _fake_record("R_InitReactiveMotionConstantBufferState", "q"),

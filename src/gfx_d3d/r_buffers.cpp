@@ -51,8 +51,8 @@ void sub_1401B0020(ID3D11Buffer *buffer, unsigned int bytes);
 void sub_1401AC0E0(ID3D11ShaderResourceView **view);           // *view = NULL
 void sub_1401AC310(unsigned int bytes, unsigned int bindFlags, D3D11_USAGE usage, const void *data, const char *name,
                    ID3D11Buffer **buffer);                     // a raw (byte address) buffer
-HRESULT sub_1401AC380(ID3D11Buffer *buffer, const char *name, ID3D11UnorderedAccessView **view);  // raw R32 UAV
-HRESULT sub_1401AC3F0(ID3D11Buffer *buffer, const char *name, ID3D11ShaderResourceView **view);   // raw R32 SRV
+void sub_1401AC380(ID3D11Buffer *buffer, const char *name, ID3D11UnorderedAccessView **view);  // raw R32 UAV
+void sub_1401AC3F0(ID3D11Buffer *buffer, const char *name, ID3D11ShaderResourceView **view);   // raw R32 SRV
 void sub_1401B1EC0(GfxReactiveMotionBufferState *state);      // releases the reactive motion constant buffers
 bool sub_140631780(ID3D11Device *device, ID3D11Buffer *buffer);  // gfx_d3d/r_init.cpp area: a driver hint
 void R_UnlockSkinnedCache();                                          // unlocks the skinned vertex cache

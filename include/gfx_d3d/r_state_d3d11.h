@@ -109,16 +109,6 @@ struct D3D11_INPUT_ELEMENT_DESC
 	unsigned int InstanceDataStepRate;
 };
 
-struct D3D11_BUFFER_DESC
-{
-	unsigned int ByteWidth;
-	int Usage;
-	unsigned int BindFlags;
-	unsigned int CPUAccessFlags;
-	unsigned int MiscFlags;
-	unsigned int StructureByteStride;
-};
-
 // the values the Store build passes
 #define D3D11_BLEND_ZERO 1
 #define D3D11_BLEND_ONE 2

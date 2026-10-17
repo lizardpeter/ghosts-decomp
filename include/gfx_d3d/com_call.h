@@ -16,81 +16,71 @@ inline R ComCall(const void *object, unsigned int slot, A... args)
 	return ((Method)(*(void *const *const *)object)[slot])(object, args...);
 }
 
-// ID3D11DeviceContext
-enum D3D11ContextSlot : unsigned int
-{
-	CTX_PSSetShader = 9,
-	CTX_IASetInputLayout = 17,
-	CTX_VSSetShader = 11,
-	CTX_HSSetShader = 60,
-	CTX_DSSetShader = 64,
-};
+// One enum per interface, by vtable position (IUnknown 0-2 come first in all of them). Each slot is checked
+// against a call in the Store build; the functions using it say where.
 
-// ---- buffers ----
-// IUnknown, first in every interface (Store: ID3D11Buffer::AddRef 140630487 `call [rax+8]`, Release 1406023BC
-// `call [rax+0x10]`)
+// IUnknown
 enum IUnknownSlot : unsigned int
 {
+	UNK_QueryInterface = 0,
 	UNK_AddRef = 1,
 	UNK_Release = 2,
 };
 
-// ID3D11Device (Store: CreateBuffer 140601685 `call [rax+0x18]` on dx.d3d11device)
-enum D3D11DeviceBufferSlot : unsigned int
+// ID3D11Device
+enum D3D11DeviceSlot : unsigned int
 {
 	DEV_CreateBuffer = 3,
+	DEV_CreateTexture1D = 4,
+	DEV_CreateTexture2D = 5,
+	DEV_CreateTexture3D = 6,
+	DEV_CreateShaderResourceView = 7,
+	DEV_CreateUnorderedAccessView = 8,
+	DEV_CreateRenderTargetView = 9,
+	DEV_CreateDepthStencilView = 10,
+	DEV_CreateInputLayout = 11,
+	DEV_CreateVertexShader = 12,
+	DEV_CreatePixelShader = 15,
+	DEV_CreateHullShader = 16,
+	DEV_CreateDomainShader = 17,
+	DEV_CreateComputeShader = 18,
+	DEV_CreateBlendState = 20,
+	DEV_CreateDepthStencilState = 21,
+	DEV_CreateRasterizerState = 22,
+	DEV_CreateSamplerState = 23,
+	DEV_CreateQuery = 24,
+	DEV_CreateDeferredContext = 27,
+	DEV_CheckMultisampleQualityLevels = 30,
+	DEV_GetDeviceRemovedReason = 39,
 };
 
-// ID3D11DeviceContext (Store: Map 140602786 `call [rax+0x70]`, Unmap 140602846 `jmp [rax+0x78]`)
-enum D3D11ContextBufferSlot : unsigned int
+// ID3D11DeviceContext
+enum D3D11ContextSlot : unsigned int
 {
+	CTX_PSSetShader = 9,
+	CTX_VSSetShader = 11,
 	CTX_Map = 14,
 	CTX_Unmap = 15,
+	CTX_IASetInputLayout = 17,
+	CTX_Begin = 27,
+	CTX_End = 28,
+	CTX_GetData = 29,
+	CTX_CopySubresourceRegion = 46,
+	CTX_UpdateSubresource = 48,
+	CTX_HSSetShader = 60,
+	CTX_DSSetShader = 64,
+	CTX_ClearState = 110,
+	CTX_Flush = 111,
 };
 
-// ID3D11Buffer: ID3D11DeviceChild 3-6, ID3D11Resource 7-9, then GetDesc (Store: 140602815 `call [rax+0x50]`)
-enum D3D11BufferSlot : unsigned int
+// Device children: ID3D11Resource / ID3D11View / ID3D11Asynchronous (7), ID3D11Buffer::GetDesc and
+// ID3D11RenderTargetView::GetDesc
+enum D3D11ChildSlot : unsigned int
 {
+	VIEW_GetResource = 7,
+	ASYNC_GetDataSize = 7,
+	RTV_GetDesc = 8,
 	BUF_GetDesc = 10,
-};
-
-// ---- states ----
-// ID3D11Device methods that create pipeline state objects, shaders, input layouts and queries
-enum D3D11DeviceStateSlot : unsigned int
-{
-	DEV_CreateInputLayout = 11,       // 140665180
-	DEV_CreateVertexShader = 12,      // 14063AE60, 14063BC10
-	DEV_CreatePixelShader = 15,       // 14063ADD0, 14063BB80
-	DEV_CreateHullShader = 16,        // 14063AD70, 14063BB10
-	DEV_CreateDomainShader = 17,      // 14063AD10, 14063BAA0
-	DEV_CreateComputeShader = 18,     // 14063AC20, 14063BA50
-	DEV_CreateBlendState = 20,        // 140630A70
-	DEV_CreateDepthStencilState = 21, // 14065BED0
-	DEV_CreateRasterizerState = 22,   // 1406310F0
-	DEV_CreateSamplerState = 23,      // 14065FE60, 1401AAB70
-	DEV_CreateQuery = 24,             // 14062F700, 14068BC80
-};
-
-// ID3D11DeviceContext (ID3D11Asynchronous methods)
-enum D3D11ContextQuerySlot : unsigned int
-{
-	CTX_Begin = 27,    // 14068BE20
-	CTX_End = 28,      // 14067D210, 14068BE20
-	CTX_GetData = 29,  // 14065BE70, 14067D210, 14062DFF0, 14068C260, 14068BE20
-};
-
-// ID3D11Asynchronous (ID3D11Query); IUnknown's Release is UNK_Release above (also 14065FE60)
-enum ComObjectStateSlot : unsigned int
-{
-	ASYNC_GetDataSize = 7,        // 14065BE70, 14067D210, 14062DFF0, 14068C260, 14068BE20
-};
-// ---- END states ----
-
-// ---- device ----
-// Slots used by the device and swap chain code (gfx_d3d/r_init.cpp); each checked against a call in the Store build.
-enum ComUnknownSlot : unsigned int
-{
-	UNKNOWN_Release = 2,
 };
 
 // IDXGIFactory
@@ -99,6 +89,12 @@ enum DXGIFactorySlot : unsigned int
 	FACTORY_EnumAdapters = 7,
 	FACTORY_MakeWindowAssociation = 8,
 	FACTORY_CreateSwapChain = 10,
+};
+
+// IDXGIDevice
+enum DXGIDeviceSlot : unsigned int
+{
+	DXGIDEVICE_GetAdapter = 7,
 };
 
 // IDXGIAdapter
@@ -123,26 +119,4 @@ enum DXGISwapChainSlot : unsigned int
 	SWAPCHAIN_SetFullscreenState = 10,
 	SWAPCHAIN_GetFullscreenState = 11,
 	SWAPCHAIN_GetDesc = 12,
-};
-
-// ID3D11Device
-enum D3D11DeviceLifecycleSlot : unsigned int
-{
-	DEVICE_CreateQuery = 24,
-	DEVICE_CreateDeferredContext = 27,
-	DEVICE_CheckMultisampleQualityLevels = 30,
-	DEVICE_GetDeviceRemovedReason = 39,
-};
-
-// ID3D11DeviceContext
-enum D3D11ContextLifecycleSlot : unsigned int
-{
-	CTX_ClearState = 110,  // End (28) and GetData (29) are in the states block
-	CTX_Flush = 111,
-};
-
-// ID3D11Query (ID3D11Asynchronous)
-enum D3D11QuerySlot : unsigned int
-{
-	QUERY_GetDataSize = 7,
 };

@@ -19,6 +19,7 @@
 #include "client/client.h"
 #include "gfx_d3d/com_call.h"
 #include "gfx_d3d/r_dx.h"
+#include "gfx_d3d/r_image.h"
 #include "gfx_d3d/r_init.h"
 #include "qcommon/dvar.h"
 #include "qcommon/qcommon.h"
@@ -150,10 +151,6 @@ void R_FinishGpuFence();
 void R_InsertGpuFence();
 void R_ReleaseGpuFenceLock();
 
-enum GfxRenderTargetId : int
-{
-	R_RENDERTARGET_FRAME_BUFFER = 1,
-};
 struct GfxCmdBufSourceState;
 struct GfxCmdBufInput;
 struct GfxCmdBufContext
@@ -180,19 +177,7 @@ struct GfxAssets
 };
 extern GfxAssets gfxAssets;
 
-// R_CreateForInitOrReset
-struct D3D11_BUFFER_DESC
-{
-	unsigned int ByteWidth;
-	int Usage;
-	unsigned int BindFlags;
-	unsigned int CPUAccessFlags;
-	unsigned int MiscFlags;
-	unsigned int StructureByteStride;
-};
-#define D3D11_USAGE_DYNAMIC 2
-#define D3D11_BIND_CONSTANT_BUFFER 4
-#define D3D11_CPU_ACCESS_WRITE 0x10000
+// R_CreateForInitOrReset: D3D11_BUFFER_DESC is in gfx_d3d/r_dxgi.h
 struct D3D11_SUBRESOURCE_DATA;
 struct D3D11_QUERY_DESC
 {
@@ -562,26 +547,26 @@ void R_ChooseAdapter()
 							if (outputDesc.Monitor == monitor)
 							{
 								if (dx.dxgiOutput != output)
-									ComCall<unsigned int>(dx.dxgiOutput, UNKNOWN_Release);
+									ComCall<unsigned int>(dx.dxgiOutput, UNK_Release);
 								if (dx.dxgiAdapter != adapter)
-									ComCall<unsigned int>(dx.dxgiAdapter, UNKNOWN_Release);
+									ComCall<unsigned int>(dx.dxgiAdapter, UNK_Release);
 								dx.dxgiAdapter = adapter;
 								dx.dxgiOutput = output;
 								dx.adapterIndex = adapterIndex;
 								return;
 							}
 							if (dx.dxgiOutput != output)
-								ComCall<unsigned int>(output, UNKNOWN_Release);
+								ComCall<unsigned int>(output, UNK_Release);
 							++outputIndex;
 						} while (ComCall<HRESULT>(adapter, ADAPTER_EnumOutputs, outputIndex, &output) !=
 						         DXGI_ERROR_NOT_FOUND);
 					}
 					if (dx.dxgiAdapter != adapter)
-						ComCall<unsigned int>(adapter, UNKNOWN_Release);
+						ComCall<unsigned int>(adapter, UNK_Release);
 				}
 				else
 				{
-					ComCall<unsigned int>(adapter, UNKNOWN_Release);
+					ComCall<unsigned int>(adapter, UNK_Release);
 				}
 			}
 			++adapterIndex;
@@ -1043,7 +1028,7 @@ bool R_CreateDevice(const GfxWindowParms *wndParms)
 	for (sampleCount = wndParms->aaSamples; sampleCount > 1; --sampleCount)
 	{
 		dx.multiSampleType = sampleCount;
-		if (ComCall<HRESULT>(dx.d3d11device, DEVICE_CheckMultisampleQualityLevels, DXGI_FORMAT_R8G8B8A8_UNORM,
+		if (ComCall<HRESULT>(dx.d3d11device, DEV_CheckMultisampleQualityLevels, DXGI_FORMAT_R8G8B8A8_UNORM,
 		                     (unsigned int)sampleCount, &qualityLevels) >= 0)
 			break;
 	}
@@ -1250,14 +1235,14 @@ bool R_CreateForInitOrReset(int reset)
 	{
 		queryDesc.Query = D3D11_QUERY_EVENT;
 		queryDesc.MiscFlags = 0;
-		if (ComCall<HRESULT>(dx.d3d11device, DEVICE_CreateQuery, &queryDesc, &dx.flushGpuFence) < 0)
+		if (ComCall<HRESULT>(dx.d3d11device, DEV_CreateQuery, &queryDesc, &dx.flushGpuFence) < 0)
 			return false;
 		dx.nextFence = 0;
 		for (fenceIndex = 0; fenceIndex < 32; ++fenceIndex)
 		{
 			queryDesc.Query = D3D11_QUERY_EVENT;
 			queryDesc.MiscFlags = 0;
-			if (ComCall<HRESULT>(dx.d3d11device, DEVICE_CreateQuery, &queryDesc, &dx.fencePool[fenceIndex]) < 0)
+			if (ComCall<HRESULT>(dx.d3d11device, DEV_CreateQuery, &queryDesc, &dx.fencePool[fenceIndex]) < 0)
 				return false;
 		}
 	}
@@ -1267,7 +1252,7 @@ bool R_CreateForInitOrReset(int reset)
 		sub_14068D600();
 		queryDesc.Query = D3D11_QUERY_OCCLUSION;
 		queryDesc.MiscFlags = 0;
-		if (ComCall<HRESULT>(dx.d3d11device, DEVICE_CreateQuery, &queryDesc, &query) < 0)
+		if (ComCall<HRESULT>(dx.d3d11device, DEV_CreateQuery, &queryDesc, &query) < 0)
 			query = nullptr;
 		gfxAssets.pixelCountQuery = query;
 		sub_1401AAEF0();
@@ -1393,13 +1378,13 @@ void R_InitRenderBuffers()
 		data->mesh[5].vertSize = 0x14;
 		R_InitDynamicVertexBufferState(&data->mesh[5].vb, 0xB4000, false);
 		for (contextIndex = 0; contextIndex < 65; ++contextIndex)
-			ComCall<HRESULT>(dx.d3d11device, DEVICE_CreateDeferredContext, 0u,
+			ComCall<HRESULT>(dx.d3d11device, DEV_CreateDeferredContext, 0u,
 			                 &data->workerContexts[contextIndex].context);
 	}
 	for (dataIndex = 0; dataIndex < 2; ++dataIndex)
 	{
 		GfxBackEndDynamicData *data = &unk_14A4FEAE0[dataIndex];
-		ComCall<HRESULT>(dx.d3d11device, DEVICE_CreateDeferredContext, 0u, &data->computeContext);
+		ComCall<HRESULT>(dx.d3d11device, DEV_CreateDeferredContext, 0u, &data->computeContext);
 		sub_1401ACD10(&data->computeCmdBuf, sub_14066A480(0x100000, "computeCmds"), 0x100000);
 	}
 	for (viewIndex = 0; viewIndex < 6; ++viewIndex)
@@ -1456,10 +1441,10 @@ static void R_ShutdownConstantBuffers()
 	R_ShutdownSubDomainRangeConstantBuffers();
 	sub_1401B7160();
 	sub_1401B0000(dx.smodelWorldMatrixConstantBuffer);
-	ComCall<unsigned int>(dx.smodelWorldMatrixConstantBuffer, UNKNOWN_Release);
+	ComCall<unsigned int>(dx.smodelWorldMatrixConstantBuffer, UNK_Release);
 	dx.smodelWorldMatrixConstantBuffer = nullptr;
 	sub_1401B0000(dx.smodelLightingOrAmbientConstantBuffer);
-	ComCall<unsigned int>(dx.smodelLightingOrAmbientConstantBuffer, UNKNOWN_Release);
+	ComCall<unsigned int>(dx.smodelLightingOrAmbientConstantBuffer, UNK_Release);
 	dx.smodelLightingOrAmbientConstantBuffer = nullptr;
 }
 
@@ -1480,7 +1465,7 @@ static void R_ShutdownStateTables()
 	memset(dx.defaultBlendStateBits, 0, sizeof(dx.defaultBlendStateBits[0]) * blendStateCount);
 	for (stateIndex = 0; stateIndex < 32; ++stateIndex)
 	{
-		ComCall<unsigned int>(dx.rasterizerStates[stateIndex], UNKNOWN_Release);
+		ComCall<unsigned int>(dx.rasterizerStates[stateIndex], UNK_Release);
 		dx.rasterizerStates[stateIndex] = nullptr;
 	}
 }
@@ -1501,9 +1486,9 @@ void R_ReleaseForShutdownOrReset(unsigned int frontEndFrameCount, int resetOnly)
 		ComCall<HRESULT>(window->swapChain, SWAPCHAIN_GetFullscreenState, &fullscreen, (IDXGIOutput **)nullptr);
 		if (fullscreen)
 			ComCall<HRESULT>(window->swapChain, SWAPCHAIN_SetFullscreenState, 0, (IDXGIOutput *)nullptr);
-		ComCall<unsigned int>(window->depthStencilTex, UNKNOWN_Release);
+		ComCall<unsigned int>(window->depthStencilTex, UNK_Release);
 		window->depthStencilTex = nullptr;
-		ComCall<unsigned int>(window->swapChain, UNKNOWN_Release);
+		ComCall<unsigned int>(window->swapChain, UNK_Release);
 		window->swapChain = nullptr;
 	}
 	R_ShutdownConstantBuffers();
@@ -1530,7 +1515,7 @@ void R_ReleaseForShutdownOrReset(unsigned int frontEndFrameCount, int resetOnly)
 		R_UnlockImmediateContext();
 		if (!resetOnly)
 		{
-			ComCall<unsigned int>(dx.flushGpuFence, UNKNOWN_Release);
+			ComCall<unsigned int>(dx.flushGpuFence, UNK_Release);
 			dx.flushGpuFence = nullptr;
 		}
 	}
@@ -1540,7 +1525,7 @@ void R_ReleaseForShutdownOrReset(unsigned int frontEndFrameCount, int resetOnly)
 		{
 			if (dx.fencePool[fenceIndex])
 			{
-				ComCall<unsigned int>(dx.fencePool[fenceIndex], UNKNOWN_Release);
+				ComCall<unsigned int>(dx.fencePool[fenceIndex], UNK_Release);
 				dx.fencePool[fenceIndex] = nullptr;
 			}
 		}
@@ -1552,14 +1537,14 @@ void R_ReleaseForShutdownOrReset(unsigned int frontEndFrameCount, int resetOnly)
 	}
 	if (gfxAssets.pixelCountQuery && !resetOnly)
 	{
-		ComCall<unsigned int>(gfxAssets.pixelCountQuery, UNKNOWN_Release);
+		ComCall<unsigned int>(gfxAssets.pixelCountQuery, UNK_Release);
 		gfxAssets.pixelCountQuery = nullptr;
 	}
 	for (samplerIndex = 0; samplerIndex < 256; ++samplerIndex)
 	{
 		if (dx.samplerStates[samplerIndex])
 		{
-			ComCall<unsigned int>(dx.samplerStates[samplerIndex], UNKNOWN_Release);
+			ComCall<unsigned int>(dx.samplerStates[samplerIndex], UNK_Release);
 			dx.samplerStates[samplerIndex] = nullptr;
 		}
 	}
@@ -1621,7 +1606,7 @@ void R_Shutdown(int destroyWindow, int isRestart)
 			R_LockImmediateContext();
 			ComCall<void>(dx.immediateContext, CTX_ClearState);
 			ComCall<void>(dx.immediateContext, CTX_Flush);
-			ComCall<unsigned int>(dx.immediateContext, UNKNOWN_Release);
+			ComCall<unsigned int>(dx.immediateContext, UNK_Release);
 			dx.immediateContext = nullptr;
 			R_UnlockImmediateContext();
 		}
@@ -1629,22 +1614,22 @@ void R_Shutdown(int destroyWindow, int isRestart)
 		dx.immediateContextMutex = nullptr;
 		if (dx.d3d11device)
 		{
-			ComCall<unsigned int>(dx.d3d11device, UNKNOWN_Release);
+			ComCall<unsigned int>(dx.d3d11device, UNK_Release);
 			dx.d3d11device = nullptr;
 		}
 		if (dx.dxgiOutput)
 		{
-			ComCall<unsigned int>(dx.dxgiOutput, UNKNOWN_Release);
+			ComCall<unsigned int>(dx.dxgiOutput, UNK_Release);
 			dx.dxgiOutput = nullptr;
 		}
 		if (dx.dxgiAdapter)
 		{
-			ComCall<unsigned int>(dx.dxgiAdapter, UNKNOWN_Release);
+			ComCall<unsigned int>(dx.dxgiAdapter, UNK_Release);
 			dx.dxgiAdapter = nullptr;
 		}
 		if (dx.dxgiFactory)
 		{
-			ComCall<unsigned int>(dx.dxgiFactory, UNKNOWN_Release);
+			ComCall<unsigned int>(dx.dxgiFactory, UNK_Release);
 			dx.dxgiFactory = nullptr;
 		}
 		sub_14064D7E0();
@@ -1702,7 +1687,7 @@ void RB_SwapBuffers()
 		{
 			if (hr == DXGI_ERROR_DEVICE_REMOVED && dx.d3d11device)
 			{
-				removedReason = ComCall<HRESULT>(dx.d3d11device, DEVICE_GetDeviceRemovedReason);
+				removedReason = ComCall<HRESULT>(dx.d3d11device, DEV_GetDeviceRemovedReason);
 				if (removedReason == (HRESULT)0x887A0001)
 					reason = "DXGI_ERROR_INVALID_CALL";
 				else if (removedReason == hr)
@@ -1742,7 +1727,7 @@ void RB_SwapBuffers()
 	do
 	{
 		fence = unk_14A385398;
-		ComCall<unsigned int>(fence, QUERY_GetDataSize);
+		ComCall<unsigned int>(fence, ASYNC_GetDataSize);
 	} while (ComCall<HRESULT>(dx.immediateContext, CTX_GetData, fence, (void *)nullptr, 0u, 0u) == 1);
 	ComCall<void>(dx.immediateContext, CTX_End, unk_14A385398);
 	R_UnlockImmediateContext();
@@ -1844,3 +1829,54 @@ static_assert(sizeof(GfxWindowTarget) == 0x20, "GfxWindowTarget");
 static_assert(__builtin_offsetof(vidConfig_t, letterbox4x3) == 0x11, "vidConfig_t (Store)");
 static_assert(__builtin_offsetof(vidConfig_t, displayFrequency) == 0x18, "vidConfig_t (Store)");
 static_assert(sizeof(vidConfig_t) == 0x40, "vidConfig_t (Store)");
+
+// ==== BEGIN images ====
+// The adapter's memory sizes (DXGI_ADAPTER_DESC), which the image code budgets textures against. Names unknown.
+
+#include "gfx_d3d/com_call.h"
+#include "gfx_d3d/r_dx.h"
+#include "gfx_d3d/r_image.h"
+#include "qcommon/dvar.h"
+
+extern "C" const GUID IID_IDXGIDevice;  // dxguid
+extern const dvar_t *r_amdGPU;
+extern const dvar_t *r_amdGPUVideoMemoryScale;
+
+// Store 140630CA0 (name unknown): the adapter's shared system memory
+unsigned long long sub_140630CA0()
+{
+	IDXGIDevice *dxgiDevice;
+	IDXGIAdapter *adapter;
+	DXGI_ADAPTER_DESC desc;
+
+	ComCall<long>(dx.d3d11device, UNK_QueryInterface, &IID_IDXGIDevice, &dxgiDevice);
+	ComCall<long>(dxgiDevice, DXGIDEVICE_GetAdapter, &adapter);
+	ComCall<long>(adapter, ADAPTER_GetDesc, &desc);
+	ComCall<unsigned long>(dxgiDevice, UNK_Release);
+	ComCall<unsigned long>(adapter, UNK_Release);
+	return desc.SharedSystemMemory;
+}
+
+// Store 140630D20 (name unknown): the adapter's dedicated video and system memory, scaled by
+// r_amdGPUVideoMemoryScale when r_amdGPU is set
+unsigned long long sub_140630D20()
+{
+	IDXGIDevice *dxgiDevice;
+	IDXGIAdapter *adapter;
+	DXGI_ADAPTER_DESC desc;
+
+	ComCall<long>(dx.d3d11device, UNK_QueryInterface, &IID_IDXGIDevice, &dxgiDevice);
+	ComCall<long>(dxgiDevice, DXGIDEVICE_GetAdapter, &adapter);
+	ComCall<long>(adapter, ADAPTER_GetDesc, &desc);
+	ComCall<unsigned long>(dxgiDevice, UNK_Release);
+	ComCall<unsigned long>(adapter, UNK_Release);
+	unsigned long long memory = desc.DedicatedSystemMemory + desc.DedicatedVideoMemory;
+	if (r_amdGPU->current.enabled)
+		return (unsigned long long)((float)memory * r_amdGPUVideoMemoryScale->current.value);
+	return memory;
+}
+
+static_assert(sizeof(DXGI_ADAPTER_DESC) == 0x130, "DXGI_ADAPTER_DESC");
+static_assert(__builtin_offsetof(DXGI_ADAPTER_DESC, DedicatedVideoMemory) == 0x110, "DXGI_ADAPTER_DESC");
+static_assert(__builtin_offsetof(DXGI_ADAPTER_DESC, SharedSystemMemory) == 0x120, "DXGI_ADAPTER_DESC");
+// ==== END images ====

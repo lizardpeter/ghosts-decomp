@@ -43,7 +43,6 @@ static_assert(__builtin_offsetof(OcclusionQuery, query) == 0x28, "OcclusionQuery
 
 extern OcclusionQuery occlusionQueryArray[32];
 extern bool g_allocateMinimalResources;
-extern ID3D11Query *unk_14A346A98;  // an occlusion query 14062F700 creates (Black Ops: gfxAssets.pixelCountQuery)
 extern int unk_14A346A00;           // set while unk_14A346A08 is in flight
 extern ID3D11Query *unk_14A346A08;
 

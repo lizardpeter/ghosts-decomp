@@ -293,3 +293,67 @@ iw6_ds_ps4	1401B1230	decompiled	src/gfx_d3d/r_init.cpp	Store-build reconstructio
 iw6_ds_ps4	1402E1570	decompiled	src/gfx_d3d/r_init.cpp	Store-build reconstruction (tested against the Store build); auto inputs fault in the server original (FormatMessageA buffer)
 iw6_ds_ps4	1402E1600	decompiled	src/gfx_d3d/r_init.cpp	Store-build reconstruction (tested against the Store build); the server original faults on auto inputs (no device state)
 iw6_ds_ps4	1402E1D20	decompiled	src/gfx_d3d/r_init.cpp	Store-build reconstruction (tested against the Store build); the server's DxGlobals layout differs and the original faults on auto inputs
+iw6mp64_MSStore_ship	1401AC380	matches	src/gfx_d3d/r_compute.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	1401AC3F0	matches	src/gfx_d3d/r_compute.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	1401AC4D0	matches	src/gfx_d3d/r_compute.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	1401AC540	matches	src/gfx_d3d/r_compute.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062AB40	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062AB70	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062AC10	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062ACD0	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062AE30	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062AF40	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062B020	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062B110	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062B310	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062B360	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062B580	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062B960	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062B980	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062B9C0	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062BA00	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062BA40	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062BA80	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062C040	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062C3D0	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062C460	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062DA40	matches	src/gfx_d3d/r_image.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062E0C0	matches	src/gfx_d3d/r_image_load_common.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062E0F0	matches	src/gfx_d3d/r_image_load_common.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062E300	matches	src/gfx_d3d/r_image_load_common.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062E4F0	matches	src/gfx_d3d/r_image_load_common.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062E690	matches	src/gfx_d3d/r_image_load_common.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062E820	matches	src/gfx_d3d/r_image_load_common.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14062E8A0	matches	src/gfx_d3d/r_image_load_common.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	140630CA0	matches	src/gfx_d3d/r_init.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	140630D20	matches	src/gfx_d3d/r_init.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14064E3A0	matches	src/gfx_d3d/r_rendertarget.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14064F360	matches	src/gfx_d3d/r_rendertarget.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14064F420	matches	src/gfx_d3d/r_rendertarget.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	14064F720	matches	src/gfx_d3d/r_rendertarget.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	140650140	matches	src/gfx_d3d/r_rendertarget.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	1406502B0	matches	src/gfx_d3d/r_rendertarget.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	1406505B0	matches	src/gfx_d3d/r_rendertarget.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	140650700	matches	src/gfx_d3d/r_rendertarget.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	140650810	matches	src/gfx_d3d/r_rendertarget.cpp	differential test against the Store build (emulated)
+iw6mp64_MSStore_ship	140651310	matches	src/gfx_d3d/r_rendertarget.cpp	differential test against the Store build (emulated)
+iw6_ds_ps4	1402E0ED0	compiles	src/gfx_d3d/r_image.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402E0F00	compiles	src/gfx_d3d/r_image.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402E0F40	compiles	src/gfx_d3d/r_image.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402E1030	compiles	src/gfx_d3d/r_image.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402E1040	compiles	src/gfx_d3d/r_image.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402E1080	compiles	src/gfx_d3d/r_image.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402E10C0	compiles	src/gfx_d3d/r_image.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402E1100	compiles	src/gfx_d3d/r_image.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402E1140	compiles	src/gfx_d3d/r_image.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402F4760	compiles	src/gfx_d3d/r_rendertarget.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402F4A10	compiles	src/gfx_d3d/r_rendertarget.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402F4CE0	compiles	src/gfx_d3d/r_rendertarget.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402F4F40	compiles	src/gfx_d3d/r_rendertarget.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402F5E30	compiles	src/gfx_d3d/r_rendertarget.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402F6180	compiles	src/gfx_d3d/r_rendertarget.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402F6400	compiles	src/gfx_d3d/r_rendertarget.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402F64B0	compiles	src/gfx_d3d/r_rendertarget.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402F65C0	compiles	src/gfx_d3d/r_rendertarget.cpp	the server's Direct3D image and render target back end is stubbed or differs (server GfxImage is 0x38 bytes, one surface per render target, no multisampling); src follows the Store build and matches there
+iw6_ds_ps4	1402E11F0	matches	src/gfx_d3d/r_image.cpp	differential test (emulated, original vs recon)
+iw6_ds_ps4	1402E12E0	matches	src/gfx_d3d/r_image_load_common.cpp	differential test (emulated, original vs recon)
