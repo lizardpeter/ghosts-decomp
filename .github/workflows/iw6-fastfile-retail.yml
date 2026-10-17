@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Regression-test IW6 unsigned and authenticated prefix parsers
         run: python3 tools/fastfile/probe_headers.py --test
-      - name: Probe nine real Ghosts FastFiles by HTTP range (no game asset upload)
+      - name: Probe nine authentic IW6 variable-length FastFile headers (bounded R2 byte ranges)
         shell: bash
         run: |
           set -euo pipefail
@@ -39,28 +39,44 @@ jobs:
             file="/tmp/iw6-source-headers/$key"
             headfile="/tmp/iw6-source-headers/$key.headers"
             url="https://r2.houseofkublai.com/ghosts/DUMP/$key"
-            http_code="$(curl --fail --silent --show-error --location --retry 2 \
-              --connect-timeout 15 --max-time 60 --range 0-65535 \
+            status="$(curl --fail --silent --show-error --location --retry 2 \
+              --connect-timeout 15 --max-time 90 --range 0-65535 \
               --max-filesize 65536 --dump-header "$headfile" \
               --output "$file" --write-out '%{http_code}' "$url")"
-            if [[ "$http_code" != 206 ]]; then
-              echo "::error::HTTP range unsupported for $key (status $http_code)" >&2
+            if [[ "$status" != 206 ]] || [[ "$(stat -c%s "$file")" != 65536 ]]; then
+              echo "::error::Failed bounded initial range for $key (HTTP $status)" >&2
               exit 1
             fi
-            actual="$(stat -c%s "$file")"
-            if [[ "$actual" != 65536 ]]; then
-              echo "::error::Incomplete header sample for $key ($actual bytes)" >&2
+            count="$(python3 -c 'import struct,sys; print(struct.unpack_from("<I",open(sys.argv[1],"rb").read(28),24)[0])' "$file")"
+            if (( count > 131072 )); then
+              echo "::error::IW6 image table count $count exceeds cap for $key" >&2
               exit 1
+            fi
+            needed=$((44 + 24 * count + 8))
+            if (( needed > 4194304 )); then
+              echo "::error::IW6 prefix needs $needed bytes; cap exceeded" >&2
+              exit 1
+            fi
+            if (( needed > 65536 )); then
+              # Request the actual variable-length header, not the entire map.
+              status="$(curl --fail --silent --show-error --location --retry 2 \
+                --connect-timeout 15 --max-time 90 --range "0-$((needed - 1))" \
+                --max-filesize 4194304 --dump-header "$headfile" \
+                --output "$file" --write-out '%{http_code}' "$url")"
+              if [[ "$status" != 206 ]] || [[ "$(stat -c%s "$file")" != "$needed" ]]; then
+                echo "::error::Failed complete header range for $key (HTTP $status, need $needed bytes)" >&2
+                exit 1
+              fi
             fi
             remote_total="$(grep -i '^content-range:' "$headfile" | tail -n 1 | sed -E 's|.*\/([0-9]+).*|\1|' | tr -d '\r')"
             if [[ "$remote_total" != "$expected" ]]; then
-              echo "::error::R2 source manifest mismatch for $key: $remote_total vs $expected" >&2
+              echo "::error::R2 source size differs for $key: $remote_total vs $expected" >&2
               exit 1
             fi
             python3 tools/fastfile/probe_headers.py "$file" \
               | tee -a /tmp/iw6-header-survey.jsonl
             rm -f "$file" "$headfile"
-          done <<'SOURCE_FASTFILES'
+                    done <<'SOURCE_FASTFILES'
           mp_alien_town.ff 186301740
           mp_alien_armory.ff 249387180
           mp_alien_beacon.ff 197856300
