@@ -125,3 +125,27 @@ B0032–B0045 in records/bugs.tsv. The ones that matter most:
 - Display modes with a zero refresh-rate denominator divide by zero.
 - Creation results are never checked, so a failed create crashes later.
 - GPU waits spin with no timeout.
+
+## Enhanced build: presentation (P0003)
+
+The enhanced build replaces the original's blit-model swap chain (`DXGI_SWAP_EFFECT_DISCARD`) with a flip-model
+one (enhanced/gfx_d3d/r_init.cpp):
+
+- **Flip model:** `FLIP_DISCARD` with two buffers, from a DXGI 1.1 factory. Windows can then pass the game's
+  buffers straight to the display (independent flip) in fullscreen and in a borderless window covering the monitor.
+- **Tearing:** allowed when the system supports it, so `r_vsync 0` can run uncapped or with VRR in a window too.
+- **Queue:** at most one frame (`SetMaximumFrameLatency(1)`).
+- **Render targets:** flip model unbinds the back buffer at every present, so the render targets that were bound are
+  bound again right after it. That keeps the renderer's state cache, which skips rebinding a target it believes is
+  bound, correct.
+- **Fallback:** a system that can't create a flip-model swap chain gets the original one.
+
+The methods and GUIDs it adds (IDXGIFactory5::CheckFeatureSupport, IDXGIDevice1::SetMaximumFrameLatency) aren't
+used by the original exe, so they can't be checked against it the way the reconstruction's slots are. Each call
+falls back to the original behaviour when it fails. The tests check the calls and their arguments in the emulator;
+whether Windows actually uses independent flip has to be confirmed on a real machine, for example with PresentMon.
+
+Next is the frame-latency waitable object: wait for it once per presented frame, then read input. That needs the
+frame loop mapped (Com_Frame, the front end and back end hand-off), which is also where any remaining
+render-thread latency is.
+

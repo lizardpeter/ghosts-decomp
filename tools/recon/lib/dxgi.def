@@ -1,0 +1,4 @@
+; Imports the enhanced build makes that the original exe doesn't (see user32.def).
+LIBRARY dxgi.dll
+EXPORTS
+CreateDXGIFactory1
