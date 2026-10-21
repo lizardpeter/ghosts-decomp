@@ -285,6 +285,85 @@ def walk_original_source_material(c: Cursor, assets: bytes, idx: int) -> dict:
     c.pop()
     return {"asset":idx,"alias":False,"images":images,"bytes":c.at-start}
 
+def walk_iw6_animation_record(c: Cursor, assets: bytes, idx: int) -> dict:
+    """Read original IW6 XAnimParts tracks and pools using PC layout.
+
+    The delta-track and flat-pool ownership order comes from independently
+    published IW6 type metadata; the output is strictly metadata and every
+    referenced span is bounded by the original authenticated XFile.
+    """
+    if u64(assets,idx*16)!=2:
+        raise ValueError(f"asset #{idx} not XAnimParts")
+    if pointer_kind(u64(assets,idx*16+8)) not in ("follows","insert"):
+        return {"asset":idx,"alias":True,"bytes":0}
+    start=c.at
+    c.push(0)
+    c.align(3)
+    h=c.take(136)
+    c.push(3)
+    numframes=struct.unpack_from("<H",h,18)[0]
+    wide=numframes>=256
+    def elements(at,count,stride,align):
+        k=pointer_kind(u64(h,at))
+        if k in ("follows","insert"):
+            c.align(align)
+            c.take(count*stride)
+        elif k=="null" and count:
+            raise ValueError(f"array@{at} null with count {count}")
+    if pointer_kind(u64(h,0)) in ("follows","insert"):
+        c.string()
+    elements(56,h[30],4,3)
+    elements(120,h[31],8,3)
+    delta=pointer_kind(u64(h,128))
+    delta_tracks=0
+    if delta in ("follows","insert"):
+        c.align(3)
+        d=c.take(24)
+        for pos,width in [(0,3),(8,4),(16,8)]:
+            p=pointer_kind(u64(d,pos))
+            if p not in ("follows","insert"):
+                continue
+            delta_tracks+=1
+            c.align(3)
+            dh=c.take(8)
+            keys=struct.unpack_from("<H",dh,0)[0]
+            if keys>65535:raise ValueError("delta track exceeds 65535 keyed frames")
+            if pos==0:
+                if keys:
+                    frames=c.take(32)
+                    c.take((keys+1)*(2 if wide else 1))
+                    if pointer_kind(u64(frames,24)) in ("follows","insert"):
+                        small=bool(dh[2])
+                        c.align(0 if small else 3)
+                        c.take((3 if small else 6)*(keys+1))
+                else:
+                    c.take(12)
+            else:
+                if keys:
+                    frames=c.take(8)
+                    c.take((keys+1)*(2 if wide else 1))
+                    if pointer_kind(u64(frames,0)) in ("follows","insert"):
+                        c.align(3)
+                        c.take(width*(keys+1))
+                else:
+                    c.take(width)
+    for at,count,stride,align in [
+        (64,struct.unpack_from("<H",h,8)[0],1,0),
+        (72,struct.unpack_from("<H",h,10)[0],2,1),
+        (80,struct.unpack_from("<H",h,12)[0],4,3),
+        (88,u32(h,36),2,1),
+        (96,struct.unpack_from("<H",h,14)[0],1,0),
+        (104,struct.unpack_from("<H",h,16)[0],4,3),
+        (112,u32(h,40),2 if wide else 1,1 if wide else 0)
+    ]:
+        if count>32*1024*1024:
+            raise ValueError("animation pool exceeds 32M elements")
+        elements(at,count,stride,align)
+    c.pop()
+    c.pop()
+    return {"asset":idx,"alias":False,"bytes":c.at-start,
+        "frames":numframes,"delta_tracks":delta_tracks}
+
 def verify_first_22_netconst_bodies(data: bytes) -> dict:
     """Validate the source body's 32-byte NetConstStrings loader proposal.
 
@@ -648,6 +727,30 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
             }
         except (ValueError,struct.error) as error:
             anim_header={"status":"blocked","reason":str(error)}
+    anim_scan={"status":"not_attempted"}
+    if anim_header["status"]=="original_136_byte_XAnimParts_header_validated":
+        count=0
+        bytes_before=c.at
+        failure=None
+        delta_count=0
+        for idx in range(725,770):
+            try:
+                record=walk_iw6_animation_record(c,asset_bytes,idx)
+                count+=1
+                delta_count+=record.get("delta_tracks",0)
+            except (ValueError,struct.error) as error:
+                failure={"asset_index":idx,"source_offset":c.at,"reason":str(error)}
+                break
+        anim_scan={
+            "status":"all_45_original_XAnimParts_walked" if failure is None
+                else "blocked_on_original_animation_layout",
+            "handles_consumed":count,
+            "delta_track_headers":delta_count,
+            "first_blocker":failure,
+            "first_animation_offset":bytes_before,
+            "after_consumed_offset":c.at,
+            "next_type_if_complete":"technique_set",
+        }
     return {
         "status":"22_original_net_const_strings_bodies_walked",
         "first_body_offset":base,
@@ -662,6 +765,7 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         "first_material_probe":first_material,
         "material_prefix_scan":materials_scan,
         "first_anim_header":anim_header,
+        "anim_prefix_scan":anim_scan,
     }
 
 def inspect_pathdata_header(data: bytes) -> dict:
