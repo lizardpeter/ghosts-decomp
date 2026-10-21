@@ -437,10 +437,35 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                 "layerCount":hdr[458],
                 "nested_deps":"not_yet_walked",
             }
+            if refs["name"] in ("follows","insert"):
+                c.string()
+            if refs["techniqueSet"] in ("follows","insert"):
+                raise ValueError("material #25 has a nested inline TechniqueSet; pass walker needed")
+            if refs["textureTable"] in ("follows","insert"):
+                n=hdr[452]
+                c.align(3)
+                tex=c.take(n*16)
+                image_pointers=[pointer_kind(u64(tex,i*16+8)) for i in range(n)]
+                first_material["image_pointer_kinds"]=image_pointers
+                if any(k in ("follows","insert") for k in image_pointers):
+                    raise ValueError(f"material #25 requires inline GfxImage child {image_pointers}")
+            if refs["constantTable"] in ("follows","insert"):
+                c.align(15)
+                c.take(hdr[453]*32)
+            if refs["stateBitsTable"] in ("follows","insert"):
+                c.align(3)
+                c.take(hdr[454]*28)
+            if refs["constantBufferTable"] in ("follows","insert"):
+                raise ValueError("material #25 inline ConstantBufferTable needs per-stage stream walker")
+            if refs["subMaterials"] in ("follows","insert"):
+                raise ValueError("material #25 inline SubMaterials needs source string walker")
+            first_material["status"]="original_material_25_inline_loader_order_passed"
+            first_material["after_full_material_offset"]=c.at
             c.pop()
             c.pop()
         except ValueError as error:
-            first_material={"status":"blocked","reason":str(error)}
+            first_material["status"]="blocked"
+            first_material["reason"]=str(error)
     return {
         "status":"22_original_net_const_strings_bodies_walked",
         "first_body_offset":base,
