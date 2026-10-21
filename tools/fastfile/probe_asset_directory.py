@@ -196,6 +196,80 @@ def directory(data: bytes) -> dict:
         "first_24_type_runs":runs[:24],
     }
 
+def verify_first_22_netconst_bodies(data: bytes) -> dict:
+    """Validate the source body's 32-byte NetConstStrings loader proposal.
+
+    Advance the *physical* source stream across 22 records and their
+    source-owned inline strings. Never report proprietary string contents.
+    Source ABI remains provisional until this authentic-data probe succeeds.
+    """
+    info=directory(data)
+    if info["first_16_asset_types"][:16] != ["net_const_strings"]*16:
+        return {"status":"not-netconst-world"}
+    sizes=struct.unpack_from("<7Q",data,16)
+    c=Cursor(data,sizes)
+    c.take(40)
+    c.push(3)
+    c.push(3)
+    string_count=u64(data,72)
+    ptrs=c.take(string_count*8) if string_count else b""
+    for i in range(string_count):
+        if pointer_kind(u64(ptrs,i*8)) in ("follows","insert"):
+            c.string()
+    c.pop()
+    globalptr=u64(data,104)
+    if pointer_kind(globalptr) in ("follows","insert"):
+        inner=u64(c.take(8),0)
+        if pointer_kind(inner) in ("follows","insert"):
+            gfx_globals(c)
+    c.pop()
+    c.push(3)
+    c.align(3)
+    count=u64(data,88)
+    asset_bytes=c.take(count*16)
+    if c.at!=info["exact_asset_table_offset"]+count*16:
+        raise ValueError("first body cursor drifted from authenticated directory")
+    base=c.at
+    counts=[]
+    for i in range(22):
+        kind=u64(asset_bytes,i*16)
+        if kind!=52:
+            raise ValueError(f"original asset #{i} is {kind}, not net_const_strings")
+        ptr=pointer_kind(u64(asset_bytes,i*16+8))
+        if ptr not in ("follows","insert"):
+            raise ValueError(f"original net_const_strings #{i} lacks inline owner")
+        c.push(0)
+        c.align(3)
+        raw=c.take(32)
+        c.push(3)
+        nameptr=pointer_kind(u64(raw,0))
+        if nameptr in ("follows","insert"):
+            c.string()
+        n=u32(raw,16)
+        if n>1_000_000:
+            raise ValueError(f"original net string count {n} exceeds limit at #{i}")
+        valueptr=pointer_kind(u64(raw,24))
+        if valueptr in ("follows","insert"):
+            c.align(7)
+            table=c.take(n*8)
+            for j in range(n):
+                if pointer_kind(u64(table,j*8)) in ("follows","insert"):
+                    c.string()
+        elif n:
+            raise ValueError(f"original net strings #{i} references an unclosed source table")
+        counts.append(n)
+        c.pop()
+        c.pop()
+    return {
+        "status":"22_original_net_const_strings_bodies_walked",
+        "first_body_offset":base,
+        "after_22_source_offset":c.at,
+        "net_const_record_count":len(counts),
+        "net_const_string_count_total":sum(counts),
+        "first_6_record_counts":counts[:6],
+        "next_xasset_type":ASSET_TYPES[u64(asset_bytes,22*16)],
+    }
+
 def inspect(path: pathlib.Path) -> dict:
     stats=StreamStats()
     with path.open("rb") as f:
@@ -219,6 +293,8 @@ def inspect(path: pathlib.Path) -> dict:
         if not inflated.eof:
             raise ValueError("original compressed stream did not terminate")
     prelude=directory(bytes(data))
+    body_probe=(verify_first_22_netconst_bodies(bytes(data))
+                if path.name=="mp_alien_town.ff" else None)
     return {
         "file":path.name, "original_size":path.stat().st_size,
         "decoded_size":len(data),
@@ -226,6 +302,7 @@ def inspect(path: pathlib.Path) -> dict:
         "authenticated_sha256_blocks":stats.sha256_blocks,
         "unverified_partial_tail_bytes":stats.partial_tail_bytes,
         **prelude,
+        "first_netconst_body_probe":body_probe,
         "status":"retail_compressed_stream_verified_and_xasset_prelude_walked",
     }
 
