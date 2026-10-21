@@ -981,6 +981,76 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                 raise ValueError("FX #797 has no original elements array owner")
             c.pop()
             c.pop()
+            second_nested={"status":"not_validated"}
+            try:
+                c.push(3)
+                material_bodies=0
+                aliased_visuals=0
+                velocity_samples=0
+                visibility_samples=0
+                for e in records:
+                    rec=elem_bytes[e["index"]*312:(e["index"]+1)*312]
+                    nv=e["velocityIntervals"]+1
+                    ns=e["visibilityIntervals"]+1
+                    if e["velPointer"] in ("follows","insert"):
+                        c.align(3)
+                        c.take(nv*96)
+                        velocity_samples+=nv
+                    if e["visPointer"] in ("follows","insert"):
+                        c.align(3)
+                        c.take(ns*80)
+                        visibility_samples+=ns
+                    kind=e["type"]
+                    vcount=e["visualCount"]
+                    visualptr=u64(rec,208)
+                    if kind==0 and vcount>1:
+                        if pointer_kind(visualptr) not in ("follows","insert"):
+                            raise ValueError("source sprite multi-visual array pointer missing")
+                        c.align(3)
+                        raw_vis=c.take(vcount*8)
+                        for k in range(vcount):
+                            p=u64(raw_vis,k*8)
+                            if pointer_kind(p) in ("follows","insert"):
+                                walk_original_source_material(c,struct.pack("<QQ",5,p),0)
+                                material_bodies+=1
+                            else:
+                                aliased_visuals+=1
+                    elif kind==0:
+                        p=pointer_kind(visualptr)
+                        if p in ("follows","insert"):
+                            walk_original_source_material(c,struct.pack("<QQ",5,visualptr),0)
+                            material_bodies+=1
+                        elif p=="alias":
+                            aliased_visuals+=1
+                        elif vcount:
+                            raise ValueError("source sprite has no original material handle")
+                    elif kind==2:
+                        # Existing source asset handle; its runtime visual
+                        # semantics are not inferred from the numeric enum.
+                        if e["visualPointer"]!="alias":
+                            raise ValueError("source type 2 requires additional loader validation")
+                        aliased_visuals+=1
+                    elif kind==12:
+                        if e["visualPointer"] in ("follows","insert"):
+                            raise ValueError("omni-light source owns unexpected inline visual")
+                    else:
+                        raise ValueError(f"unsupported original FX visual type {kind}")
+                    for path in (240,248,256):
+                        if pointer_kind(u64(rec,path)) in ("follows","insert"):
+                            c.string()
+                    if e["extendedPointer"] in ("follows","insert"):
+                        raise ValueError("extended source FX payload has no verified walker")
+                c.pop()
+                second_nested={
+                    "status":"original_FX_797_body_closed",
+                    "source_end":c.at,
+                    "inline_material_bodies":material_bodies,
+                    "source_visual_aliases":aliased_visuals,
+                    "velocity_samples":velocity_samples,
+                    "visibility_samples":visibility_samples,
+                }
+            except (ValueError,struct.error) as error:
+                second_nested={"status":"blocked","source_at":c.at,"reason":str(error)}
             second_fx={
                 "status":"source_header_for_original_FX_797_observed",
                 "preceding_technique_796_source_offset":first_after_fx,
@@ -989,7 +1059,8 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                 "total_elements":count,
                 "effect_name_pointer":pointer_kind(u64(hdr,0)),
                 "fx_element_array_pointer":pointer_kind(u64(hdr,56)),
-                "nested_elements_walked":False,
+                "nested_elements_walked":second_nested["status"]=="original_FX_797_body_closed",
+                "nested_evidence":second_nested,
                 "effect_element_type_counts":dict(collections.Counter(r["type"] for r in records)),
                 "fx_element_headers":records,
                 "fixed_element_source_end":c.at,
