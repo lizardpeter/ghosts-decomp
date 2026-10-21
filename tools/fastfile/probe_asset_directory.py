@@ -954,6 +954,33 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
             count=loop+one+emission
             if count>4096:
                 raise ValueError("FX #797 implausible element count")
+            c.push(0)
+            c.align(3)
+            header_797=c.take(64)
+            c.push(3)
+            if pointer_kind(u64(header_797,0)) in ("follows","insert"):
+                c.string()
+            records=[]
+            if pointer_kind(u64(header_797,56)) in ("follows","insert"):
+                c.align(3)
+                elem_bytes=c.take(count*312)
+                for k in range(count):
+                    e=elem_bytes[k*312:(k+1)*312]
+                    records.append({
+                        "index":k,
+                        "type":e[180],
+                        "visualCount":e[182],
+                        "velocityIntervals":e[183],
+                        "visibilityIntervals":e[184],
+                        "visualPointer":pointer_kind(u64(e,208)),
+                        "velPointer":pointer_kind(u64(e,192)),
+                        "visPointer":pointer_kind(u64(e,200)),
+                        "extendedPointer":pointer_kind(u64(e,280)),
+                    })
+            elif count:
+                raise ValueError("FX #797 has no original elements array owner")
+            c.pop()
+            c.pop()
             second_fx={
                 "status":"source_header_for_original_FX_797_observed",
                 "preceding_technique_796_source_offset":first_after_fx,
@@ -963,6 +990,9 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                 "effect_name_pointer":pointer_kind(u64(hdr,0)),
                 "fx_element_array_pointer":pointer_kind(u64(hdr,56)),
                 "nested_elements_walked":False,
+                "effect_element_type_counts":dict(collections.Counter(r["type"] for r in records)),
+                "fx_element_headers":records,
+                "fixed_element_source_end":c.at,
             }
         except (ValueError,struct.error) as error:
             second_fx={"status":"blocked","at":c.at,"reason":str(error)}
