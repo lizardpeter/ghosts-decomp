@@ -260,6 +260,55 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         counts.append(n)
         c.pop()
         c.pop()
+    # Inspect the NEXT original ComWorld body at index 22. The layout below
+    # is a candidate inferred from existing Rust code; real data must prove
+    # that its lengths/pointers permit safe source-order traversal.
+    comworld={"status":"not-validated"}
+    try:
+        if u64(asset_bytes,22*16)!=20:
+            raise ValueError("XAsset #22 is not ComWorld")
+        if pointer_kind(u64(asset_bytes,22*16+8)) not in ("follows","insert"):
+            raise ValueError("ComWorld owner is not inline")
+        com_start=c.at
+        c.push(0)
+        c.align(3)
+        raw=c.take(40)
+        c.push(3)
+        if pointer_kind(u64(raw,0)) in ("follows","insert"):
+            c.string()
+        light_count=u32(raw,12)
+        if light_count>100000:
+            raise ValueError(f"ComWorld light count out of range {light_count}")
+        positions=[]
+        if pointer_kind(u64(raw,16)) in ("follows","insert"):
+            c.align(3)
+            source_lights=c.take(light_count*120)
+            # Each serialized light contains the original XString reference at
+            # offset 112. Do not expose source strings in public logs.
+            for i in range(light_count):
+                ptr=pointer_kind(u64(source_lights,i*120+112))
+                if ptr in ("follows","insert"):
+                    c.string()
+                positions.append(ptr)
+        elif light_count:
+            raise ValueError("ComWorld primary light array not inline")
+        secondary_count=u32(raw,24)
+        if secondary_count>100000:
+            raise ValueError(f"ComWorld auxiliary array count out of range {secondary_count}")
+        if pointer_kind(u64(raw,32)) in ("follows","insert"):
+            c.align(3)
+            c.take(secondary_count*10)
+        c.pop()
+        c.pop()
+        comworld={"status":"candidate_40_byte_ComWorld_walk_passed",
+            "first_comworld_offset":com_start,
+            "after_comworld_offset":c.at,
+            "primary_light_count":light_count,
+            "primary_light_name_pointers":dict(collections.Counter(positions)),
+            "secondary_array_count":secondary_count,
+            "next_asset_type":ASSET_TYPES[u64(asset_bytes,23*16)]}
+    except ValueError as error:
+        comworld={"status":"blocked", "reason":str(error)}
     return {
         "status":"22_original_net_const_strings_bodies_walked",
         "first_body_offset":base,
@@ -268,6 +317,7 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         "net_const_string_count_total":sum(counts),
         "first_6_record_counts":counts[:6],
         "next_xasset_type":ASSET_TYPES[u64(asset_bytes,22*16)],
+        "comworld_probe":comworld,
     }
 
 def inspect(path: pathlib.Path) -> dict:
