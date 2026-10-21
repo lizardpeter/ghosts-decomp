@@ -309,6 +309,39 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
             "next_asset_type":ASSET_TYPES[u64(asset_bytes,23*16)]}
     except ValueError as error:
         comworld={"status":"blocked", "reason":str(error)}
+    # Probe the next LightDef fixed header without taking unsupported
+    # nested image assets out of order. A nested inline image is a HARD
+    # frontier until its loader has independently been verified.
+    lightdef={"status":"not-validated"}
+    if comworld["status"]=="candidate_40_byte_ComWorld_walk_passed":
+        try:
+            if u64(asset_bytes,23*16)!=27:
+                raise ValueError("asset #23 is not LightDef")
+            if pointer_kind(u64(asset_bytes,23*16+8)) not in ("follows","insert"):
+                raise ValueError("asset #23 owner not inline")
+            light_start=c.at
+            c.push(0)
+            c.align(3)
+            light_hdr=c.take(48)
+            c.push(3)
+            nm=pointer_kind(u64(light_hdr,0))
+            if nm in ("follows","insert"):
+                c.string()
+            children=[pointer_kind(u64(light_hdr,x)) for x in (8,24)]
+            if any(x in ("follows","insert") for x in children):
+                lightdef={"status":"blocked_on_inline_GfxImage_dependency",
+                    "first_lightdef_offset":light_start,
+                    "nested_image_pointer_kinds":children}
+            else:
+                lightdef={"status":"fixed_header_and_name_walked",
+                    "first_lightdef_offset":light_start,
+                    "after_lightdef_offset":c.at,
+                    "nested_image_pointer_kinds":children,
+                    "next_asset_type":ASSET_TYPES[u64(asset_bytes,24*16)]}
+            c.pop()
+            c.pop()
+        except ValueError as error:
+            lightdef={"status":"blocked","reason":str(error)}
     return {
         "status":"22_original_net_const_strings_bodies_walked",
         "first_body_offset":base,
@@ -318,6 +351,7 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         "first_6_record_counts":counts[:6],
         "next_xasset_type":ASSET_TYPES[u64(asset_bytes,22*16)],
         "comworld_probe":comworld,
+        "lightdef_probe":lightdef,
     }
 
 def inspect(path: pathlib.Path) -> dict:
