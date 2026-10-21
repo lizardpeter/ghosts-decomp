@@ -923,6 +923,49 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                 }
             except (ValueError,struct.error) as error:
                 first_fx={"status":"blocked","reason":str(error)}
+    second_fx={"status":"not_attempted"}
+    if first_fx.get("nested_evidence",{}).get("status")=="original_FX_795_all_nested_body_dependencies_walked":
+        try:
+            if u64(asset_bytes,796*16)!=12:
+                raise ValueError("XAsset #796 is not an original TechniqueSet")
+            first_after_fx=c.at
+            ptr=pointer_kind(u64(asset_bytes,796*16+8))
+            if ptr in ("follows","insert"):
+                c.push(0)
+                c.align(3)
+                ts=c.take(3312)
+                c.push(3)
+                if pointer_kind(u64(ts,0)) in ("follows","insert"):
+                    c.string()
+                if any(pointer_kind(u64(ts,16+i*8)) in ("follows","insert")
+                       for i in range(412)):
+                    raise ValueError("XAsset #796 has an unclosed inline technique pass")
+                c.pop()
+                c.pop()
+            if u64(asset_bytes,797*16)!=37:
+                raise ValueError("XAsset #797 is not an original FX body")
+            source_fx=c.at
+            hdr=data[source_fx:source_fx+64]
+            if len(hdr)!=64:
+                raise ValueError("XAsset #797 FX header truncated")
+            loop=u32(hdr,20)
+            one=u32(hdr,24)
+            emission=u32(hdr,28)
+            count=loop+one+emission
+            if count>4096:
+                raise ValueError("FX #797 implausible element count")
+            second_fx={
+                "status":"source_header_for_original_FX_797_observed",
+                "preceding_technique_796_source_offset":first_after_fx,
+                "fx_797_source_offset":source_fx,
+                "looping":loop,"one_shot":one,"emission":emission,
+                "total_elements":count,
+                "effect_name_pointer":pointer_kind(u64(hdr,0)),
+                "fx_element_array_pointer":pointer_kind(u64(hdr,56)),
+                "nested_elements_walked":False,
+            }
+        except (ValueError,struct.error) as error:
+            second_fx={"status":"blocked","at":c.at,"reason":str(error)}
     return {
         "status":"22_original_net_const_strings_bodies_walked",
         "first_body_offset":base,
@@ -940,6 +983,7 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         "anim_prefix_scan":anim_scan,
         "post_anim_technique_scan":postanim_techniques,
         "first_original_fx_header":first_fx,
+        "second_original_fx_header":second_fx,
     }
 
 def inspect_pathdata_header(data: bytes) -> dict:
