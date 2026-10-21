@@ -173,7 +173,7 @@ def directory(data: bytes) -> dict:
         pointer_kind(u64(raw,i*16+8))
         kinds[ASSET_TYPES[kind]]+=1
     # Coverage of KIND IDs in private Rust-test, not of decoded asset bodies.
-    supported={0,1,3,4,5,7,8,9,10,11,12,13,20,26,27,33,44,45,46,51,56,57,58,62}
+    supported={0,1,3,4,5,7,8,9,10,11,12,13,20,26,27,33,44,45,46,52,56,57,58,61}
     first_unsupported=next((
         {"index":i,"type":ASSET_TYPES[u64(raw,i*16)]}
         for i in range(assets) if u64(raw,i*16) not in supported
