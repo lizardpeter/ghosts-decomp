@@ -328,16 +328,47 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
             if nm in ("follows","insert"):
                 c.string()
             children=[pointer_kind(u64(light_hdr,x)) for x in (8,24)]
-            if any(x in ("follows","insert") for x in children):
-                lightdef={"status":"blocked_on_inline_GfxImage_dependency",
-                    "first_lightdef_offset":light_start,
-                    "nested_image_pointer_kinds":children}
-            else:
-                lightdef={"status":"fixed_header_and_name_walked",
-                    "first_lightdef_offset":light_start,
-                    "after_lightdef_offset":c.at,
-                    "nested_image_pointer_kinds":children,
-                    "next_asset_type":ASSET_TYPES[u64(asset_bytes,24*16)]}
+            images=[]
+            for image_ref in children:
+                if image_ref not in ("follows","insert"):
+                    continue
+                # Fixed original 104-byte GfxImage ABI. Do not guess bytes
+                # for a missing inline image or interpret its pixel format.
+                image_at=c.at
+                c.push(0)
+                c.align(3)
+                image_raw=c.take(104)
+                c.push(3)
+                width,height=struct.unpack_from("<HH",image_raw,44)
+                image_name_kind=pointer_kind(u64(image_raw,96))
+                if image_name_kind in ("follows","insert"):
+                    c.string()
+                pixel_kind=pointer_kind(u64(image_raw,56))
+                pixel_len=1 if image_raw[29]==11 else u32(image_raw,36)
+                if pixel_len>512*1024*1024:
+                    raise ValueError(f"inline GfxImage pixel length exceeds cap {pixel_len}")
+                if pixel_kind in ("follows","insert"):
+                    c.push(0)
+                    c.align(3)
+                    c.take(pixel_len)
+                    c.pop()
+                c.pop()
+                c.pop()
+                if width==0 or height==0:
+                    raise ValueError("nested image has zero original dimensions")
+                images.append({
+                    "source_offset":image_at,
+                    "width":width,"height":height,
+                    "dxgi_format":u32(image_raw,24),
+                    "streamed":bool(image_raw[53]),
+                    "inline_pixel_bytes":pixel_len if pixel_kind in ("follows","insert") else 0,
+                })
+            lightdef={"status":"candidate_LightDef_and_nested_GfxImage_walk_passed",
+                "first_lightdef_offset":light_start,
+                "after_lightdef_offset":c.at,
+                "nested_image_pointer_kinds":children,
+                "nested_image_headers":images,
+                "next_asset_type":ASSET_TYPES[u64(asset_bytes,24*16)]}
             c.pop()
             c.pop()
         except ValueError as error:
