@@ -699,11 +699,12 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         try:
             if u64(asset_bytes,725*16)!=2:
                 raise ValueError("next source XAsset is not XAnimParts")
+            # Header-only observation must not advance the live body
+            # cursor. The following full animation walk consumes this record.
             at=c.at
-            c.push(0)
-            c.align(3)
-            h=c.take(136)
-            c.pop()
+            h=data[at:at+136]
+            if len(h)!=136:
+                raise ValueError("first authored XAnimParts header truncated")
             ptr_fields={"name":0,"names":56,"dataByte":64,"dataShort":72,
                 "dataInt":80,"randomShort":88,"randomByte":96,
                 "randomInt":104,"indices":112,"notify":120,"deltaPart":128}
