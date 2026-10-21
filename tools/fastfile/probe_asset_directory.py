@@ -846,6 +846,64 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                     raise ValueError("original FxEffectDef elements have missing source array")
                 c.pop()
                 c.pop()
+                fx_children={"status":"not_validated"}
+                try:
+                    c.push(3)
+                    visual_materials=0
+                    visual_array_rows=0
+                    velocity_records=0
+                    visibility_records=0
+                    for elem in elements:
+                        source_elem=raw_elements[elem["index"]*312:(elem["index"]+1)*312]
+                        if elem["pointer_kinds"]["velSamples"] in ("follows","insert"):
+                            c.align(3)
+                            c.take((elem["velocityIntervals"]+1)*96)
+                            velocity_records+=elem["velocityIntervals"]+1
+                        if elem["pointer_kinds"]["visSamples"] in ("follows","insert"):
+                            c.align(3)
+                            c.take((elem["visibilityIntervals"]+1)*80)
+                            visibility_records+=elem["visibilityIntervals"]+1
+                        vkind=elem["elemType"]
+                        vcount=elem["visualCount"]
+                        vptr=u64(source_elem,208)
+                        if vkind==15:
+                            raise ValueError("original Fx decal visual arrays require the mark-material loader")
+                        if vcount>1:
+                            if pointer_kind(vptr) not in ("follows","insert"):
+                                raise ValueError("FX multiple visuals lack original array owner")
+                            c.align(3)
+                            visual_ptrs=c.take(vcount*8)
+                            visual_array_rows+=vcount
+                            if vkind not in (12,):
+                                for visual_idx in range(vcount):
+                                    handle=u64(visual_ptrs,visual_idx*8)
+                                    if pointer_kind(handle) in ("follows","insert"):
+                                        fake=struct.pack("<QQ",5,handle)
+                                        walk_original_source_material(c,fake,0)
+                                        visual_materials+=1
+                        elif vkind not in (12,):
+                            if pointer_kind(vptr) in ("follows","insert"):
+                                fake=struct.pack("<QQ",5,vptr)
+                                walk_original_source_material(c,fake,0)
+                                visual_materials+=1
+                        for field in ("effectOnImpact","effectOnDeath","effectEmitted"):
+                            if elem["pointer_kinds"][field] in ("follows","insert"):
+                                c.string()
+                        if elem["pointer_kinds"]["extended"] in ("follows","insert"):
+                            raise ValueError("FX authored extended emitter needs source-specific body decoder")
+                    c.pop()
+                    fx_children={
+                        "status":"original_FX_795_all_nested_body_dependencies_walked",
+                        "original_fx_body_end":c.at,
+                        "visual_material_bodies":visual_materials,
+                        "visual_array_rows":visual_array_rows,
+                        "velocity_sample_records":velocity_records,
+                        "visibility_sample_records":visibility_records,
+                        "next_xasset_type":"technique_set",
+                    }
+                except (ValueError,struct.error) as error:
+                    fx_children={"status":"blocked_on_original_FX_child","source_offset":c.at,
+                        "reason":str(error)}
                 first_fx={
                     "status":"original_FxEffectDef_fixed_header_observed",
                     "asset_index":795,
@@ -857,7 +915,8 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                     "emission_elements":emission,
                     "total_elements":total,
                     "candidate_serialized_element_bytes":total*312,
-                    "nested_elements_walked":False,
+                    "nested_elements_walked":fx_children["status"]=="original_FX_795_all_nested_body_dependencies_walked",
+                    "nested_evidence":fx_children,
                     "source_element_header_end":c.at,
                     "element_types":dict(collections.Counter(e["elemType"] for e in elements)),
                     "original_element_headers":elements,
