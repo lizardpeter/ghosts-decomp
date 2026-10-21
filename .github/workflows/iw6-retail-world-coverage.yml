@@ -1,0 +1,52 @@
+name: Ghosts authentic IW6 multi-map source coverage
+
+on:
+  push:
+    branches: [iw6-fastfile-retail-probes]
+    paths:
+      - "tools/fastfile/probe_asset_directory.py"
+      - ".github/workflows/iw6-retail-world-coverage.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retail-world-directory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - file: mp_alien_armory.ff
+            bytes: 249387180
+          - file: mp_alien_beacon.ff
+            bytes: 197856300
+          - file: mp_strikezone.ff
+            bytes: 138884972
+          - file: black_ice.ff
+            bytes: 333564502
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout: |
+            tools/fastfile
+      - name: Verify original retail asset directory and first unsupported loader
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="/tmp/${{ matrix.file }}"
+          trap 'rm -f "$source"' EXIT
+          curl --fail --show-error --silent --location --retry 3 \
+            --retry-delay 2 --connect-timeout 20 --max-time 600 \
+            -o "$source" \
+            "https://r2.houseofkublai.com/ghosts/DUMP/${{ matrix.file }}"
+          size="$(stat -c%s "$source")"
+          if [ "$size" != "${{ matrix.bytes }}" ]; then
+            echo "::error::Original ${{ matrix.file }} size mismatch: $size vs ${{ matrix.bytes }}"
+            exit 1
+          fi
+          python3 tools/fastfile/probe_asset_directory.py "$source"
+          echo "Authentic retail source analyzed in ephemeral runner RAM. No original assets published."
