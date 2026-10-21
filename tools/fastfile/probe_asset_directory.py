@@ -615,6 +615,39 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
             "after_consumed_offset":c.at,
             "first_xanim_asset_index":725,
         }
+    anim_header={"status":"not_attempted"}
+    if materials_scan["status"]=="all_700_material_handles_walked":
+        try:
+            if u64(asset_bytes,725*16)!=2:
+                raise ValueError("next source XAsset is not XAnimParts")
+            at=c.at
+            c.push(0)
+            c.align(3)
+            h=c.take(136)
+            c.pop()
+            ptr_fields={"name":0,"names":56,"dataByte":64,"dataShort":72,
+                "dataInt":80,"randomShort":88,"randomByte":96,
+                "randomInt":104,"indices":112,"notify":120,"deltaPart":128}
+            kinds={name:pointer_kind(u64(h,off)) for name,off in ptr_fields.items()}
+            anim_header={
+                "status":"original_136_byte_XAnimParts_header_validated",
+                "asset_index":725,"source_offset":at,
+                "ptr_kinds":kinds,
+                "dataByteCount":struct.unpack_from("<H",h,8)[0],
+                "dataShortCount":struct.unpack_from("<H",h,10)[0],
+                "dataIntCount":struct.unpack_from("<H",h,12)[0],
+                "randomDataByteCount":struct.unpack_from("<H",h,14)[0],
+                "randomDataIntCount":struct.unpack_from("<H",h,16)[0],
+                "numframes":struct.unpack_from("<H",h,18)[0],
+                "flags":h[20],
+                "boneCount":list(h[21:31]),
+                "notifyCount":h[31],
+                "randomDataShortCount":u32(h,36),
+                "indexCount":u32(h,40),
+                "nested_pool_walk":"not_yet_attempted",
+            }
+        except (ValueError,struct.error) as error:
+            anim_header={"status":"blocked","reason":str(error)}
     return {
         "status":"22_original_net_const_strings_bodies_walked",
         "first_body_offset":base,
@@ -628,6 +661,7 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         "techniqueset_probe":technique,
         "first_material_probe":first_material,
         "material_prefix_scan":materials_scan,
+        "first_anim_header":anim_header,
     }
 
 def inspect_pathdata_header(data: bytes) -> dict:
