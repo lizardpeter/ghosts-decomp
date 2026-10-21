@@ -385,6 +385,46 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         "lightdef_probe":lightdef,
     }
 
+def inspect_pathdata_header(data: bytes) -> dict:
+    """Audit the 136-byte IW6 PathData header at the authenticated asset cursor.
+
+    Numeric fields and tagged pointers are read from real FF bytes. Nothing is
+    skipped or reported as a full navigation graph until source arrays close.
+    """
+    d=directory(data)
+    if d["asset_count"]!=2 or d["first_16_asset_types"]!=["pathdata","rawfile"]:
+        raise ValueError("source zone is not the two-entry original path zone")
+    at=d["exact_asset_table_offset"]+32
+    end=at+136
+    if end>len(data):
+        raise ValueError("original PathData header truncated")
+    hdr=data[at:end]
+    ptr_fields={"name":0,"nodes":16,"pathVis":32,"nodeTree":48,
+        "dynamicNodeGroups":64,"pathExposure":80,"pathNoPeekVis":96,
+        "pathZones":112,"pathDynStates":128}
+    kinds={name:pointer_kind(u64(hdr,off)) for name,off in ptr_fields.items()}
+    counts={name:u32(hdr,at) for name,at in {
+        "nodeCount":8,"visBytes":28,"nodeTreeCount":40,
+        "dynamicNodeGroupCount":56,"exposureBytes":72,
+        "noPeekVisBytes":88,"zoneCount":104,
+        "zonesBytes":108,"dynStatesBytes":120
+    }.items()}
+    counts["version"]=struct.unpack_from("<H",hdr,26)[0]
+    if counts["nodeCount"]>1000000 or counts["nodeTreeCount"]>1000000:
+        raise ValueError("original PathData counts exceed safe cap")
+    if counts["zoneCount"]>counts["nodeCount"]:
+        raise ValueError("original zone node count exceeds nodes")
+    return {
+        "status":"retail_PathData_136_byte_header_verified_only",
+        "source_header_offset":at,
+        "source_header_end":end,
+        "counts":counts,
+        "source_pointer_kinds":kinds,
+        "nodes_inline_bytes_if_present":counts["nodeCount"]*176
+            if kinds["nodes"] in ("follows","insert") else 0,
+        "full_nested_pathdata_walk":"not_yet_attempted",
+    }
+
 def inspect(path: pathlib.Path) -> dict:
     stats=StreamStats()
     with path.open("rb") as f:
@@ -410,6 +450,8 @@ def inspect(path: pathlib.Path) -> dict:
     prelude=directory(bytes(data))
     body_probe=(verify_first_22_netconst_bodies(bytes(data))
                 if path.name=="mp_alien_town.ff" else None)
+    path_probe=(inspect_pathdata_header(bytes(data))
+                if path.name=="mp_alien_town_path.ff" else None)
     return {
         "file":path.name, "original_size":path.stat().st_size,
         "decoded_size":len(data),
@@ -418,6 +460,7 @@ def inspect(path: pathlib.Path) -> dict:
         "unverified_partial_tail_bytes":stats.partial_tail_bytes,
         **prelude,
         "first_netconst_body_probe":body_probe,
+        "pathdata_header_probe":path_probe,
         "status":"retail_compressed_stream_verified_and_xasset_prelude_walked",
     }
 
