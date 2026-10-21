@@ -354,12 +354,18 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                     c.pop()
                 c.pop()
                 c.pop()
-                if width==0 or height==0:
-                    raise ValueError(f"nested GfxImage zero dimensions at source {image_at}; "
-                        f"format={u32(image_raw,24)}, mapType={image_raw[28]}, "
-                        f"semantic={image_raw[29]}, namePointer={image_name_kind}, "
-                        f"pixelPointer={pixel_kind}, streamed={image_raw[53]}")
+                # Retail sometimes embeds a named placeholder GfxImage
+                # without a GPU texture. Preserve its source identity, but
+                # never lower it to a renderable image.
+                missing=(width==0 or height==0)
+                empty=(width==0 and height==0 and u32(image_raw,24)==0
+                    and image_raw[53]==0 and pixel_kind=="null")
+                if missing and not empty:
+                    raise ValueError(f"invalid GfxImage dimensions at {image_at}; "
+                        f"{width}x{height}, format={u32(image_raw,24)}, "
+                        f"pixel={pixel_kind}, streamed={image_raw[53]}")
                 images.append({
+                    "source_only_null_image":empty,
                     "source_offset":image_at,
                     "width":width,"height":height,
                     "dxgi_format":u32(image_raw,24),
