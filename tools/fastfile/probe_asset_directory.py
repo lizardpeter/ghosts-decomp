@@ -447,8 +447,40 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                 tex=c.take(n*16)
                 image_pointers=[pointer_kind(u64(tex,i*16+8)) for i in range(n)]
                 first_material["image_pointer_kinds"]=image_pointers
-                if any(k in ("follows","insert") for k in image_pointers):
-                    raise ValueError(f"material #25 requires inline GfxImage child {image_pointers}")
+                image_summaries=[]
+                for kind in image_pointers:
+                    if kind not in ("follows","insert"):
+                        continue
+                    at=c.at
+                    c.push(0)
+                    c.align(3)
+                    iraw=c.take(104)
+                    c.push(3)
+                    nameptr=pointer_kind(u64(iraw,96))
+                    if nameptr in ("follows","insert"):
+                        c.string()
+                    pixelptr=pointer_kind(u64(iraw,56))
+                    length=1 if iraw[29]==11 else u32(iraw,36)
+                    if length>512*1024*1024:
+                        raise ValueError("authored inline image >512 MiB")
+                    if pixelptr in ("follows","insert"):
+                        c.push(0)
+                        c.align(3)
+                        c.take(length)
+                        c.pop()
+                    width,height=struct.unpack_from("<HH",iraw,44)
+                    null=(width==0 and height==0 and pixelptr=="null"
+                          and u32(iraw,24)==0 and iraw[53]==0)
+                    if (width==0 or height==0) and not null:
+                        raise ValueError(f"material nested image invalid dimensions at {at}")
+                    image_summaries.append({
+                        "source_offset":at,"width":width,"height":height,
+                        "format":u32(iraw,24),
+                        "inline_pixel_bytes":length if pixelptr in ("follows","insert") else 0,
+                        "null_gpu_resource":null,"streamed":bool(iraw[53])})
+                    c.pop()
+                    c.pop()
+                first_material["nested_images"]=image_summaries
             if refs["constantTable"] in ("follows","insert"):
                 c.align(15)
                 c.take(hdr[453]*32)
@@ -461,6 +493,7 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                 raise ValueError("material #25 inline SubMaterials needs source string walker")
             first_material["status"]="original_material_25_inline_loader_order_passed"
             first_material["after_full_material_offset"]=c.at
+            first_material["next_source_pointer_kind"]=pointer_kind(u64(data,c.at))
             c.pop()
             c.pop()
         except ValueError as error:
