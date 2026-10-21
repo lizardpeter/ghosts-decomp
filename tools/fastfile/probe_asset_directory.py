@@ -809,6 +809,43 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                 total=looping+one_shot+emission
                 if total>100000:
                     raise ValueError("original FX element count exceeds bounded source parser")
+                # Inspect source-owned 312-byte FxElemDef headers in the
+                # verified loader order. Nested visual and material spans are
+                # separate, gated work; no fabricated FX is rendered.
+                c.push(0)
+                c.align(3)
+                source_header=c.take(64)
+                c.push(3)
+                if pointer_kind(u64(source_header,0)) in ("follows","insert"):
+                    c.string()
+                elements=[]
+                if pointer_kind(u64(source_header,56)) in ("follows","insert"):
+                    c.align(3)
+                    raw_elements=c.take(total*312)
+                    for k in range(total):
+                        elem=raw_elements[k*312:(k+1)*312]
+                        record={
+                            "index":k,
+                            "elemType":elem[180],
+                            "elemLitType":elem[181],
+                            "visualCount":elem[182],
+                            "velocityIntervals":elem[183],
+                            "visibilityIntervals":elem[184],
+                            "pointer_kinds":{
+                                field:pointer_kind(u64(elem,off))
+                                for field,off in (
+                                    ("velSamples",192),("visSamples",200),
+                                    ("visuals",208),("effectOnImpact",240),
+                                    ("effectOnDeath",248),("effectEmitted",256),
+                                    ("extended",280),
+                                )
+                            },
+                        }
+                        elements.append(record)
+                elif total:
+                    raise ValueError("original FxEffectDef elements have missing source array")
+                c.pop()
+                c.pop()
                 first_fx={
                     "status":"original_FxEffectDef_fixed_header_observed",
                     "asset_index":795,
@@ -821,6 +858,9 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                     "total_elements":total,
                     "candidate_serialized_element_bytes":total*312,
                     "nested_elements_walked":False,
+                    "source_element_header_end":c.at,
+                    "element_types":dict(collections.Counter(e["elemType"] for e in elements)),
+                    "original_element_headers":elements,
                 }
             except (ValueError,struct.error) as error:
                 first_fx={"status":"blocked","reason":str(error)}
