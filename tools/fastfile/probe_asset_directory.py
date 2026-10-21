@@ -411,6 +411,36 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
             c.pop()
         except ValueError as error:
             technique={"status":"blocked","reason":str(error)}
+    first_material={"status":"not_validated"}
+    if technique["status"]=="candidate_3312_byte_TechniqueSet_fixed_header_validated" and technique["first_inline_technique"] is None:
+        try:
+            if u64(asset_bytes,25*16)!=5:
+                raise ValueError("original #25 is not MATERIAL")
+            start=c.at
+            c.push(0)
+            c.align(3)
+            hdr=c.take(936)
+            c.push(3)
+            fields={"name":0,"techniqueSet":464,"textureTable":472,
+                "constantTable":480,"stateBitsTable":488,
+                "constantBufferTable":912,"subMaterials":928}
+            refs={k:pointer_kind(u64(hdr,v)) for k,v in fields.items()}
+            first_material={
+                "status":"original_936_byte_Material_header_validated",
+                "source_header_offset":start,
+                "after_fixed_header_offset":c.at,
+                "pointer_kinds":refs,
+                "textureCount":hdr[452],
+                "constantCount":hdr[453],
+                "stateBitsCount":hdr[454],
+                "constantBufferCount":hdr[920],
+                "layerCount":hdr[458],
+                "nested_deps":"not_yet_walked",
+            }
+            c.pop()
+            c.pop()
+        except ValueError as error:
+            first_material={"status":"blocked","reason":str(error)}
     return {
         "status":"22_original_net_const_strings_bodies_walked",
         "first_body_offset":base,
@@ -422,6 +452,7 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         "comworld_probe":comworld,
         "lightdef_probe":lightdef,
         "techniqueset_probe":technique,
+        "first_material_probe":first_material,
     }
 
 def inspect_pathdata_header(data: bytes) -> dict:
