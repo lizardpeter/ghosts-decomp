@@ -752,6 +752,78 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
             "after_consumed_offset":c.at,
             "next_type_if_complete":"technique_set",
         }
+    # First authenticated FX source blocker follows 25 technique sets
+    # after XAnimParts. This does not invent shader bytecode or passes.
+    postanim_techniques={"status":"not_attempted"}
+    first_fx={"status":"not_attempted"}
+    if anim_scan["status"]=="all_45_original_XAnimParts_walked":
+        count=0
+        aliases=0
+        blocker=None
+        start=c.at
+        for idx in range(770,795):
+            try:
+                if u64(asset_bytes,idx*16)!=12:
+                    raise ValueError(f"XAsset #{idx} should be TechniqueSet")
+                assetptr=pointer_kind(u64(asset_bytes,idx*16+8))
+                if assetptr not in ("follows","insert"):
+                    aliases+=1
+                    count+=1
+                    continue
+                c.push(0)
+                c.align(3)
+                ts=c.take(3312)
+                c.push(3)
+                if pointer_kind(u64(ts,0)) in ("follows","insert"):
+                    c.string()
+                refs=[pointer_kind(u64(ts,16+j*8)) for j in range(412)]
+                if any(k in ("follows","insert") for k in refs):
+                    raise ValueError("authored nested MaterialTechnique requires pass/shader traversal")
+                c.pop()
+                c.pop()
+                count+=1
+            except (ValueError,struct.error) as error:
+                blocker={"asset_index":idx,"source_offset":c.at,"reason":str(error)}
+                break
+        postanim_techniques={
+            "status":"all_25_technique_sets_traversed" if blocker is None else "blocked_on_original_technique_dependency",
+            "first_technique_source_offset":start,
+            "technique_handles_advanced":count,
+            "aliased_technique_handles":aliases,
+            "after_source_offset":c.at,
+            "first_blocker":blocker,
+        }
+        if blocker is None:
+            try:
+                if u64(asset_bytes,795*16)!=37:
+                    raise ValueError("XAsset #795 expected original FX effect")
+                if pointer_kind(u64(asset_bytes,795*16+8)) not in ("follows","insert"):
+                    raise ValueError("first FX asset unexpectedly not source-owned inline")
+                source_at=c.at
+                fx=data[source_at:source_at+64]
+                if len(fx)!=64:
+                    raise ValueError("first original FxEffectDef header truncated")
+                looping=u32(fx,20)
+                one_shot=u32(fx,24)
+                emission=u32(fx,28)
+                total=looping+one_shot+emission
+                if total>100000:
+                    raise ValueError("original FX element count exceeds bounded source parser")
+                first_fx={
+                    "status":"original_FxEffectDef_fixed_header_observed",
+                    "asset_index":795,
+                    "source_offset":source_at,
+                    "name_pointer_class":pointer_kind(u64(fx,0)),
+                    "effects_pointer_class":pointer_kind(u64(fx,56)),
+                    "looping_elements":looping,
+                    "one_shot_elements":one_shot,
+                    "emission_elements":emission,
+                    "total_elements":total,
+                    "candidate_serialized_element_bytes":total*312,
+                    "nested_elements_walked":False,
+                }
+            except (ValueError,struct.error) as error:
+                first_fx={"status":"blocked","reason":str(error)}
     return {
         "status":"22_original_net_const_strings_bodies_walked",
         "first_body_offset":base,
@@ -767,6 +839,8 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         "material_prefix_scan":materials_scan,
         "first_anim_header":anim_header,
         "anim_prefix_scan":anim_scan,
+        "post_anim_technique_scan":postanim_techniques,
+        "first_original_fx_header":first_fx,
     }
 
 def inspect_pathdata_header(data: bytes) -> dict:
