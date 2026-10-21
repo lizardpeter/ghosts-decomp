@@ -196,6 +196,95 @@ def directory(data: bytes) -> dict:
         "first_24_type_runs":runs[:24],
     }
 
+def walk_original_source_material(c: Cursor, assets: bytes, idx: int) -> dict:
+    """Read one IW6 Material in retail order. Stop at unknown inline types."""
+    if u64(assets,idx*16)!=5:
+        raise ValueError("source XAsset order moved beyond the material group")
+    slot=pointer_kind(u64(assets,idx*16+8))
+    if slot in ("null","alias"):
+        return {"asset":idx,"alias":True,"images":0}
+    start=c.at
+    c.push(0)
+    c.align(3)
+    h=c.take(936)
+    c.push(3)
+    fields={"name":0,"tech":464,"textures":472,"constants":480,
+        "states":488,"buffers":912,"layers":928}
+    ptrs={k:pointer_kind(u64(h,off)) for k,off in fields.items()}
+    if ptrs["name"] in ("follows","insert"):
+        c.string()
+    if ptrs["tech"] in ("follows","insert"):
+        raise ValueError("nested MaterialTechniqueSet needs exact shader-pass walker")
+    ntex=h[452]
+    images=0
+    if ptrs["textures"] in ("follows","insert"):
+        c.align(3)
+        tex=c.take(16*ntex)
+        for i in range(ntex):
+            ptr=pointer_kind(u64(tex,16*i+8))
+            if tex[16*i+7]==11 and ptr in ("follows","insert"):
+                raise ValueError("inline water_t texture needs separate water loader")
+            if ptr not in ("follows","insert"):
+                continue
+            c.push(0)
+            c.align(3)
+            img=c.take(104)
+            c.push(3)
+            ip=pointer_kind(u64(img,96))
+            if ip in ("follows","insert"):
+                c.string()
+            px=pointer_kind(u64(img,56))
+            datalen=1 if img[29]==11 else u32(img,36)
+            if datalen>512*1024*1024:
+                raise ValueError("nested GfxImage data exceeds allocation cap")
+            if px in ("follows","insert"):
+                c.push(0)
+                c.align(3)
+                c.take(datalen)
+                c.pop()
+            width,height=struct.unpack_from("<HH",img,44)
+            empty=width==0 and height==0 and u32(img,24)==0 and px=="null" and not img[53]
+            if (width==0 or height==0) and not empty:
+                raise ValueError("nested material image has invalid dimensions")
+            images+=1
+            c.pop()
+            c.pop()
+    elif ntex:
+        raise ValueError("nonzero texture count without original inline table")
+    for key,count,stride,mask in [
+        ("constants",h[453],32,15),("states",h[454],28,3)]:
+        if ptrs[key] in ("follows","insert"):
+            c.align(mask)
+            c.take(count*stride)
+        elif count and ptrs[key]=="null":
+            raise ValueError(f"nonzero {key} count without original pointer")
+    if ptrs["buffers"] in ("follows","insert"):
+        c.align(3)
+        buffers=c.take(h[920]*128)
+        for j in range(h[920]):
+            cb=buffers[j*128:(j+1)*128]
+            for count_at,ptr_at,mask in [(0,32,15),(16,64,1)]:
+                for k in range(4):
+                    count=u32(cb,count_at+4*k)
+                    if count>32*1024*1024:
+                        raise ValueError("material stage array count exceeds bound")
+                    if pointer_kind(u64(cb,ptr_at+8*k)) in ("follows","insert"):
+                        c.align(mask)
+                        c.take(count)
+    elif h[920] and ptrs["buffers"]=="null":
+        raise ValueError("nonzero constant buffer count without source pointer")
+    if ptrs["layers"] in ("follows","insert"):
+        c.align(7)
+        layers=c.take(h[458]*8)
+        for k in range(h[458]):
+            if pointer_kind(u64(layers,k*8)) in ("follows","insert"):
+                c.string()
+    elif h[458] and ptrs["layers"]=="null":
+        raise ValueError("nonzero material layer count without source pointer")
+    c.pop()
+    c.pop()
+    return {"asset":idx,"alias":False,"images":images,"bytes":c.at-start}
+
 def verify_first_22_netconst_bodies(data: bytes) -> dict:
     """Validate the source body's 32-byte NetConstStrings loader proposal.
 
@@ -499,6 +588,33 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         except ValueError as error:
             first_material["status"]="blocked"
             first_material["reason"]=str(error)
+    materials_scan={"status":"not_attempted"}
+    if first_material.get("status")=="original_material_25_inline_loader_order_passed":
+        start=c.at
+        decoded=1
+        aliases=0
+        image_count=len(first_material.get("nested_images",[]))
+        first_blocker=None
+        for idx in range(26,725):
+            try:
+                info=walk_original_source_material(c,asset_bytes,idx)
+                decoded+=1
+                aliases+=int(info.get("alias",False))
+                image_count+=info.get("images",0)
+            except (ValueError,struct.error) as error:
+                first_blocker={"asset_index":idx,
+                    "source_offset":c.at,"reason":str(error)}
+                break
+        materials_scan={
+            "status":"all_700_material_handles_walked" if first_blocker is None
+                else "blocked_on_original_material_dependency",
+            "handles_consumed":decoded,
+            "aliased_handles":aliases,
+            "inline_gfximages_walked":image_count,
+            "first_blocker":first_blocker,
+            "after_consumed_offset":c.at,
+            "first_xanim_asset_index":725,
+        }
     return {
         "status":"22_original_net_const_strings_bodies_walked",
         "first_body_offset":base,
@@ -511,6 +627,7 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         "lightdef_probe":lightdef,
         "techniqueset_probe":technique,
         "first_material_probe":first_material,
+        "material_prefix_scan":materials_scan,
     }
 
 def inspect_pathdata_header(data: bytes) -> dict:
