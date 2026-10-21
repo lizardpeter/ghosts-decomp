@@ -172,6 +172,19 @@ def directory(data: bytes) -> dict:
             raise ValueError(f"invalid source XAsset type {kind} at index {i}")
         pointer_kind(u64(raw,i*16+8))
         kinds[ASSET_TYPES[kind]]+=1
+    # Coverage of KIND IDs in private Rust-test, not of decoded asset bodies.
+    supported={0,1,3,4,5,7,8,9,10,11,12,13,20,26,27,33,44,45,46,51,56,57,58,62}
+    first_unsupported=next((
+        {"index":i,"type":ASSET_TYPES[u64(raw,i*16)]}
+        for i in range(assets) if u64(raw,i*16) not in supported
+    ),None)
+    runs=[]
+    for i in range(assets):
+        name=ASSET_TYPES[u64(raw,i*16)]
+        if runs and runs[-1]["type"]==name:
+            runs[-1]["count"]+=1
+        else:
+            runs.append({"index":i,"type":name,"count":1})
     return {
         "exact_asset_table_offset":table_at,
         "asset_count":assets,
@@ -179,6 +192,8 @@ def directory(data: bytes) -> dict:
         "has_gfx_globals":bool(globalptr),
         "type_counts":dict(sorted(kinds.items())),
         "first_16_asset_types":[ASSET_TYPES[u64(raw,i*16)] for i in range(min(assets,16))],
+        "first_unsupported_body_type":first_unsupported,
+        "first_24_type_runs":runs[:24],
     }
 
 def inspect(path: pathlib.Path) -> dict:
