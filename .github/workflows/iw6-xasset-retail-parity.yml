@@ -1,0 +1,52 @@
+name: Ghosts original IW6 asset-directory parity
+
+on:
+  push:
+    branches: [iw6-fastfile-retail-probes]
+    paths:
+      - "tools/fastfile/probe_asset_directory.py"
+      - ".github/workflows/iw6-xasset-retail-parity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  original-source-directory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout: |
+            tools/fastfile
+      - name: Test exact source directory cursor
+        run: python3 tools/fastfile/probe_asset_directory.py --test
+      - name: Verify original retail IW6 asset directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ghosts-iw6-original
+          while IFS=' ' read -r name expected; do
+            [[ -n "$name" ]] || continue
+            file="/tmp/ghosts-iw6-original/$name"
+            curl --fail --show-error --silent --location --retry 3 \
+              --retry-delay 2 --connect-timeout 20 --max-time 600 \
+              --output "$file" \
+              "https://r2.houseofkublai.com/ghosts/DUMP/$name"
+            actual="$(stat -c%s "$file")"
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::Retail size mismatch for $name: $actual vs $expected" >&2
+              exit 1
+            fi
+            python3 tools/fastfile/probe_asset_directory.py "$file"
+            rm -f "$file"
+          done <<'ORIGINAL_IW6'
+          mp_alien_town_path.ff 385068
+          techsets_mp_alien_town.ff 7479340
+          mp_alien_town_load.ff 1957932
+          mp_alien_town.ff 186301740
+          ORIGINAL_IW6
+      - name: No proprietary artifacts
+        run: echo "Only validated counts/offsets/digests in logs. No original source files uploaded."
