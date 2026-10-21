@@ -355,7 +355,10 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
                 c.pop()
                 c.pop()
                 if width==0 or height==0:
-                    raise ValueError("nested image has zero original dimensions")
+                    raise ValueError(f"nested GfxImage zero dimensions at source {image_at}; "
+                        f"format={u32(image_raw,24)}, mapType={image_raw[28]}, "
+                        f"semantic={image_raw[29]}, namePointer={image_name_kind}, "
+                        f"pixelPointer={pixel_kind}, streamed={image_raw[53]}")
                 images.append({
                     "source_offset":image_at,
                     "width":width,"height":height,
