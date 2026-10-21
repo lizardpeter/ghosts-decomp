@@ -194,6 +194,12 @@ def directory(data: bytes) -> dict:
         "first_16_asset_types":[ASSET_TYPES[u64(raw,i*16)] for i in range(min(assets,16))],
         "first_unsupported_body_type":first_unsupported,
         "first_24_type_runs":runs[:24],
+        "render_relevant_xasset_positions":{
+            name:[i for i in range(assets)
+                if ASSET_TYPES[u64(raw,i*16)]==name]
+            for name in ("gfxworld","clipmap","map_ents","xmodel","xmodel_surfs",
+                         "image","pixelshader","vertexshader","fxworld")
+        },
     }
 
 def walk_original_source_material(c: Cursor, assets: bytes, idx: int) -> dict:
