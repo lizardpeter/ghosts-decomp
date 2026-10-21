@@ -382,6 +382,35 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
             c.pop()
         except ValueError as error:
             lightdef={"status":"blocked","reason":str(error)}
+    technique={"status":"not_validated"}
+    if lightdef["status"]=="candidate_LightDef_and_nested_GfxImage_walk_passed":
+        try:
+            if u64(asset_bytes,24*16)!=12:
+                raise ValueError("next original asset #24 is not TechniqueSet")
+            if pointer_kind(u64(asset_bytes,24*16+8)) not in ("follows","insert"):
+                raise ValueError("TechniqueSet handle not inline")
+            start=c.at
+            c.push(0)
+            c.align(3)
+            hdr=c.take(3312)
+            c.push(3)
+            nameptr=pointer_kind(u64(hdr,0))
+            if nameptr in ("follows","insert"):
+                c.string()
+            refs=[pointer_kind(u64(hdr,16+8*i)) for i in range(412)]
+            dist=dict(collections.Counter(refs))
+            firstinline=next((i for i,k in enumerate(refs) if k in ("follows","insert")),None)
+            technique={"status":"candidate_3312_byte_TechniqueSet_fixed_header_validated",
+                "first_techniqueset_offset":start,
+                "after_techniqueset_header_and_name_offset":c.at,
+                "name_pointer_kind":nameptr,
+                "original_technique_ref_kinds":dist,
+                "first_inline_technique":firstinline,
+                "nested_technique_body_walk":"not_yet_attempted"}
+            c.pop()
+            c.pop()
+        except ValueError as error:
+            technique={"status":"blocked","reason":str(error)}
     return {
         "status":"22_original_net_const_strings_bodies_walked",
         "first_body_offset":base,
@@ -392,6 +421,7 @@ def verify_first_22_netconst_bodies(data: bytes) -> dict:
         "next_xasset_type":ASSET_TYPES[u64(asset_bytes,22*16)],
         "comworld_probe":comworld,
         "lightdef_probe":lightdef,
+        "techniqueset_probe":technique,
     }
 
 def inspect_pathdata_header(data: bytes) -> dict:
