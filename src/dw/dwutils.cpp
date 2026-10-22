@@ -68,3 +68,111 @@ void *sub_1405DA070(const char *host, unsigned short port, unsigned int title)
     }
     return auth;
 }
+
+#include "dw/dwservices.h"
+#include "dw/services_state.h"
+#include "dw/services_sdk_abi.h"
+#include "dw/dwlogon_state.h"
+
+// Store 1405D9FD0: scan the single Store controller slot for an active lobby.
+bdLobbyService *dwGetActiveLobbyService()
+{
+    return (bdLobbyService *)dwLogonUnknown;
+}
+
+// Store 1405DA470: only first construction registers a handler, for controllers 0..3.
+// The original rereads the cache after the handler callback.
+bdLobbyService *dwGetLobbyService(int controller)
+{
+    if (!dwLobbyServiceCache)
+    {
+        void *storage = DwLogonAllocate(0x538);
+        dwLobbyServiceCache = storage ? (bdLobbyService *)DwServicesLobbyConstruct(storage) : nullptr;
+        if (dwLobbyServiceCache && controller >= 0 && controller <= 3)
+            DwServicesRegisterHandler(dwLobbyServiceCache, dwLobbyEventHandlers[controller]);
+    }
+    return dwLobbyServiceCache;
+}
+
+// Store 1405DAA30: readiness is specifically SDK state 2.
+bool dwIsBdNetReady()
+{
+    void *net = DwNetInstance();
+    return net && sub_1407679F0(net) == 2;
+}
+
+// Store 1405DA130/190: these getters do not require a connected lobby.
+bdContentStreaming *dwGetContentStreaming(int controller)
+{
+    bdLobbyService *lobby = dwGetLobbyService(controller);
+    return lobby ? (bdContentStreaming *)DwServicesContent(lobby) : nullptr;
+}
+
+bdDML *dwGetDML(int controller)
+{
+    bdLobbyService *lobby = dwGetLobbyService(controller);
+    return lobby ? (bdDML *)DwServicesDML(lobby) : nullptr;
+}
+
+// Store 1405DA150/1D0: these getters admit only SDK connection state 2.
+bdCounter *dwGetCounter(int controller)
+{
+    bdLobbyService *lobby = dwGetLobbyService(controller);
+    return lobby && DwLogonLobbyStatus(lobby) == 2 ? (bdCounter *)DwServicesCounter(lobby) : nullptr;
+}
+
+bdGroup *dwGetGroup(int controller)
+{
+    bdLobbyService *lobby = dwGetLobbyService(controller);
+    return lobby && DwLogonLobbyStatus(lobby) == 2 ? (bdGroup *)DwServicesGroup(lobby) : nullptr;
+}
+
+// Store 1405DBF40: process a captured lobby, then reacquire it before content work.
+void dwLobbyPump(int controller)
+{
+    dwLobbyActivity = 0;
+    bdLobbyService *lobby = dwGetLobbyService(controller);
+    if (lobby)
+    {
+        DwServicesLobbyPump(lobby);
+        if (DwLogonLobbyStatus(lobby) == 2)
+        {
+            dwLobbyActivity = 14;
+            LiveAntiCheat_Pump(controller);
+            sub_1405D6E60(controller);
+            lobby = dwGetLobbyService(controller);
+            if (lobby)
+            {
+                void *content = DwServicesContent(lobby);
+                if (content && sub_14045CFF0(controller))
+                    DwServicesContentPump(content);
+            }
+        }
+    }
+}
+
+// Store 1405DBFD0: unchecked controller index, as in the original.
+void sub_1405DBFD0(int controller)
+{
+    dwLogonEntries[controller].state = 0;
+}
+
+// Store 1405DBFF0: clear the first flag only; the second flag/reason are retained.
+void sub_1405DBFF0()
+{
+    dwDisconnectState = 0;
+    authBusy[0] = 0;
+}
+
+void sub_1405DC010()
+{
+    authBusy[0] = 1;
+    Live_DemonwareDisconnectCleanup(0);
+}
+
+void sub_1405DC020(unsigned int reason)
+{
+    dwDisconnectReason = reason;
+    authBusy[1] = 1;
+    Live_DemonwareDisconnectCleanup(0);
+}
