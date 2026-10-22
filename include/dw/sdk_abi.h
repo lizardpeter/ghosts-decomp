@@ -26,3 +26,16 @@ bool DwFindAddrHandle(const void *map, void *commonAddrRef, const void *security
     __asm__("?findAddrHandle@bdAddressMap@@QEBA_NV?$bdReference@VbdCommonAddr@@@@AEBVbdSecurityID@@AEAV?$bdReference@VbdAddrHandle@@@@@Z");
 // Store 140741840: returns endpoint+8 in the refresh caller; name not established.
 void *sub_140741840(void *endpoint);
+
+void *DwGetLocalCommonAddr(void *result)
+    __asm__("?dwGetLocalCommonAddr@@YA?AV?$bdReference@VbdCommonAddr@@@@XZ");
+void *DwGlobalAddressMap() __asm__("?dwGetAddressMap@@YAPEAVbdAddressMap@@XZ");
+void *DwAllocate(unsigned long long size) __asm__("?allocate@bdMemory@@SAPEAX_K@Z");
+void *DwConstructCommonAddr(void *storage) __asm__("??0bdCommonAddr@@QEAA@XZ");
+bool DwDeserializeCommonAddr(void *address, void *localReference, const unsigned char *serialized)
+    __asm__("?deserialize@bdCommonAddr@@QEAA_NV?$bdReference@VbdCommonAddr@@@@QEBE@Z");
+bool DwIsLoopbackCommonAddr(const void *address) __asm__("?isLoopback@bdCommonAddr@@QEBA_NXZ");
+bool DwGetAddrHandle(void *map, void *commonReference, const void *securityID, void *resultReference)
+    __asm__("?getAddrHandle@bdAddressMap@@QEAA_NV?$bdReference@VbdCommonAddr@@@@AEBVbdSecurityID@@AEAV?$bdReference@VbdAddrHandle@@@@@Z");
+void *DwNetInstance() __asm__("?getInstance@?$bdSingleton@VbdNetImpl@@@@SAPEAVbdNetImpl@@XZ");
+void *sub_1407679D0(void *net);  // returns net+8; conversion reads its port at +2

@@ -19,3 +19,15 @@ bdSocketRouter *dwGetSocketRouter()
     bdNetImpl *net = bdSingleton<bdNetImpl>::getInstance();
     return net ? net->getSocketRouter() : nullptr;
 }
+
+#include "dw/sdk_abi.h"
+
+// Store 1405DA000: obtain the router's address map, with both null gates.
+bdAddressMap *dwGetAddressMap()
+{
+    bdNetImpl *net = bdSingleton<bdNetImpl>::getInstance();
+    if (!net)
+        return nullptr;
+    bdSocketRouter *router = net->getSocketRouter();
+    return router ? (bdAddressMap *)DwGetAddressMap(router) : nullptr;
+}

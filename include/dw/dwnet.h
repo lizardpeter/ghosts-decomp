@@ -4,3 +4,5 @@
 class bdSocketRouter;
 bdSocketRouter *dwGetSocketRouter();
 void dwSanityCheckAddressHandle(int index, bdSocketRouter *router);
+class bdAddressMap;
+bdAddressMap *dwGetAddressMap();

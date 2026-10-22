@@ -349,3 +349,150 @@ void dwSanityCheckAddressHandle(int index, bdSocketRouter *socketRouter)
     }
     Release(original);
 }
+
+void sub_1405A8070();  // Store table housekeeping; original name not established
+
+// Store 1405A8300: deserialize a common address and register its handle.
+// Unknown original name. The descriptor and security-ID payloads belong to the SDK.
+// Keep the original return semantics: a successful deserialize is not reset when
+// subsequent registration fails or returns no handle (records/bugs.tsv B0052).
+bool sub_1405A8300(netadr_s *adr, const unsigned char *serialized, const unsigned char *securityID)
+{
+    Sys_EnterCriticalSection((CriticalSection)0x21);
+    bool result = false;
+    if (!adr)
+    {
+        Sys_LeaveCriticalSection((CriticalSection)0x21);
+        return false;
+    }
+    sub_1405A8070();
+    void *handle = nullptr;
+    memset(adr, 0, sizeof(*adr));
+    adr->addrHandleIndex = ~0u;
+    void *localCommon = nullptr;
+    DwGetLocalCommonAddr(&localCommon);
+    void *map = DwGlobalAddressMap();
+    if (map && localCommon)
+    {
+        void *common = nullptr;
+        void *storage = DwAllocate(184);
+        if (storage)
+        {
+            common = DwConstructCommonAddr(storage);
+            if (common)
+                Retain(common);
+        }
+        void *localReference = localCommon;
+        Retain(localCommon);
+        result = DwDeserializeCommonAddr(common, &localReference, serialized);
+        if (result)
+        {
+            if (!DwIsLoopbackCommonAddr(common))
+            {
+                if (common)
+                    Retain(common);
+                void *commonReference = common;
+                const bool registered = DwGetAddrHandle(map, &commonReference, securityID, &handle);
+                if (registered && handle)
+                {
+                    void *registeredHandle = handle;
+                    Retain(registeredHandle);
+                    Sys_EnterCriticalSection((CriticalSection)0x21);
+                    unsigned int index = 0;
+                    unsigned int firstFree = ~0u;
+                    unsigned int oldest = ~0u;
+                    bool foundFree = false;
+                    bool inserted = false;
+                    for (;; ++index)
+                    {
+                        if (index >= (unsigned int)localHandleIndex)
+                        {
+                            index = firstFree;
+                            if (!foundFree)
+                            {
+                                index = (int)oldest < 0 ? 0 : oldest;
+                                dwUnregisterAddrHandle(index);
+                            }
+                            DwHandleEntry &entry = addressHandles[(int)index];
+                            if (entry.handle)
+                                Release(entry.handle);
+                            entry.handle = registeredHandle;
+                            Retain(registeredHandle);
+                            inserted = true;
+                            break;
+                        }
+                        void *other = addressHandles[index].handle;
+                        bool equal = false;
+                        if (!other)
+                        {
+                            if (!foundFree)
+                            {
+                                foundFree = true;
+                                firstFree = index;
+                            }
+                        }
+                        else
+                        {
+                            equal = DwAddrHandleEqual(registeredHandle, other);
+                            if ((int)oldest < 0 || addressHandles[index].lifetime < addressHandles[(int)oldest].lifetime)
+                                oldest = index;
+                        }
+                        if (equal)
+                            break;
+                    }
+                    if (addressHandles[(int)index].lifetime < 6600)
+                        addressHandles[(int)index].lifetime = 6600;
+                    Sys_LeaveCriticalSection((CriticalSection)0x21);
+                    Release(registeredHandle);
+                    void *router = dwGetSocketRouter();
+                    if (router)
+                    {
+                        bool connect = inserted;
+                        if (!connect)
+                        {
+                            void *stateReference = handle;
+                            if (handle)
+                                Retain(handle);
+                            connect = RouterState(router, &stateReference) == 3;
+                        }
+                        if (connect)
+                            ((void (*)(void *, void **))(*(void ***)router)[6])(router, &handle);
+                    }
+                    alignas(8) unsigned char realAddress[136];
+                    alignas(8) unsigned char internetAddress[144];
+                    void *real = DwGetRealAddr(handle, realAddress);
+                    void *inet = sub_14073ED40(real);
+                    void *sockaddr = DwGetInAddr(inet, internetAddress);
+                    unsigned int ip4 = *(const unsigned int *)sockaddr;
+                    DwDestroyInetAddr(realAddress);
+                    NET_InAddrToIpAddr((const in_addr *)&ip4, adr->ip);
+                    alignas(8) unsigned char portAddress[136];
+                    real = DwGetRealAddr(handle, portAddress);
+                    adr->port = DwGetPort(real);
+                    DwDestroyInetAddr(portAddress);
+                    adr->type = NA_IP;
+                    adr->addrHandleIndex = index;
+                    result = true;
+                }
+            }
+            else
+            {
+                NET_InAddrSetLoopback((in_addr *)adr->ip);
+                adr->type = NA_IP;
+                adr->port = 0xC03;
+                adr->addrHandleIndex = localHandleIndex;
+                void *net = DwNetInstance();
+                if (net)
+                    adr->port = *(const unsigned short *)((const unsigned char *)sub_1407679D0(net) + 2);
+            }
+        }
+        if (common)
+            Release(common);
+    }
+    if (localCommon)
+        Release(localCommon);
+    if (handle)
+        Release(handle);
+    Sys_LeaveCriticalSection((CriticalSection)0x21);
+    return result;
+}
