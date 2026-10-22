@@ -83,16 +83,19 @@ online features staying disabled. The two `MessageBoxW` calls at start-up are th
 is ignored. Details:
 
 1. **Runtime start-up: GDK_Init 1401A1930, called from Com_Init 140461550.**
-   - `XGameRuntimeInitialize` (1406AF4BC) failing → if hr is 0x89240101 or 0x89240102 (the runtime DLL or its exports
-     are missing), `MessageBoxW "Game Runtime is not installed on this system or needs updating."` → return 0.
+   - `XGameRuntimeInitialize` (1406AF4BC) failing → if hr is 0x89240101 or 0x89240102,
+     `MessageBoxW "Game Runtime is not installed on this system or needs updating."` → return 0.
+     The local loader and missing-export check both produce 0x89240101.
    - `XGameGetXboxTitleId` (1406AF32C) failing → `MessageBoxW "Title ID not found in MicrosoftGameConfig.mgc file."`
      → return 0. Outside its package the exe has no MicrosoftGame.config.
    - Com_Init ignores the return value and keeps going. But all GDK set-up is then skipped: gamesave, users, presence,
      store and session queues are never created, so there is no sign-in, no licence and no online.
    - 1406AEC18 calls `DebugBreak()` when runtime initialisation fails and KUSER_SHARED_DATA+0x2D4 & 3 == 3 (a kernel
      debugger is present). Keep this in mind when testing under a debugger.
-   - Without initialisation, every later QueryApi re-tries 1406AEC18(1), which reports
-     `XErrorReport(0x89240100, "XGameRuntimeInitialize must be called before making this call.")`.
+   - Without initialisation, every later QueryApi retries 1406AEC18(1). When only the
+     legacy initializer is available, this reports `XErrorReport(0x89240100,
+     "XGameRuntimeInitialize must be called before making this call.")`. With Ex
+     available it instead attempts implicit initialization.
 2. **Sign-in: GDK frame 1401A1760, called each frame from Live_Frame 14054B4B0.**
    - Sign-in starts only in the main menu (`FUN_140222950()`), once, when 1401A7EA0 says no signed-in user
      (user+0x80 XUserState != 0, or an add is in progress).
@@ -309,6 +312,10 @@ The title string uses signed `_itoa` behavior even for a title ID above INT_MAX.
 functions. These include 56 cases that connect reconstructed startup, runtime
 lookup and COM thunks; only OS imports, DLL exports and interface providers are
 modeled. No DLL is loaded and no vendor connection is made by the tests.
+Twelve deliberate source mutations were rejected: loader flags, Ex flags,
+implicit initialization, HRESULT translation, public initialization mode,
+cleanup admission, interface release, title-query success, feature fallback,
+account-add options, token count forwarding and startup order.
 
 P0007 overrides loading, initialization, interface lookup, cleanup and game
 startup in `enhanced/`. Entry points return unavailable (HRESULT 0x89240100),
@@ -317,6 +324,10 @@ config, title, tasks, services or error dialogs. Cleanup clears runtime fields
 without calling SDK callbacks or OS imports, preserving the lock and padding.
 This is for offline startup, not unloading an already running SDK: it does not
 release preexisting vendor resources or coordinate live SDK threads.
+All six individual override removals make `test_gdk_offline.py` fail. Its five
+tests reject runtime/SDK calls, exercise empty and poisoned cached state, verify
+output clearing and preserved fields, and run the five inherited thunks through
+the actual enhanced interface lookup.
 
 The five reconstructed thunks inherit the actual enhanced lookup guard, including
 account addition and token/signature requests. Other original thunks and original

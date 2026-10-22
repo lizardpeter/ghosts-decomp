@@ -456,14 +456,14 @@ iw6mp64_MSStore_ship	1405DBFD0	matches	src/dw/dwutils.cpp	Store original vs reco
 iw6mp64_MSStore_ship	1405DBFF0	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 9 explicit cases; behavior-changing mutations caught (first auth-busy flag only); SDK boundaries modeled, no live network
 iw6mp64_MSStore_ship	1405DC010	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 18 explicit cases; behavior-changing mutations caught (request flag before cleanup); SDK boundaries modeled, no live network
 iw6mp64_MSStore_ship	1405DC020	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 90 explicit cases; behavior-changing mutations caught (reason before cleanup); SDK boundaries modeled, no live network
-iw6mp64_MSStore_ship	1406AEC18	decompiled	src/_external/gdk/xgameruntime.cpp	Store GDK runtime/startup reconstruction; verification pending
-iw6mp64_MSStore_ship	1406AEE34	decompiled	src/_external/gdk/xgameruntime.cpp	Store GDK runtime/startup reconstruction; verification pending
-iw6mp64_MSStore_ship	1406AEE74	decompiled	src/_external/gdk/xgameruntime.cpp	Store GDK runtime/startup reconstruction; verification pending
-iw6mp64_MSStore_ship	1406AF4BC	decompiled	src/_external/gdk/xgameruntime.cpp	Store GDK runtime/startup reconstruction; verification pending
-iw6mp64_MSStore_ship	1406AF52C	decompiled	src/_external/gdk/xgameruntime.cpp	Store GDK runtime/startup reconstruction; verification pending
-iw6mp64_MSStore_ship	1406B14FC	decompiled	src/_external/gdk/xgameruntime.cpp	Store GDK runtime/startup reconstruction; verification pending
-iw6mp64_MSStore_ship	1406AF32C	decompiled	src/_external/gdk/xgameruntime.cpp	Store GDK runtime/startup reconstruction; verification pending
-iw6mp64_MSStore_ship	1406AF4C4	decompiled	src/_external/gdk/xgameruntime.cpp	Store GDK runtime/startup reconstruction; verification pending
-iw6mp64_MSStore_ship	1406B1550	decompiled	src/_external/gdk/xgameruntime.cpp	Store GDK runtime/startup reconstruction; verification pending
-iw6mp64_MSStore_ship	1406B1D00	decompiled	src/_external/gdk/xgameruntime.cpp	Store GDK runtime/startup reconstruction; verification pending
-iw6mp64_MSStore_ship	1401A1930	decompiled	src/win32/gdk.cpp	Store GDK runtime/startup reconstruction; verification pending
+iw6mp64_MSStore_ship	1406AEC18	matches	src/_external/gdk/xgameruntime.cpp	test_gdk.py: 732 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	1406AEE34	matches	src/_external/gdk/xgameruntime.cpp	test_gdk.py: 4 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	1406AEE74	matches	src/_external/gdk/xgameruntime.cpp	test_gdk.py: 127 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	1406AF4BC	matches	src/_external/gdk/xgameruntime.cpp	test_gdk.py: 12 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	1406AF52C	matches	src/_external/gdk/xgameruntime.cpp	test_gdk.py: 108 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	1406B14FC	matches	src/_external/gdk/xgameruntime.cpp	test_gdk.py: 11 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	1406AF32C	matches	src/_external/gdk/xgameruntime.cpp	test_gdk.py: 52 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	1406AF4C4	matches	src/_external/gdk/xgameruntime.cpp	test_gdk.py: 31 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	1406B1550	matches	src/_external/gdk/xgameruntime.cpp	test_gdk.py: 71 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	1406B1D00	matches	src/_external/gdk/xgameruntime.cpp	test_gdk.py: 55 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	1401A1930	matches	src/win32/gdk.cpp	test_gdk.py: 70 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
