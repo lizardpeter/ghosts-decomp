@@ -11,7 +11,7 @@ void DW_Frame(int controller)
 {
     if (sub_1405F47D0())
         return;
-    const int status = sub_14019A930(controller);
+    const int status = dwGetLogOnStatus(controller);
     if (status == 0)
     {
         if (!inhibitLogon)
@@ -24,7 +24,7 @@ void DW_Frame(int controller)
         DwLogonPump(controller);
         sub_1405F4630(controller);
     }
-    sub_14019A930(controller);
+    dwGetLogOnStatus(controller);
 }
 
 // Store 1405D3DC0: update the automatic-logon inhibit byte verbatim.

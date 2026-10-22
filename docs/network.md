@@ -2,7 +2,7 @@
 
 This page lists every way the Microsoft Store build (`iw6mp64_MSStore_ship`) can reach the network. It also
 shows the few functions all of that traffic goes through. The faithful decomp reproduces all of it. The enhanced
-build replaces it in source.
+build replaces these paths incrementally in source.
 
 The enhanced build's goal is that it never talks to Activision's, Demonware's, Xbox's or Microsoft's services.
 Local play and LAN keep working, and online play goes to our own backend once it exists.
@@ -81,11 +81,13 @@ If runtime initialisation fails while a kernel debugger is attached,
 **The original exe** is tested with no network at all: a VM or Windows Sandbox without a network adapter. It
 then behaves as it does offline: a popup, and the online systems stay off.
 
-**The enhanced build** (`enhanced/`) replaces the platform layer in source. It has no GDK, no Demonware, no xsapi
-and no XCurl. The game's dw*/Live_* layer (dw/, online/, sessions/; the PS4 PDB names them) calls our own
-backend client, with its own accounts and login, and that client talks to our server, whose address is a setting.
-A test on the built binary checks that none of the hosts above and none of the removed paths are left in it. Game
-UDP stays as it is, with the fixes in records/bugs.tsv.
+**The enhanced build** (`enhanced/`) is replacing the platform layer in source. The target architecture has no
+GDK, Demonware, xsapi or XCurl: the game's dw*/Live_* layer will use our own backend client and a configurable
+server address. That replacement is not complete. P0005 below disables the reconstructed auth/lobby login
+entry points. Xbox/GDK, other service paths, and the Demonware game transport still need replacements.
+The hybrid DLL also resolves unreconstructed functions to the original executable, so this is not yet a
+standalone offline game. A future standalone build must check that removed paths and vendor hosts are absent;
+that whole-binary guarantee is not claimed by the current entry-point tests.
 
 ## Checked
 
@@ -232,3 +234,62 @@ not require a nonnull handle or an index below the active count. B0053 records
 its unchecked write; current-caller reachability of an invalid index remains
 unestablished. `test_dwlifetime.py` compares table writes and lock calls against
 the Store binary, including writes above the active count within mapped storage.
+
+
+## Login reconstruction and offline entry points
+
+`dwLogOnStart` (14019ADA0) first checks platform readiness and the two auth-busy
+flags. Its retry scheduler uses a wrapping 32-bit millisecond difference, signed
+seconds truncated toward zero, and a delay obtained from the original helper.
+At elapsed seconds greater than 120 it resets the attempt count. At exactly 120
+it still honors the existing delay. A permitted attempt sets state 1; readiness
+and busy failures leave all scheduling state unchanged.
+
+`dwLogOnComplete` (14019A9A0) clears the current state before taking one step:
+
+| Prior state | Original action |
+|---|---|
+| 1, 2, 8 | Wait for another controller's active logon, otherwise advance to 9 |
+| 3 | Pump auth-host DNS; pending stays 3, failure ends login, success joins the controller check |
+| 9 | Obtain the cached auth client; start authentication if its status permits |
+| 10 | Poll auth status and require result 700 to advance to 11 |
+| 11 | Pump lobby-host DNS; construct a port-3074 endpoint, disconnect the old lobby, then connect with auth info |
+| 13 | Pump the lobby and inspect connection status plus transport readiness; notify only after assigning state 14 |
+| Other states | Fall through with state 0 |
+
+The auth client uses port 443 and title 2510. Its factory (1405DA070) lazily
+allocates 0x3580 bytes, caches the constructor result, and returns an existing
+client without reconfiguration. Its release helper (1405D9F30) destroys and frees
+the captured pointer before clearing the cache, even if the destructor changes
+the cache. The busy query (1405D9F10) reads two separate bytes.
+
+Terminal states 0 and 14 release both DNS resolver objects and the auth client.
+State 0 also disconnects the lobby. Resolver cleanup (14019AE90) rereads the
+second global after destroying the first object. Reset (14019AE70) clears only
+the qword before the controller table and its first sixteen bytes; it leaves
+resolver pointers untouched. The Store controller scan checks one controller.
+All new storage names are descriptive; original unknown names remain `sub_<VA>`.
+
+P0005 replaces `dwLogOnStart`, `dwLogOnComplete`, their status/busy queries,
+the auth-client factory, and `DW_Frame` in the enhanced build. Start, step and
+frame clear scheduling state and remain offline. Queries never report vendor authentication or pending
+vendor login. The factory returns null even when an old cache exists. These
+entry points do not call SDK DNS, auth, lobby, clock or platform-readiness code.
+They do not masquerade as a successful online login. A replacement account and
+dedicated-server client can later own this boundary.
+
+The override is intended for source-linked startup, not hot-swapping an already
+connected original process. It does not clean up preexisting SDK objects. The
+original selector and cleanup remain available for faithful verification and
+separate shutdown paths. `test_backend_offline.py` poisons old object pointers,
+rejects modeled platform/backend calls, and checks the offline results.
+`test_dwlogon.py` compares the faithful functions with the original, including
+login steps with the real reconstructed auth factory and release helpers.
+
+`DW_Frame` (1405D3D40) is the caller that automatically starts or advances login
+and pumps a connected lobby. Its inhibit setter (1405D3DC0) stores its low
+argument byte without boolean normalization. The original `dwGetLogOnStatus`
+name and `DWOnlineStatus` enum are confirmed by PS4 PDB 1402B78D0 and the Store
+caller's 32-bit comparisons. The enhanced frame override resets to offline
+before any original frame callbacks. Frame integration cases exercise the
+faithful driver through the reconstructed status, start, step, and auth helpers.

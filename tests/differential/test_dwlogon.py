@@ -7,7 +7,7 @@ from syms import static, va
 
 STORE = 'iw6mp64_MSStore_ship'
 SOURCE = 'dw/dwlogon-win.cpp'
-STATUS = '?sub_14019A930@@YAHH@Z'
+STATUS = '?dwGetLogOnStatus@@YA?AW4DWOnlineStatus@@H@Z'
 BUSY = '?sub_14019A960@@YA_NH@Z'
 START = '?dwLogOnStart@@YAXH@Z'
 RESET = '?sub_14019AE70@@YAXXZ'

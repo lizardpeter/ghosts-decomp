@@ -419,19 +419,20 @@ iw6mp64_MSStore_ship	1405A8300	matches	src/dw/dwnet.cpp	Store original vs recons
 iw6mp64_MSStore_ship	1405DA000	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwcommon.py; original caller in test_win_net_common.py; behavior-changing mutations caught; SDK boundary modeled
 iw6mp64_MSStore_ship	1405A8790	matches	src/dw/dwnet.cpp	Store original vs reconstruction: test_dwlifetime.py explicit cases; behavior-changing mutations caught (occupied/nonzero/bound and local-skip/clear-value); lock calls and table writes compared; no live network
 iw6mp64_MSStore_ship	1405A87E0	matches	src/dw/dwnet.cpp	Store original vs reconstruction: test_dwlifetime.py explicit cases; behavior-changing mutations caught (occupied/nonzero/bound and local-skip/clear-value); lock calls and table writes compared; no live network
-iw6mp64_MSStore_ship	14019A930	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
-iw6mp64_MSStore_ship	14019A960	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
-iw6mp64_MSStore_ship	14019ADA0	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
-iw6mp64_MSStore_ship	14019AE70	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
-iw6mp64_MSStore_ship	14019AE90	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
-iw6mp64_MSStore_ship	14019AEE0	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
-iw6mp64_MSStore_ship	14019A9A0	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
-iw6mp64_MSStore_ship	1405D9F10	decompiled	src/dw/dwutils.cpp	Store logon reconstruction; verification pending
-iw6mp64_MSStore_ship	1405D9F30	decompiled	src/dw/dwutils.cpp	Store logon reconstruction; verification pending
-iw6mp64_MSStore_ship	1405DA070	decompiled	src/dw/dwutils.cpp	Store logon reconstruction; verification pending
+iw6mp64_MSStore_ship	14019A930	matches	src/dw/dwlogon-win.cpp	Store original vs reconstruction: test_dwlogon.py, 60 explicit cases; behavior-changing mutations caught (status enum/complete-state); SDK/platform boundaries modeled, no live network
+iw6mp64_MSStore_ship	14019A960	matches	src/dw/dwlogon-win.cpp	Store original vs reconstruction: test_dwlogon.py, 80 explicit cases; behavior-changing mutations caught (busy-controller exclusion); SDK/platform boundaries modeled, no live network
+iw6mp64_MSStore_ship	14019ADA0	matches	src/dw/dwlogon-win.cpp	Store original vs reconstruction: test_dwlogon.py, 272 explicit cases; behavior-changing mutations caught (retry timeout); SDK/platform boundaries modeled, no live network
+iw6mp64_MSStore_ship	14019AE70	matches	src/dw/dwlogon-win.cpp	Store original vs reconstruction: test_dwlogon.py, 20 explicit cases; behavior-changing mutations caught (reset coverage); SDK/platform boundaries modeled, no live network
+iw6mp64_MSStore_ship	14019AE90	matches	src/dw/dwlogon-win.cpp	Store original vs reconstruction: test_dwlogon.py, 8 explicit cases; behavior-changing mutations caught (resolver cleanup); SDK/platform boundaries modeled, no live network
+iw6mp64_MSStore_ship	14019AEE0	matches	src/dw/dwlogon-win.cpp	Store original vs reconstruction: test_dwlogon.py, 6 explicit cases; behavior-changing mutations caught (auth endpoint); SDK/platform boundaries modeled, no live network
+iw6mp64_MSStore_ship	14019A9A0	matches	src/dw/dwlogon-win.cpp	Store original vs reconstruction: test_dwlogon.py, 482 explicit cases; behavior-changing mutations caught (lobby port and readiness; includes 108 auth-helper integration cases); SDK/platform boundaries modeled, no live network
+iw6mp64_MSStore_ship	1405D9F10	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwlogon.py, 16 explicit cases; behavior-changing mutations caught (second auth-busy flag); SDK/platform boundaries modeled, no live network
+iw6mp64_MSStore_ship	1405D9F30	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwlogon.py, 4 explicit cases; behavior-changing mutations caught (captured auth pointer at deallocation); SDK/platform boundaries modeled, no live network
+iw6mp64_MSStore_ship	1405DA070	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwlogon.py, 96 explicit cases; behavior-changing mutations caught (auth allocation size); SDK/platform boundaries modeled, no live network
 iw6_ds_ps4	1402B7900	typed		Store-only login reconstruction; reference platform, hosts and static storage differ; no reference implementation or matching claim
 iw6_ds_ps4	1402B8070	typed		Store-only login reconstruction; reference platform, hosts and static storage differ; no reference implementation or matching claim
 iw6_ds_ps4	1402B81D0	typed		Store-only login reconstruction; reference platform, hosts and static storage differ; no reference implementation or matching claim
-iw6mp64_MSStore_ship	1405D3D40	decompiled	src/dw/dwframe.cpp	Store frame login driver; verification pending
-iw6mp64_MSStore_ship	1405D3DC0	decompiled	src/dw/dwframe.cpp	Store frame login driver; verification pending
+iw6mp64_MSStore_ship	1405D3D40	matches	src/dw/dwframe.cpp	Store original vs reconstruction: test_dwlogon.py, 256 explicit cases; behavior-changing mutations caught (inhibit branch and final status query; includes 40 login/auth integration cases); SDK/platform boundaries modeled, no live network
+iw6mp64_MSStore_ship	1405D3DC0	matches	src/dw/dwframe.cpp	Store original vs reconstruction: test_dwlogon.py, 18 explicit cases; behavior-changing mutations caught (inhibit byte value); SDK/platform boundaries modeled, no live network
 iw6_ds_ps4	1402B6C90	typed		Store-only backend frame driver; reference platform and static storage differ; no reference matching claim
+iw6_ds_ps4	1402B78D0	typed		Store-only status reconstruction; reference uses different logon state storage; no reference matching claim

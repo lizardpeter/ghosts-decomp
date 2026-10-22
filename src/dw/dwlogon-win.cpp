@@ -9,11 +9,11 @@ int sub_1405F3D10(unsigned int attempt, int maximum);
 extern "C" int _wcsicmp(const wchar_t *, const wchar_t *);
 
 // Store 14019A930: 0 offline/suppressed, 1 pending, 2 state 14.
-int sub_14019A930(int controller)
+DWOnlineStatus dwGetLogOnStatus(int controller)
 {
     if (!dwLogonSuppressed && dwLogonEntries[controller].state)
-        return dwLogonEntries[controller].state == 14 ? 2 : 1;
-    return 0;
+        return dwLogonEntries[controller].state == 14 ? DW_LIVE_CONNECTED : DW_LIVE_CONNECTING;
+    return DW_LIVE_DISCONNECTED;
 }
 
 // Store supports one controller here. Exclude that controller from the busy test.
