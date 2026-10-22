@@ -18,7 +18,7 @@ TOUCH = '?sub_1405A9E50@@YAXPEBUnetadr_s@@@Z'
 # Mapped game-function addresses are used as fake virtual slots, never executed.
 STATE_STUB = '?sub_14054F8D0@@YAHXZ'
 SEND_STUB = '?sub_14054F950@@YAHXZ'
-DESTROY_STUB = '?sub_1405AA0B0@@YA_NPEAUnetadr_s@@@Z'
+DESTROY_STUB = '?Sys_GetLocalIP@@YA?AUin_addr@@H@Z'
 PUMP_STUB = '?sub_14054F8E0@@YA_NPEBUXNADDR@@PEBUnetadr_s@@@Z'
 UNREGISTER_STUB = '?sub_14054F2E0@@YA_NPEBI@Z'
 M = {}

@@ -272,3 +272,80 @@ int dwRecvFrom(netadr_s *const from, void *const buffer, unsigned int bufferSize
     Sys_LeaveCriticalSection((CriticalSection)0x21);
     return result;
 }
+
+// Store 1405AA0B0: recover a concrete IP/port from the address-handle index.
+// The original clears the IP even on failure and succeeds for an empty valid slot.
+void NET_InAddrSetLoopback(in_addr *address);
+bool sub_1405AA0B0(netadr_s *adr)
+{
+    *(unsigned int *)adr->ip = 0;
+    if (adr->type != NA_IP)
+        return false;
+    const unsigned int index = adr->addrHandleIndex;
+    if (index < (unsigned int)localHandleIndex)
+    {
+        void *handle = addressHandles[index].handle;
+        if (handle)
+        {
+            Retain(handle);
+            alignas(8) unsigned char realAddress[144];
+            alignas(8) unsigned char internetAddress[144];
+            DwGetRealAddr(handle, realAddress);
+            adr->port = DwGetPort(realAddress);
+            void *inet = sub_14073ED40(realAddress);
+            void *sockaddr = DwGetInAddr(inet, internetAddress);
+            *(unsigned int *)adr->ip = *(const unsigned int *)sockaddr;
+            DwDestroyInetAddr(realAddress);
+            Release(handle);
+        }
+    }
+    else if (index == (unsigned int)localHandleIndex)
+        NET_InAddrSetLoopback((in_addr *)adr->ip);
+    else
+        return false;
+    return true;
+}
+
+// Store 1405A9A90, PS4 PDB dw/dwnet.cpp:681. No lock is acquired here:
+// callers protect the table, including the nested calls in send/status helpers.
+void dwSanityCheckAddressHandle(int index, bdSocketRouter *socketRouter)
+{
+    void *router = socketRouter ? socketRouter : dwGetSocketRouter();
+    if (!router || index < 0 || index >= localHandleIndex)
+        return;
+    DwHandleEntry &entry = addressHandles[index];
+    void *original = entry.handle;
+    if (!original)
+        return;
+    Retain(original);
+    void *stateHandle = original;
+    Retain(original);
+    if (RouterState(router, &stateHandle) == 3)
+    {
+        void *replacement = nullptr;
+        void *map = DwGetAddressMap(router);
+        void *endpoint = (unsigned char *)original + 16;
+        void *securityID = sub_140741840(endpoint);
+        void *commonRef[2];
+        void *common = DwGetEndpointCommonAddr(endpoint, commonRef);
+        // findAddrHandle consumes the temporary common-address reference.
+        if (DwFindAddrHandle(map, common, securityID, &replacement))
+        {
+            stateHandle = replacement;
+            if (replacement)
+                Retain(replacement);
+            if (RouterState(router, &stateHandle) == 2)
+            {
+                if (entry.handle)
+                    Release(entry.handle);
+                entry.handle = replacement;
+                if (replacement)
+                    Retain(replacement);
+                entry.unknown = 0;
+            }
+        }
+        if (replacement)
+            Release(replacement);
+    }
+    Release(original);
+}

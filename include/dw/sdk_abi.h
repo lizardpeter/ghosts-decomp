@@ -17,3 +17,12 @@ void DwDestroyInetAddr(void *address)
 // The matcher also associates unrelated folded identity functions with this address;
 // no original name has been established for this caller's accessor.
 void *sub_14073ED40(void *address);
+
+void *DwGetAddressMap(void *router)
+    __asm__("?getAddressMap@bdSocketRouter@@QEAAPEAVbdAddressMap@@XZ");
+void *DwGetEndpointCommonAddr(const void *endpoint, void *result)
+    __asm__("?getCommonAddr@bdEndpoint@@QEBA?AV?$bdReference@VbdCommonAddr@@@@XZ");
+bool DwFindAddrHandle(const void *map, void *commonAddrRef, const void *securityID, void *resultRef)
+    __asm__("?findAddrHandle@bdAddressMap@@QEBA_NV?$bdReference@VbdCommonAddr@@@@AEBVbdSecurityID@@AEAV?$bdReference@VbdAddrHandle@@@@@Z");
+// Store 140741840: returns endpoint+8 in the refresh caller; name not established.
+void *sub_140741840(void *endpoint);
