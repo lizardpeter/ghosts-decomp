@@ -204,3 +204,21 @@ CASES = [
 for symbol in (CONTENT, COUNTER, DML, GROUP):
     CASES.append({'symbol': symbol, 'build': STORE, 'ret': 'int64',
                   'fakes': SERVICE_FAKES, 'inputs': service_inputs})
+
+# Service getters and pump with the reconstructed factory, including callback cache replacement.
+INTEGRATED_FAKES = {k: v for k, v in PUMP_FAKES.items() if k != LOBBY}
+INTEGRATED_FAKES.update(FACTORY_FAKES)
+for case in CASES:
+    if case['symbol'] in (CONTENT, COUNTER, DML, GROUP, PUMP):
+        baseline = case['fakes']
+        for inp in case['inputs']:
+            inp['fakes'] = baseline
+        case['fakes'] = {}
+        case['inputs'].extend([
+            {'args': [controller], 'setup': setup(
+                cached=cached, allocation=allocated, constructed=constructed,
+                handler_mutation=mutation, status=status, content_gate=True),
+             'fakes': INTEGRATED_FAKES}
+            for controller in (0, 3, 4) for cached in (False, True)
+            for allocated, constructed in ((False, False), (True, False), (True, True))
+            for mutation in ('none', 'replace', 'clear') for status in (1, 2)])

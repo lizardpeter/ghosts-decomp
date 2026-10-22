@@ -84,7 +84,8 @@ then behaves as it does offline: a popup, and the online systems stay off.
 **The enhanced build** (`enhanced/`) is replacing the platform layer in source. The target architecture has no
 GDK, Demonware, xsapi or XCurl: the game's dw*/Live_* layer will use our own backend client and a configurable
 server address. That replacement is not complete. P0005 below disables the reconstructed auth/lobby login
-entry points. Xbox/GDK, other service paths, and the Demonware game transport still need replacements.
+entry points. P0006 blocks lobby-service access and pumping. Xbox/GDK, other service paths,
+and the Demonware game transport still need replacements.
 The hybrid DLL also resolves unreconstructed functions to the original executable, so this is not yet a
 standalone offline game. A future standalone build must check that removed paths and vendor hosts are absent;
 that whole-binary guarantee is not claimed by the current entry-point tests.
@@ -293,3 +294,51 @@ name and `DWOnlineStatus` enum are confirmed by PS4 PDB 1402B78D0 and the Store
 caller's 32-bit comparisons. The enhanced frame override resets to offline
 before any original frame callbacks. Frame integration cases exercise the
 faithful driver through the reconstructed status, start, step, and auth helpers.
+
+
+## Lobby services and disconnection state
+
+`dwGetLobbyService` (1405DA470) lazily constructs the shared SDK lobby in 0x538
+bytes of allocated storage. Only initial construction registers an event handler,
+using one of four objects at stride 8 for controller indices 0 through 3. Existing
+cached objects are returned without registering another handler or changing their
+controller association. Allocation/constructor failure returns null. The factory
+rereads its global after the handler callback, so a callback can change the result.
+
+`dwGetActiveLobbyService` (1405D9FD0) uses separate storage: it scans the single
+Store controller slot at 140DF23D8. It does not read the construction cache at
+14A022468. The two pointers must remain distinct in the faithful reconstruction.
+The earlier descriptive `logonUnknown` alias is retained for that controller slot.
+
+| Wrapper | Original admission rule |
+|---|---|
+| `dwGetContentStreaming`, `dwGetDML` | Nonnull lobby; no connection-status check |
+| `dwGetCounter`, `dwGetGroup` | Nonnull lobby and SDK connection status exactly 2 |
+| `dwIsBdNetReady` | Nonnull SDK net singleton and SDK net status exactly 2 |
+
+`dwLobbyPump` (1405DBF40) clears the activity dword, obtains a lobby, and pumps
+that captured object. On status 2 it writes activity 14, calls the anticheat pump
+and a game callback, then obtains the lobby again before accessing content.
+A nonnull content object is pumped only when the controller gate allows it.
+Callbacks can replace the cached lobby or change activity; those effects survive.
+
+The disconnect wrappers preserve separate state. 1405DBFD0 clears only the
+selected controller's logon-state dword with no bounds check. 1405DBFF0 clears
+the disconnect-state dword and first auth-busy byte, retaining the second byte
+and reason. 1405DC010 sets the first byte; 1405DC020 stores its supplied reason
+and sets the second byte. Both request cleanup with controller argument 0, and
+leave any changes made by that cleanup callback intact.
+
+P0006 overrides the active-lobby accessor, construction factory, four service
+getters and lobby pump. Accessors return null without touching either cache or
+calling SDK methods. The pump clears only the local activity marker, preserving
+the neighboring logon flag, and calls no vendor, anticheat or content callbacks.
+These entry points remain unavailable even with poisoned or preexisting cache
+pointers. Original net readiness and disconnect bookkeeping are reconstructed
+separately; this patch does not replace the game packet transport.
+
+`test_dwservices.py` compares the original wrappers and integration through the
+reconstructed factory. `test_services_offline.py` rejects dependency calls from
+each enhanced entry point and checks that it cannot return an old vendor object.
+The source override is for a reconstruction started offline, not runtime teardown
+of SDK objects already owned by an original running process.
