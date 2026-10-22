@@ -370,3 +370,50 @@ CASES.append({'symbol':GAME_INIT,'build':STORE,'ret':'char','fakes':STARTUP_FAKE
  {'args':[],'setup':startup_setup(runtime_result=runtime,title_result=result,title=title)}
  for runtime in (0,1,0xFFFFFFFF,0x80004005,0x89240100,0x89240101,0x89240102)
  for result in (0,1,0x80004005) for title in (0,2510,0xFFFFFFFF)]})
+
+# End-to-end reconstructed startup/runtime/query/thunks; only OS and SDK providers are modeled.
+INTEGRATED_FAKES = dict(RUNTIME_FAKES)
+INTEGRATED_FAKES.update({k:v for k,v in THUNK_FAKES.items() if k != QUERY})
+INTEGRATED_FAKES.update({k:v for k,v in STARTUP_FAKES.items()
+                          if k not in ('XGameRuntimeInitialize','XGameGetXboxTitleId')})
+INTEGRATED_FAKES[QSTUB] = query_fake
+
+
+def integrated_setup(profile):
+    def apply(w):
+        thunk_setup()(w)
+        module,cached,available,load_ok,init_result,query_result,initialized,implicit = profile
+        base = static(SRC,'runtime')
+        pointers = [va(s) for s in STUBS]
+        module_ptr = base+0x1000
+        w.write(base,struct.pack('<QBB6sQ5Q',0,initialized,implicit,b'PADDED',
+                module_ptr if module else 0,*[p if cached & (1<<i) else 0 for i,p in enumerate(pointers)]))
+        w.write(static(GAME,'titleString'),b'\xA5'*16)
+        w.u64(static(GAME,'scidPointer'),0x12345678)
+        M.update(load_module=module_ptr if load_ok else 0,
+                 available=[p if available & (1<<i) else 0 for i,p in enumerate(pointers)],
+                 init_result=init_result,query_sequence=(query_result,))
+        w.m.on_import('USER32.dll!MessageBoxW',imp(message))
+        w.m.on_import('api-ms-win-crt-convert-l1-1-0.dll!_itoa',imp(itoa))
+    return apply
+
+
+profiles = ((False,0,31,False,0,0,0,0), (False,0,31,True,0,0,0,0),
+            (True,0,27,True,0,0,0,0), (True,31,31,True,0x80004005,0,0,0),
+            (True,31,31,True,0,0x80040154,0,0), (True,31,31,True,1,0,0,0),
+            (True,31,31,True,0,0,1,0))
+integrated_args = {
+ 'XGameRuntimeInitialize':[], QUERY:[0x1408B1D40,0x1408B1D40,b'API-OLD!'],
+ 'XThreadAssertNotTimeSensitive':[], 'XGameGetXboxTitleId':[b'TOLD'],
+ 'XGameRuntimeIsFeatureAvailable':[10], 'XUserAddAsync':[4,0x123456789ABCDEF0],
+ 'XUserGetTokenAndSignatureAsync':[0x123456789ABCDEF0,1,b'POST\0',b'https://example.invalid/token\0',
+                                 2,0xCAFEBABE,3,0xDEADBEEF,0xFEDCBA9876543210], GAME_INIT:[]}
+for case in CASES:
+    if case['symbol'] in integrated_args:
+        baseline = case.get('fakes',{})
+        for inp in case['inputs']:
+            inp['fakes'] = baseline
+        case['fakes'] = {}
+        case['inputs'].extend([{'args':integrated_args[case['symbol']],
+                               'setup':integrated_setup(profile),'fakes':INTEGRATED_FAKES}
+                              for profile in profiles])

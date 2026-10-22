@@ -2,13 +2,15 @@
 
 Scope: the 97 xgameruntime.lib thunks listed in the thunk table below, plus the runtime start-up helpers around them.
 Sources: Ghidra pseudocode, disassembly and callgraph in analysis/iw6mp64_MSStore_ship, and the IIDs and .rdata read
-from the original exe with pefile. Nothing was run, and no service was contacted. The names are in records/names.tsv
+from the original exe with pefile. Reconstructed functions are now executed against the original in an emulator
+with modeled OS and SDK providers; no service is contacted. The names are in records/names.tsv
 (method `gdk-thunk`); docs/network.md puts them in context.
 
 ## Summary
 
 - **All 97 thunks are named; none is left `sub_<VA>`.** Confidence: 12 at 0.95, 14 at 0.9, 47 at 0.85, 13 at 0.8,
-  1 at 0.75, 7 at 0.7, 3 at 0.6. Five runtime helpers outside the table are also named (see the end of records/names.tsv).
+  1 at 0.75, 7 at 0.7, 3 at 0.6. Five runtime helpers outside the table also have behavior identifications.
+  The three internal helpers retain `sub_<VA>` source names because their original names are unknown.
 - **The 13 interfaces.** Each thunk calls `QueryApiImpl(&familyIID, &versionIID, &api)`. The IID in the thunk table below is
   the *version* IID, the second argument. Families: XUser 01ACD177 has two versions (079415E3 and CEF4FAC0), XGameSave
   704C3F58-...6FE2 / ...6EE2, XStore 0DD112AC / 5C48DEDF, XNetworking 37E56907 / BF2346B2, XPackage AF406016 / E2A4734B,
@@ -273,3 +275,50 @@ Callers are the full list from callgraph.tsv. Labels: (TaskManager) game 14045Fx
 | 1406AEE74 | XGameRuntime_QueryApi (xgameruntime.lib internal) | 0.9 | QueryApiImpl(&familyIID,&versionIID,&api); maps REGDB_E_CLASSNOTREG to 0x89240107 "XGameRuntime is missing required dependencies" |
 | 1406AF4BC | XGameRuntimeInitialize | 0.9 | tail-calls 1406AEC18(0); first call in GDK_Init 1401A1930 which shows "Game Runtime is not installed..." on 0x89240101/0x89240102 |
 | 1406AF52C | XGameRuntimeUninitialize | 0.9 | calls UninitializeApiImpl, clears the resolved pointers and FreeLibrary; last call of GDK_Shutdown 1401A1A30 |
+
+## Reconstructed runtime and account boundary
+
+`src/_external/gdk/xgameruntime.cpp` reconstructs the three internal helpers,
+public runtime initialization/cleanup, the thread guard, title ID and feature
+queries, `XUserAddAsync`, and `XUserGetTokenAndSignatureAsync`.
+`src/win32/gdk.cpp` reconstructs game startup 1401A1930. Its original name and
+source path remain unknown; the descriptive file groups this game-side code.
+
+The loader caches `xgameruntime.dll`, using `LoadLibraryExA` flag 0x800.
+Initialization resolves five exports under an SRW lock and accepts either the
+legacy initializer or its Ex variant. Missing required exports return
+0x89240101, as does load failure. The older descriptive missing-export value
+0x89240102 is not the value in this binary. Implicit initialization requires
+Ex; an explicit call after implicit initialization runs the initializer again.
+The Ex call forwards full 64-bit flags with bit 1 set. A negative result invokes
+`DebugBreak` only when the original shared-user-data debugger bits are both set.
+
+Interface lookup preserves provider HRESULTs except for 0x80040154, translated
+to 0x89240107 with the repair diagnostic. A failed lookup can leave the output
+unchanged. Successful thunks invoke their observed COM slot and release the
+interface even if that method fails. The title query calls the thread guard
+first but does not abort when that separate query fails. Token arguments use an
+explicit lowered Win64 forwarding contract: the original copies stack qwords,
+so this header does not assert a complete SDK source prototype.
+
+Game startup handles runtime/title failures before initializing config, the
+GDK task set, gamesave, users, events, store, presence and sessions in order.
+The title string uses signed `_itoa` behavior even for a title ID above INT_MAX.
+
+`tests/differential/test_gdk.py` contains 1,273 comparisons across these 11
+functions. These include 56 cases that connect reconstructed startup, runtime
+lookup and COM thunks; only OS imports, DLL exports and interface providers are
+modeled. No DLL is loaded and no vendor connection is made by the tests.
+
+P0007 overrides loading, initialization, interface lookup, cleanup and game
+startup in `enhanced/`. Entry points return unavailable (HRESULT 0x89240100),
+lookup clears a supplied output pointer, and game startup returns false without
+config, title, tasks, services or error dialogs. Cleanup clears runtime fields
+without calling SDK callbacks or OS imports, preserving the lock and padding.
+This is for offline startup, not unloading an already running SDK: it does not
+release preexisting vendor resources or coordinate live SDK threads.
+
+The five reconstructed thunks inherit the actual enhanced lookup guard, including
+account addition and token/signature requests. Other original thunks and original
+call sites are not redirected by this source-linking step. Full executable
+integration, all remaining SDK paths, and the custom dedicated server are pending.

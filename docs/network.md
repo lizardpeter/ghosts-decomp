@@ -342,3 +342,17 @@ reconstructed factory. `test_services_offline.py` rejects dependency calls from
 each enhanced entry point and checks that it cannot return an old vendor object.
 The source override is for a reconstruction started offline, not runtime teardown
 of SDK objects already owned by an original running process.
+
+## GDK startup, sign-in and token boundary
+
+P0007 adds six enhanced overrides at the reconstructed GDK runtime boundary and
+game startup. They prevent these source-linked paths from loading the runtime,
+resolving SDK exports or obtaining Xbox interfaces. Reconstructed account-add
+and token/signature thunks run through the enhanced lookup guard and return
+unavailable without starting an async operation. No completion is fabricated.
+Title and feature queries also fail without SDK access, and game startup skips
+all GDK subsystem initialization. See docs/gdk.md for faithful behavior and tests.
+
+This extends P0005/P0006 offline startup. Unreconstructed original call sites,
+HTTP providers, remaining SDK thunks and packet transport still need work; this
+is not a claim of whole-game isolation or a working standalone executable.
