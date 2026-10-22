@@ -139,3 +139,34 @@ outside the C++ by-value `netadr_s` calling contract used in these tests.
 The PS4-host reference has a different `netadr_s` layout (handle index at +0x10 rather
 than the Store build's +0x0C). Store verification does not establish equivalence to that
 server build; its differing layout and dependencies need their own reconstruction.
+
+## Receive and handle ownership
+
+`dwRecvFrom` (1405A9740) asks router slot +0x40 whether it is ready. Only the
+exact state 1 reaches receive at slot +0x58; otherwise it returns -9. A nonpositive
+receive result is returned unchanged, releasing any handle that the router provided.
+A positive result without a handle is also returned unchanged.
+
+A positive result with a handle runs the Store build's inlined registration:
+
+1. Search for an equivalent registered handle. Equivalence takes precedence over an
+   earlier empty slot, so a received sender keeps its existing index.
+2. If none matches, use the first empty slot. When the table is full, unregister the
+   entry with the smallest **unsigned** lifetime; ties keep the first entry.
+3. Raise the selected entry's lifetime to at least 6600. Registration retains a table
+   reference; the receive routine releases its temporary references separately.
+4. Remove the first two transport bytes, then derive the sender's IPv4 address and
+   port from its real address. The header's contents are not validated here.
+
+`dwUnregisterAddrHandle` (1405A9EA0) gives the router a borrowed reference to the table
+entry, pumps the router, then takes critical section 0x21, releases the current table
+handle and zeros all 16 bytes of the entry. It rereads the entry after the router calls,
+which matters if those calls update the table. `sub_1405A8980` maps router states 1
+and 2 to game statuses 0 and 1; other router states become 2. The reserved local index
+is immediately status 1 without consulting the router.
+
+The SDK address getters use Win64 hidden return buffers. `include/dw/sdk_abi.h`
+expresses that ABI for hybrid calls without claiming complete SDK class layouts.
+Receive tests exercise unregister together with receive and compare packet buffers,
+address outputs, ownership counts, table selection, lifetime updates and call order.
+B0051 records the original's unchecked one-byte transport result for an enhanced fix.

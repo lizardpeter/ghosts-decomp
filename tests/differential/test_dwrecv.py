@@ -137,5 +137,10 @@ for ready in (-1, 0, 1, 2, 3):
         inputs.append({'args': [bytes([0xA5])*16, bytes([0xCC])*1280, 1280],
                        'setup': _receive_setup('equal0', ready, -9, False, router, len(inputs)+120)})
 
+for size, result in ((0, 0), (1, 0), (2, 2), (3, 3), (64, 64), (1024, 1024)):
+    for has_received in (False, True):
+        inputs.append({'args': [bytes([0x5A])*16, bytes([0xCC])*max(1, size), size],
+                       'setup': _receive_setup('empty2', 1, result, has_received, True, len(inputs)+120)})
+
 CASES = [{'symbol': '?dwRecvFrom@@YAHQEAUnetadr_s@@QEAXI@Z', 'build': STORE,
           'ret': 'int', 'fakes': RECV_FAKES, 'inputs': inputs}]
