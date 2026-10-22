@@ -221,3 +221,14 @@ failed or empty registration. The current caller then forwards the invalid handl
 index. `test_win_net_common.py` exercises that caller with injected SDK failures,
 alongside its existing isolated cases. `dwGetAddressMap` (1405DA000) is reconstructed
 separately and checks both the singleton and router before obtaining the map.
+
+The lifetime pass at `sub_1405A8790` holds critical section 0x21 and captures the
+unsigned local handle index as its entry count. It decrements a lifetime only
+when the entry has a handle and the lifetime is nonzero. Empty entries retain
+stale lifetime values, and zero does not wrap to FFFFFFFF. Entry +12 is untouched.
+
+`sub_1405A87E0` clears one nonlocal entry's lifetime under the same lock. It does
+not require a nonnull handle or an index below the active count. B0053 records
+its unchecked write; current-caller reachability of an invalid index remains
+unestablished. `test_dwlifetime.py` compares table writes and lock calls against
+the Store binary, including writes above the active count within mapped storage.

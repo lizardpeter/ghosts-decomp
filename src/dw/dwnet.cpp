@@ -51,6 +51,31 @@ unsigned int sub_1405A8AD0()
     return localHandleIndex;
 }
 
+// Store 1405A8790: age occupied entries once, without wrapping a zero lifetime.
+void sub_1405A8790()
+{
+    Sys_EnterCriticalSection((CriticalSection)0x21);
+    const unsigned int count = (unsigned int)localHandleIndex;
+    for (unsigned int index = 0; index < count; ++index)
+    {
+        DwHandleEntry *entry = &addressHandles[index];
+        if (entry->handle && entry->lifetime)
+            --entry->lifetime;
+    }
+    Sys_LeaveCriticalSection((CriticalSection)0x21);
+}
+
+// Store 1405A87E0: clear a nonlocal lifetime; the original does not validate the index.
+void sub_1405A87E0(const netadr_s *adr)
+{
+    if ((int)adr->addrHandleIndex != localHandleIndex)
+    {
+        Sys_EnterCriticalSection((CriticalSection)0x21);
+        addressHandles[adr->addrHandleIndex].lifetime = 0;
+        Sys_LeaveCriticalSection((CriticalSection)0x21);
+    }
+}
+
 // Store 1405A9C80. Sys_SendPacket supplies its checksum-framed bytes here.
 // Router methods consume the temporary handle references passed to them by value.
 int dwSendTo(unsigned int length, const void *data, netadr_s to)
