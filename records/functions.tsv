@@ -407,3 +407,6 @@ iw6mp64_MSStore_ship	1405A9C80	matches	src/dw/dwnet.cpp	tests/differential/test_
 iw6mp64_MSStore_ship	1405A9E50	matches	src/dw/dwnet.cpp	tests/differential/test_dwnet.py; Store original vs reconstruction; mutation caught; vendor/SDK callees modeled, no live network
 iw6mp64_MSStore_ship	1405DA910	matches	src/dw/dwutils.cpp	tests/differential/test_dwnet.py; Store original vs reconstruction; mutation caught; vendor/SDK callees modeled, no live network
 iw6_ds_ps4	140297230	typed		Store-only dwSendTo reconstruction: server netadr_s handle is at +0x10 versus Store +0x0C, and its globals differ; reference source/inputs pending; do not claim this compiled export matches
+iw6mp64_MSStore_ship	1405A8980	decompiled	src/dw/dwnet.cpp	Store disassembly; explicit connection-state differential cases pending
+iw6mp64_MSStore_ship	1405A9EA0	decompiled	src/dw/dwnet.cpp	Store disassembly; explicit unregister/ownership differential cases pending
+iw6_ds_ps4	1402974E0	typed		Store-only unregister reconstruction; table symbols/layout not reconstructed for this reference; do not claim compiled export matches

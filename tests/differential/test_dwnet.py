@@ -16,9 +16,11 @@ SEND = '?dwSendTo@@YAHIPEBXUnetadr_s@@@Z'
 GETTER = '?sub_1405A8AD0@@YAIXZ'
 TOUCH = '?sub_1405A9E50@@YAXPEBUnetadr_s@@@Z'
 # Mapped game-function addresses are used as fake virtual slots, never executed.
-STATE_STUB = '?sub_1405A8980@@YAHPEBUnetadr_s@@@Z'
-SEND_STUB = '?dwRecvFrom@@YAHQEAUnetadr_s@@QEAXI@Z'
+STATE_STUB = '?sub_14054F8D0@@YAHXZ'
+SEND_STUB = '?sub_14054F950@@YAHXZ'
 DESTROY_STUB = '?sub_1405AA0B0@@YA_NPEAUnetadr_s@@@Z'
+PUMP_STUB = '?sub_14054F8E0@@YA_NPEBUXNADDR@@PEBUnetadr_s@@@Z'
+UNREGISTER_STUB = '?sub_14054F2E0@@YA_NPEBI@Z'
 M = {}
 
 
@@ -103,9 +105,11 @@ def _setup(local, index=0, count=1, present=True, router=True, state=2, result=1
         replacement = handle + 0x20
         w.write(handle, struct.pack('<QiI', handle_vtable, count, 0))
         w.write(replacement, struct.pack('<QiI', handle_vtable, count, 0))
-        vtable = [0] * 11
+        vtable = [0] * 12
+        vtable[4] = va(PUMP_STUB)
+        vtable[7] = va(UNREGISTER_STUB)
         vtable[9], vtable[10] = va(STATE_STUB), va(SEND_STUB)
-        router_vtable = w.alloc(struct.pack('<11Q', *vtable))
+        router_vtable = w.alloc(struct.pack('<12Q', *vtable))
         M['router'] = w.alloc(struct.pack('<Q', router_vtable)) if router else 0
         M['entry'] = static('dw/dwnet.cpp', 'addressHandles') + index * 16
         M['replacement'] = replacement
@@ -174,4 +178,46 @@ CASES.append({
     'inputs': [{'args': [], 'setup': _accessor_setup(instance, router)}
                for instance in (0, 1, 0x12345678, 0x123456789ABCDEF0, 0xFFFFFFFFFFFFFFFF)
                for router in (0, 1, 0x100001234, 0x123456789ABCDEF0, 0xFFFFFFFFFFFFFFFF)],
+})
+
+
+# Connection status observes all router states and verifies the local fast path.
+CASES.append({
+    'symbol': '?sub_1405A8980@@YAHPEBUnetadr_s@@@Z', 'build': STORE, 'ret': 'int', 'fakes': FAKES,
+    'inputs': [{'args': [struct.pack('<I4sHHi', 4, b'\x7F\0\0\1', 27016, 0, index)],
+                'setup': _setup(4, index, count, present, router, state, replace=replace)}
+               for index in (-1, 0, 3, 4, 5, 0x7FFFFFFF)
+               for state in (0, 1, 2, 3, 4, -1)
+               for count, present, router, replace in
+               ((0, True, True, False), (1, True, True, False), (2, True, True, True),
+                (1, False, True, False), (1, True, False, False))],
+})
+
+
+def _format_address(mu):
+    _log('format', mu.reg_read(UC_X86_REG_RCX) & 0xFFFFFFFF, mu.reg_read(UC_X86_REG_R8))
+    return 0
+
+
+def _unregister(mu):
+    entry = mu.reg_read(UC_X86_REG_RDX)
+    _log('unregister', mu.reg_read(UC_X86_REG_RCX), entry, _u64(mu, entry))
+    # The original reads the table again after the router has run.
+    if M['replace']:
+        M['m']._emulated_write(entry, struct.pack('<Q', M['replacement']))
+
+
+def _pump(mu):
+    _log('pump', mu.reg_read(UC_X86_REG_RCX))
+
+
+CASES.append({
+    'symbol': '?dwUnregisterAddrHandle@@YAXI@Z', 'build': STORE, 'ret': 'void',
+    'fakes': {**FAKES, '?dwAddrIndexToAddrString@@YA_NHQEAD_K@Z': _format_address,
+              UNREGISTER_STUB: _unregister, PUMP_STUB: _pump},
+    'inputs': [{'args': [index], 'setup': _setup(4, index, count, present, router, replace=replace)}
+               for index in range(8) for count in (0, 1, 2, 100)
+               for present, router, replace in ((False, False, False), (False, True, False),
+                                                (True, False, False), (True, True, False),
+                                                (True, True, True))],
 })

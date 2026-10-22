@@ -110,3 +110,67 @@ void sub_1405A9E50(const netadr_s *adr)
         Sys_LeaveCriticalSection((CriticalSection)0x21);
     }
 }
+
+// Store 1405A8980: maps the router's connection state to the game's task status.
+// Original name unknown. A local address is complete without consulting the router.
+int sub_1405A8980(const netadr_s *adr)
+{
+    const int index = (int)adr->addrHandleIndex;
+    Sys_EnterCriticalSection((CriticalSection)0x21);
+    if (index == localHandleIndex)
+    {
+        Sys_LeaveCriticalSection((CriticalSection)0x21);
+        return 1;
+    }
+    void *router = dwGetSocketRouter();
+    void *handle = nullptr;
+    Sys_EnterCriticalSection((CriticalSection)0x21);
+    if (index >= 0 && index < localHandleIndex)
+    {
+        dwSanityCheckAddressHandle(index, nullptr);
+        handle = addressHandles[index].handle;
+        if (handle)
+            Retain(handle);
+    }
+    Sys_LeaveCriticalSection((CriticalSection)0x21);
+    int result = 2;
+    if (router && handle)
+    {
+        void *stateHandle = handle;
+        Retain(handle);
+        const int state = RouterState(router, &stateHandle);
+        if (state == 1)
+            result = 0;
+        else if (state == 2)
+            result = 1;
+    }
+    Sys_LeaveCriticalSection((CriticalSection)0x21);
+    if (handle)
+        Release(handle);
+    return result;
+}
+
+bool dwAddrIndexToAddrString(int index, char *const buffer, unsigned long long size);
+
+// Store 1405A9EA0 (PS4 PDB dw/dwnet.cpp: dwUnregisterAddrHandle).
+// Router slot +0x38 borrows the table entry; unlike send/state it does not consume
+// a temporary reference. It runs before the game takes the table's lock.
+void dwUnregisterAddrHandle(unsigned int index)
+{
+    char address[32];
+    dwAddrIndexToAddrString((int)index, address, sizeof(address));
+    void *router = dwGetSocketRouter();
+    DwHandleEntry *entry = &addressHandles[index];
+    if (router && entry->handle)
+    {
+        ((void (*)(void *, void **))(*(void ***)router)[7])(router, &entry->handle);
+        ((void (*)(void *))(*(void ***)router)[4])(router);
+    }
+    Sys_EnterCriticalSection((CriticalSection)0x21);
+    if (entry->handle)
+        Release(entry->handle);
+    entry->handle = nullptr;
+    entry->lifetime = 0;
+    entry->unknown = 0;
+    Sys_LeaveCriticalSection((CriticalSection)0x21);
+}
