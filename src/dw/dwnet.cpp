@@ -5,6 +5,7 @@
 #include <iw6_static.h>
 #include "qcommon/qcommon.h"
 #include "dw/dwnet.h"
+#include "dw/sdk_abi.h"
 
 #define IW6_SOURCE "dw/dwnet.cpp"
 
@@ -173,4 +174,101 @@ void dwUnregisterAddrHandle(unsigned int index)
     entry->lifetime = 0;
     entry->unknown = 0;
     Sys_LeaveCriticalSection((CriticalSection)0x21);
+}
+
+
+void dwUnregisterAddrHandle(unsigned int index);
+struct in_addr;
+void NET_InAddrToIpAddr(const in_addr *in, unsigned char *const out);
+
+// Store 1405A9740. Registration is inlined here in this build: find an equal
+// handle, otherwise the first empty entry, otherwise evict the oldest lifetime.
+// The original strips two bytes without validating that a positive result is >=2.
+int dwRecvFrom(netadr_s *const from, void *const buffer, unsigned int bufferSize)
+{
+    Sys_EnterCriticalSection((CriticalSection)0x21);
+    int result = -9;
+    void *router = dwGetSocketRouter();
+    if (router && ((int (*)(void *))(*(void ***)router)[8])(router) == 1)
+    {
+        void *received = nullptr;
+        result = ((int (*)(void *, void **, void *, unsigned int))(*(void ***)router)[11])
+            (router, &received, buffer, bufferSize);
+        if (result > 0)
+        {
+            if (!received)
+            {
+                Sys_LeaveCriticalSection((CriticalSection)0x21);
+                return result;
+            }
+            Retain(received);
+            Sys_EnterCriticalSection((CriticalSection)0x21);
+            unsigned int index = 0;
+            unsigned int firstFree = ~0u;
+            unsigned int oldest = ~0u;
+            bool foundFree = false;
+            for (;; ++index)
+            {
+                if (index >= (unsigned int)localHandleIndex)
+                {
+                    index = firstFree;
+                    if (!foundFree)
+                    {
+                        index = (int)oldest < 0 ? 0 : oldest;
+                        dwUnregisterAddrHandle(index);
+                    }
+                    DwHandleEntry &entry = addressHandles[(int)index];
+                    if (entry.handle)
+                        Release(entry.handle);
+                    entry.handle = received;
+                    Retain(received);
+                    break;
+                }
+                void *other = addressHandles[index].handle;
+                bool equal = false;
+                if (!other)
+                {
+                    if (!foundFree)
+                    {
+                        foundFree = true;
+                        firstFree = index;
+                    }
+                }
+                else
+                {
+                    equal = DwAddrHandleEqual(received, other);
+                    if ((int)oldest < 0 || addressHandles[index].lifetime < addressHandles[(int)oldest].lifetime)
+                        oldest = index;
+                }
+                if (equal)
+                    break;
+            }
+            if (addressHandles[(int)index].lifetime < 6600)
+                addressHandles[(int)index].lifetime = 6600;
+            Sys_LeaveCriticalSection((CriticalSection)0x21);
+            Release(received);
+            result -= 2;
+            memmove(buffer, (unsigned char *)buffer + 2, (unsigned long long)(long long)result);
+
+            alignas(8) unsigned char realAddress[136];
+            alignas(8) unsigned char internetAddress[144];
+            void *real = DwGetRealAddr(received, realAddress);
+            void *inet = sub_14073ED40(real);
+            void *sockaddr = DwGetInAddr(inet, internetAddress);
+            unsigned int ip4 = *(const unsigned int *)sockaddr;
+            DwDestroyInetAddr(realAddress);
+            NET_InAddrToIpAddr((const in_addr *)&ip4, from->ip);
+
+            alignas(8) unsigned char portAddress[136];
+            real = DwGetRealAddr(received, portAddress);
+            from->port = DwGetPort(real);
+            DwDestroyInetAddr(portAddress);
+            from->addrHandleIndex = index;
+            from->type = NA_IP;
+        }
+        if (received)
+            Release(received);
+    }
+    Sys_LeaveCriticalSection((CriticalSection)0x21);
+    return result;
 }

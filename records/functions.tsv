@@ -410,3 +410,5 @@ iw6_ds_ps4	140297230	typed		Store-only dwSendTo reconstruction: server netadr_s 
 iw6mp64_MSStore_ship	1405A8980	decompiled	src/dw/dwnet.cpp	Store disassembly; explicit connection-state differential cases pending
 iw6mp64_MSStore_ship	1405A9EA0	decompiled	src/dw/dwnet.cpp	Store disassembly; explicit unregister/ownership differential cases pending
 iw6_ds_ps4	1402974E0	typed		Store-only unregister reconstruction; table symbols/layout not reconstructed for this reference; do not claim compiled export matches
+iw6mp64_MSStore_ship	1405A9740	decompiled	src/dw/dwnet.cpp	Store disassembly: receive, inline registration, prefix removal and address conversion; differential verification pending
+iw6_ds_ps4	140296BB0	typed		Store-only receive reconstruction; reference address layout and SDK/table dependencies differ; reference implementation not claimed
