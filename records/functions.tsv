@@ -402,3 +402,6 @@ iw6_ds_ps4	1402F41D0	decompiled	src/gfx_d3d/r_rendercmds.cpp	Store-build reconst
 iw6_ds_ps4	1402F4280	decompiled	src/gfx_d3d/r_rendercmds.cpp	Store-build reconstruction (tested against the Store build); the server's GfxBackEndData layout differs (drawType at 0x1280, not 0x151448) and the original faults on auto inputs
 iw6_ds_ps4	1402F42A0	decompiled	src/gfx_d3d/r_rendercmds.cpp	Store-build reconstruction (tested against the Store build); the server's GfxBackEndData layout differs (drawType at 0x1280, not 0x151448) and the original faults on auto inputs
 iw6_ds_ps4	1402F42C0	decompiled	src/gfx_d3d/r_rendercmds.cpp	Store-build reconstruction (tested against the Store build); the server's GfxBackEndData layout differs (drawType at 0x1280, not 0x151448) and the original faults on auto inputs
+iw6mp64_MSStore_ship	1405A8AD0	decompiled	src/dw/dwnet.cpp	authored from Store disassembly; differential verification pending
+iw6mp64_MSStore_ship	1405A9C80	decompiled	src/dw/dwnet.cpp	authored from Store disassembly; differential verification pending
+iw6mp64_MSStore_ship	1405A9E50	decompiled	src/dw/dwnet.cpp	authored from Store disassembly; differential verification pending
