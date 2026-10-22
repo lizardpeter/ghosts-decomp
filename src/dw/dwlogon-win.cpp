@@ -9,7 +9,7 @@ int sub_1405F3D10(unsigned int attempt, int maximum);
 extern "C" int _wcsicmp(const wchar_t *, const wchar_t *);
 
 // Store 14019A930: 0 offline/suppressed, 1 pending, 2 state 14.
-unsigned char sub_14019A930(int controller)
+int sub_14019A930(int controller)
 {
     if (!dwLogonSuppressed && dwLogonEntries[controller].state)
         return dwLogonEntries[controller].state == 14 ? 2 : 1;

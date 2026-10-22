@@ -429,3 +429,9 @@ iw6mp64_MSStore_ship	14019A9A0	decompiled	src/dw/dwlogon-win.cpp	Store logon rec
 iw6mp64_MSStore_ship	1405D9F10	decompiled	src/dw/dwutils.cpp	Store logon reconstruction; verification pending
 iw6mp64_MSStore_ship	1405D9F30	decompiled	src/dw/dwutils.cpp	Store logon reconstruction; verification pending
 iw6mp64_MSStore_ship	1405DA070	decompiled	src/dw/dwutils.cpp	Store logon reconstruction; verification pending
+iw6_ds_ps4	1402B7900	typed		Store-only login reconstruction; reference platform, hosts and static storage differ; no reference implementation or matching claim
+iw6_ds_ps4	1402B8070	typed		Store-only login reconstruction; reference platform, hosts and static storage differ; no reference implementation or matching claim
+iw6_ds_ps4	1402B81D0	typed		Store-only login reconstruction; reference platform, hosts and static storage differ; no reference implementation or matching claim
+iw6mp64_MSStore_ship	1405D3D40	decompiled	src/dw/dwframe.cpp	Store frame login driver; verification pending
+iw6mp64_MSStore_ship	1405D3DC0	decompiled	src/dw/dwframe.cpp	Store frame login driver; verification pending
+iw6_ds_ps4	1402B6C90	typed		Store-only backend frame driver; reference platform and static storage differ; no reference matching claim

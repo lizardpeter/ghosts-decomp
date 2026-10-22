@@ -774,7 +774,7 @@ iw6mp64_MSStore_ship	1407679D0	function	?sub_1407679D0@@YAPEAXPEAX@Z	sub_1407679
 iw6mp64_MSStore_ship	1405DA000	function	?dwGetAddressMap@@YAPEAVbdAddressMap@@XZ	dwGetAddressMap	dw/dwutils.cpp	pdb-code	0.95	PS4 PDB dwGetAddressMap 1402BAC10; Store calls singleton 1405AA190, getSocketRouter 1407679E0 and getAddressMap 1407754B0 with null gates, confirming matcher
 iw6mp64_MSStore_ship	1405A8790	function	?sub_1405A8790@@YAXXZ	sub_1405A8790	dw/dwnet.cpp	unnamed	0	name unknown: critical section 0x21; captured unsigned localHandleIndex bounds 16-byte table scan; decrement occupied nonzero lifetimes at entry+8
 iw6mp64_MSStore_ship	1405A87E0	function	?sub_1405A87E0@@YAXPEBUnetadr_s@@@Z	sub_1405A87E0	dw/dwnet.cpp	unnamed	0	name unknown: compare netadr_s+0x0C with localHandleIndex; otherwise lock 0x21 and clear lifetime at 149F7F2C8 + unsigned index*16 without bounds check
-iw6mp64_MSStore_ship	14019A930	function	?sub_14019A930@@YAEH@Z	sub_14019A930	dw/dwlogon-win.cpp	unnamed	0	status query at entry+0, suppressed by byte 140DF23D4; 0/1/2, state14 complete
+iw6mp64_MSStore_ship	14019A930	function	?sub_14019A930@@YAHH@Z	sub_14019A930	dw/dwlogon-win.cpp	unnamed	0	status query at entry+0, suppressed by byte 140DF23D4; 0/1/2, state14 complete; DW_Frame consumes 32-bit EAX result
 iw6mp64_MSStore_ship	14019A960	function	?sub_14019A960@@YA_NH@Z	sub_14019A960	dw/dwlogon-win.cpp	unnamed	0	one-controller busy query; excludes requested controller; unsigned state-4 <=9 except state8
 iw6mp64_MSStore_ship	14019ADA0	function	?dwLogOnStart@@YAXH@Z	dwLogOnStart	dw/dwlogon-win.cpp	pdb-code	0.85	PS4 PDB cross-build caller match corroborated: readiness/busy gates; Sys_Milliseconds and retry delay; state1 at stride24
 iw6mp64_MSStore_ship	14019AE70	function	?sub_14019AE70@@YAXXZ	sub_14019AE70	dw/dwlogon-win.cpp	unnamed	0	zero qword 140DF23D8 and sixteen bytes 140DF23E0, leaves resolver pointers untouched
@@ -801,3 +801,8 @@ iw6mp64_MSStore_ship	14074ABA0	function	?sub_14074ABA0@@YAPEAXPEAXIPEBDG@Z	sub_1
 iw6mp64_MSStore_ship	14074ACF0	function	?sub_14074ACF0@@YAXPEAX@Z	sub_14074ACF0		unnamed	0	name unknown: auth destructor called before deallocate by 1405D9F30
 iw6mp64_MSStore_ship	14A022470	data	iw6s@dw/dwutils.cpp@@authBusy	authBusy	dw/dwutils.cpp	disassembly	0.9	descriptive name, original unknown: two adjacent bytes read by 1405D9F10
 iw6mp64_MSStore_ship	14A022480	data	iw6s@dw/dwutils.cpp@@authClient	authClient	dw/dwutils.cpp	disassembly	0.9	descriptive name, original unknown: auth cache read/set by 1405DA070 and destroyed by 1405D9F30
+iw6mp64_MSStore_ship	1405D3D40	function	?DW_Frame@@YAXH@Z	DW_Frame	dw/dwframe.cpp	pdb-code	0.9	PS4 PDB dw/dwframe.cpp; Store calls the identified login status/start/step and lobby pump in corresponding branches
+iw6mp64_MSStore_ship	1405D3DC0	function	?sub_1405D3DC0@@YAXE@Z	sub_1405D3DC0	dw/dwframe.cpp	unnamed	0	name unknown: store low argument byte to automatic-logon inhibit flag 149FE1950
+iw6mp64_MSStore_ship	1405F47D0	function	?sub_1405F47D0@@YAHXZ	sub_1405F47D0		unnamed	0	name unknown: returns zero in Store; DW_Frame tests EAX as initial gate
+iw6mp64_MSStore_ship	1405F4630	function	?sub_1405F4630@@YAXH@Z	sub_1405F4630		unnamed	0	name unknown: DW_Frame invokes after lobby pump while connected, controller passed in ECX
+iw6mp64_MSStore_ship	149FE1950	data	iw6s@dw/dwframe.cpp@@inhibitLogon	inhibitLogon	dw/dwframe.cpp	disassembly	0.9	descriptive name, original unknown: byte suppresses automatic start in DW_Frame; written by 1405D3DC0
