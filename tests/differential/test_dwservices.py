@@ -203,7 +203,7 @@ CASES = [
 ]
 for symbol in (CONTENT, COUNTER, DML, GROUP):
     CASES.append({'symbol': symbol, 'build': STORE, 'ret': 'int64',
-                  'fakes': SERVICE_FAKES, 'inputs': service_inputs})
+                  'fakes': SERVICE_FAKES, 'inputs': [dict(inp) for inp in service_inputs]})
 
 # Service getters and pump with the reconstructed factory, including callback cache replacement.
 INTEGRATED_FAKES = {k: v for k, v in PUMP_FAKES.items() if k != LOBBY}

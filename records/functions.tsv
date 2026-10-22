@@ -436,23 +436,23 @@ iw6mp64_MSStore_ship	1405D3D40	matches	src/dw/dwframe.cpp	Store original vs reco
 iw6mp64_MSStore_ship	1405D3DC0	matches	src/dw/dwframe.cpp	Store original vs reconstruction: test_dwlogon.py, 18 explicit cases; behavior-changing mutations caught (inhibit byte value); SDK/platform boundaries modeled, no live network
 iw6_ds_ps4	1402B6C90	typed		Store-only backend frame driver; reference platform and static storage differ; no reference matching claim
 iw6_ds_ps4	1402B78D0	typed		Store-only status reconstruction; reference uses different logon state storage; no reference matching claim
-iw6mp64_MSStore_ship	1405D9FD0	decompiled	src/dw/dwutils.cpp	Store service lifecycle reconstruction; verification pending
+iw6mp64_MSStore_ship	1405D9FD0	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 8 explicit cases; behavior-changing mutations caught (active slot distinct from construction cache); SDK boundaries modeled, no live network
 iw6_ds_ps4	1402BAC00	typed		Store-only service reconstruction; reference static storage and platform differ; no reference matching claim
-iw6mp64_MSStore_ship	1405DA470	decompiled	src/dw/dwutils.cpp	Store service lifecycle reconstruction; verification pending
+iw6mp64_MSStore_ship	1405DA470	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 144 explicit cases; behavior-changing mutations caught (controller3 handler admission and cache reread after registration); SDK boundaries modeled, no live network
 iw6_ds_ps4	1402BAE50	typed		Store-only service reconstruction; reference static storage and platform differ; no reference matching claim
-iw6mp64_MSStore_ship	1405DAA30	decompiled	src/dw/dwutils.cpp	Store service lifecycle reconstruction; verification pending
+iw6mp64_MSStore_ship	1405DAA30	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 12 explicit cases; behavior-changing mutations caught (SDK ready state); SDK boundaries modeled, no live network
 iw6_ds_ps4	1402BB390	typed		Store-only service reconstruction; reference static storage and platform differ; no reference matching claim
-iw6mp64_MSStore_ship	1405DA130	decompiled	src/dw/dwutils.cpp	Store service lifecycle reconstruction; verification pending
+iw6mp64_MSStore_ship	1405DA130	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 300 explicit cases; behavior-changing mutations caught (content result; 108 factory-integration cases); SDK boundaries modeled, no live network
 iw6_ds_ps4	1402BAD20	typed		Store-only service reconstruction; reference static storage and platform differ; no reference matching claim
-iw6mp64_MSStore_ship	1405DA150	decompiled	src/dw/dwutils.cpp	Store service lifecycle reconstruction; verification pending
+iw6mp64_MSStore_ship	1405DA150	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 300 explicit cases; behavior-changing mutations caught (counter connection gate; 108 factory-integration cases); SDK boundaries modeled, no live network
 iw6_ds_ps4	1402BAD40	typed		Store-only service reconstruction; reference static storage and platform differ; no reference matching claim
-iw6mp64_MSStore_ship	1405DA190	decompiled	src/dw/dwutils.cpp	Store service lifecycle reconstruction; verification pending
+iw6mp64_MSStore_ship	1405DA190	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 300 explicit cases; behavior-changing mutations caught (DML result; 108 factory-integration cases); SDK boundaries modeled, no live network
 iw6_ds_ps4	1402BAD80	typed		Store-only service reconstruction; reference static storage and platform differ; no reference matching claim
-iw6mp64_MSStore_ship	1405DA1D0	decompiled	src/dw/dwutils.cpp	Store service lifecycle reconstruction; verification pending
+iw6mp64_MSStore_ship	1405DA1D0	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 300 explicit cases; behavior-changing mutations caught (group connection gate; 108 factory-integration cases); SDK boundaries modeled, no live network
 iw6_ds_ps4	1402BADA0	typed		Store-only service reconstruction; reference static storage and platform differ; no reference matching claim
-iw6mp64_MSStore_ship	1405DBF40	decompiled	src/dw/dwutils.cpp	Store service lifecycle reconstruction; verification pending
+iw6mp64_MSStore_ship	1405DBF40	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 828 explicit cases; behavior-changing mutations caught (lobby reacquisition and activity value; 108 factory-integration cases); SDK boundaries modeled, no live network
 iw6_ds_ps4	1402BCBB0	typed		Store-only service reconstruction; reference static storage and platform differ; no reference matching claim
-iw6mp64_MSStore_ship	1405DBFD0	decompiled	src/dw/dwutils.cpp	Store service lifecycle reconstruction; verification pending
-iw6mp64_MSStore_ship	1405DBFF0	decompiled	src/dw/dwutils.cpp	Store service lifecycle reconstruction; verification pending
-iw6mp64_MSStore_ship	1405DC010	decompiled	src/dw/dwutils.cpp	Store service lifecycle reconstruction; verification pending
-iw6mp64_MSStore_ship	1405DC020	decompiled	src/dw/dwutils.cpp	Store service lifecycle reconstruction; verification pending
+iw6mp64_MSStore_ship	1405DBFD0	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 16 explicit cases; behavior-changing mutations caught (state reset value); SDK boundaries modeled, no live network
+iw6mp64_MSStore_ship	1405DBFF0	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 9 explicit cases; behavior-changing mutations caught (first auth-busy flag only); SDK boundaries modeled, no live network
+iw6mp64_MSStore_ship	1405DC010	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 18 explicit cases; behavior-changing mutations caught (request flag before cleanup); SDK boundaries modeled, no live network
+iw6mp64_MSStore_ship	1405DC020	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwservices.py, 90 explicit cases; behavior-changing mutations caught (reason before cleanup); SDK boundaries modeled, no live network
