@@ -1,0 +1,149 @@
+"""Store dwnet boundary: modeled router, no network or vendor service is contacted.
+
+The router consumes the by-value bdReference arguments. Observe the lock nesting,
+refresh requests, intrusive counts, packet contents and router results independently
+for the original and reconstruction. Unknown SDK types remain opaque in source.
+"""
+import random
+import struct
+
+from unicorn.x86_const import UC_X86_REG_RCX, UC_X86_REG_RDX, UC_X86_REG_R8, UC_X86_REG_R9
+
+from syms import static
+
+STORE = 'iw6mp64_MSStore_ship'
+SEND = '?dwSendTo@@YAHIPEBXUnetadr_s@@@Z'
+GETTER = '?sub_1405A8AD0@@YAIXZ'
+TOUCH = '?sub_1405A9E50@@YAXPEBUnetadr_s@@@Z'
+# Mapped game-function addresses are used as fake virtual slots, never executed.
+STATE_STUB = '?sub_1405A8980@@YAHPEBUnetadr_s@@@Z'
+SEND_STUB = '?dwRecvFrom@@YAHQEAUnetadr_s@@QEAXI@Z'
+DESTROY_STUB = '?sub_1405AA0B0@@YA_NPEAUnetadr_s@@@Z'
+M = {}
+
+
+def _u64(mu, p):
+    return struct.unpack('<Q', bytes(mu.mem_read(p, 8)))[0]
+
+
+def _i32(mu, p):
+    return struct.unpack('<i', bytes(mu.mem_read(p, 4)))[0]
+
+
+def _log(*items):
+    M['m'].observed.append(items)
+
+
+def _lock(mu):
+    _log('enter', mu.reg_read(UC_X86_REG_RCX) & 0xFFFFFFFF)
+
+
+def _unlock(mu):
+    _log('leave', mu.reg_read(UC_X86_REG_RCX) & 0xFFFFFFFF)
+
+
+def _router(mu):
+    _log('router')
+    return M['router']
+
+
+def _refresh(mu):
+    _log('refresh', mu.reg_read(UC_X86_REG_RCX) & 0xFFFFFFFF, mu.reg_read(UC_X86_REG_RDX))
+    if M['replace']:
+        M['m']._emulated_write(M['entry'], struct.pack('<Q', M['replacement']))
+
+
+def _consume(mu, operation):
+    router, reference = mu.reg_read(UC_X86_REG_RCX), mu.reg_read(UC_X86_REG_RDX)
+    handle = _u64(mu, reference)
+    count = _i32(mu, handle + 8)
+    _log(operation, router, handle, count)
+    M['m']._emulated_write(handle + 8, struct.pack('<I', (count - 1) & 0xFFFFFFFF))
+    return handle
+
+
+def _state(mu):
+    _consume(mu, 'state')
+    return M['state']
+
+
+def _send(mu):
+    _consume(mu, 'send')
+    data, n = mu.reg_read(UC_X86_REG_R8), mu.reg_read(UC_X86_REG_R9) & 0xFFFFFFFF
+    _log('packet', n, bytes(mu.mem_read(data, n)))
+    return M['result']
+
+
+def _destroy(mu):
+    handle, flags = mu.reg_read(UC_X86_REG_RCX), mu.reg_read(UC_X86_REG_RDX) & 0xFFFFFFFF
+    _log('destroy', handle, flags, _i32(mu, handle + 8))
+
+
+FAKES = {
+    '?Sys_EnterCriticalSection@@YAXW4CriticalSection@@@Z': _lock,
+    '?Sys_LeaveCriticalSection@@YAXW4CriticalSection@@@Z': _unlock,
+    '?sub_1405DA910@@YAPEAXXZ': _router,
+    '?sub_1405A9A90@@YAXHPEAX@Z': _refresh,
+    STATE_STUB: _state,
+    SEND_STUB: _send,
+    DESTROY_STUB: _destroy,
+}
+
+
+def _setup(local, index=0, count=1, present=True, router=True, state=2, result=123,
+           replace=False, lifetimes=None):
+    def setup(w):
+        from syms import va
+        M.clear()
+        M.update(m=w.m, state=state, result=result, replace=replace)
+        handle_vtable = w.alloc(struct.pack('<Q', va(DESTROY_STUB)))
+        # Image-backed fake objects make final reference-count writes part of the
+        # harness's compared global state, including paths with no destructor.
+        handle = static('dw/dwnet.cpp', 'addressHandles') + 0x1000
+        replacement = handle + 0x20
+        w.write(handle, struct.pack('<QiI', handle_vtable, count, 0))
+        w.write(replacement, struct.pack('<QiI', handle_vtable, count, 0))
+        vtable = [0] * 11
+        vtable[9], vtable[10] = va(STATE_STUB), va(SEND_STUB)
+        router_vtable = w.alloc(struct.pack('<11Q', *vtable))
+        M['router'] = w.alloc(struct.pack('<Q', router_vtable)) if router else 0
+        M['entry'] = static('dw/dwnet.cpp', 'addressHandles') + index * 16
+        M['replacement'] = replacement
+        w.u32(static('dw/dwnet.cpp', 'localHandleIndex'), local)
+        for i in range(8):
+            value = (lifetimes or [11, 22, 33, 44, 55, 66, 77, 88])[i]
+            w.write(static('dw/dwnet.cpp', 'addressHandles') + 16*i,
+                    struct.pack('<QII', handle if present else 0, value, 0xAABBCCDD))
+    return setup
+
+
+def _send_inputs():
+    out = []
+    r = random.Random(0xD06)
+    # Explicit Cartesian boundaries: lengths include the exact 1262-byte admission limit.
+    for index in (-1, 0, 3, 4, 0x7FFFFFFF):
+        for state in (0, 1, 2, 3, 4, -1):
+            for length in (0, 1, 2, 1261, 1262, 1263, 0xFFFFFFFF):
+                data = r.randbytes(min(length, 1263)) or b'\0'
+                adr = struct.pack('<I4sHHi', 4, b'\x0A\x00\x00\x01', 27016, 0, index)
+                out.append({'args': [length, data, adr], 'setup': _setup(4, index, state=state)})
+    for count in (0, 1, 2, 100):
+        for present, router, replace in ((True, False, False), (False, True, False),
+                                         (True, True, False), (True, True, True)):
+            for result in (-10, -7, -6, -2, 0, 1, 1264):
+                out.append({'args': [3, b'abc', struct.pack('<4I', 4, 0, 0, 2)],
+                            'setup': _setup(4, 2, count, present, router, 2, result, replace)})
+    return out
+
+
+_r = random.Random(0x8AD0)
+CASES = [
+    {'symbol': SEND, 'build': STORE, 'ret': 'int', 'fakes': FAKES, 'inputs': _send_inputs()},
+    {'symbol': GETTER, 'build': STORE, 'ret': 'int',
+     'inputs': [{'args': [], 'setup': _setup(v)} for v in
+                [0, 1, 4, -1, 0x7FFFFFFF, -0x80000000] + [_r.getrandbits(32) for _ in range(40)]]},
+    {'symbol': TOUCH, 'build': STORE, 'ret': 'void', 'fakes': FAKES,
+     'inputs': [{'args': [struct.pack('<4I', 4, 0, 0, index)],
+                 'setup': _setup(local, index, lifetimes=[_r.getrandbits(32) for _ in range(8)])}
+                for local in (0, 1, 3, 7) for index in range(8)]},
+]

@@ -57,16 +57,16 @@ unsigned int sub_1405A8AD0()
 int dwSendTo(unsigned int length, const void *data, netadr_s to)
 {
     Sys_EnterCriticalSection((CriticalSection)0x21);
-    void *handle = NULL;
+    void *handle = nullptr;
     void *router;
     const netadr_s *adr = &to;
-    // The original also accepts a null ABI-level pointer for this by-value 16-byte struct.
-    // Ordinary C++ callers always supply a struct; no additional source-level null branch is needed.
+    // The original checks its ABI-level aggregate pointer for null; ordinary C++ callers
+    // always supply the by-value struct. Null aggregate pointers are outside this source contract.
     const int index = (int)adr->addrHandleIndex;
     Sys_EnterCriticalSection((CriticalSection)0x21);
     if (index >= 0 && index < localHandleIndex)
     {
-        sub_1405A9A90(index, NULL);
+        sub_1405A9A90(index, nullptr);
         handle = addressHandles[index].handle;
         if (handle)
             Retain(handle);
