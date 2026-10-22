@@ -82,8 +82,8 @@ def _destroy(mu):
 FAKES = {
     '?Sys_EnterCriticalSection@@YAXW4CriticalSection@@@Z': _lock,
     '?Sys_LeaveCriticalSection@@YAXW4CriticalSection@@@Z': _unlock,
-    '?sub_1405DA910@@YAPEAXXZ': _router,
-    '?sub_1405A9A90@@YAXHPEAX@Z': _refresh,
+    '?dwGetSocketRouter@@YAPEAVbdSocketRouter@@XZ': _router,
+    '?dwSanityCheckAddressHandle@@YAXHPEAVbdSocketRouter@@@Z': _refresh,
     STATE_STUB: _state,
     SEND_STUB: _send,
     DESTROY_STUB: _destroy,
@@ -147,3 +147,31 @@ CASES = [
                  'setup': _setup(local, index, lifetimes=[_r.getrandbits(32) for _ in range(8)])}
                 for local in (0, 1, 3, 7) for index in range(8)]},
 ]
+
+
+# Exercise dwGetSocketRouter independently: neither fake initializes the SDK.
+def _instance(mu):
+    _log('instance')
+    return M['instance']
+
+
+def _get_router(mu):
+    _log('getSocketRouter', mu.reg_read(UC_X86_REG_RCX))
+    return M['router']
+
+
+def _accessor_setup(instance, router):
+    def setup(w):
+        M.clear()
+        M.update(m=w.m, instance=instance, router=router)
+    return setup
+
+
+CASES.append({
+    'symbol': '?dwGetSocketRouter@@YAPEAVbdSocketRouter@@XZ', 'build': STORE, 'ret': 'int64',
+    'fakes': {'?getInstance@?$bdSingleton@VbdNetImpl@@@@SAPEAVbdNetImpl@@XZ': _instance,
+              '?getSocketRouter@bdNetImpl@@QEAAPEAVbdSocketRouter@@XZ': _get_router},
+    'inputs': [{'args': [], 'setup': _accessor_setup(instance, router)}
+               for instance in (0, 1, 0x12345678, 0x123456789ABCDEF0, 0xFFFFFFFFFFFFFFFF)
+               for router in (0, 1, 0x100001234, 0x123456789ABCDEF0, 0xFFFFFFFFFFFFFFFF)],
+})

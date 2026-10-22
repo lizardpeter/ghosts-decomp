@@ -4,6 +4,7 @@
 #include <string.h>
 #include <iw6_static.h>
 #include "qcommon/qcommon.h"
+#include "dw/dwnet.h"
 
 #define IW6_SOURCE "dw/dwnet.cpp"
 
@@ -17,9 +18,6 @@ static_assert(sizeof(DwHandleEntry) == 16, "Store address table stride");
 IW6_STATIC int localHandleIndex IW6_AT("", "localHandleIndex");
 IW6_STATIC DwHandleEntry addressHandles[] IW6_AT("", "addressHandles");
 
-// Router accessor and address refresh: original names/types are not identified yet.
-void *sub_1405DA910();
-void sub_1405A9A90(int index, void *router);
 extern "C" long _InterlockedIncrement(long volatile *addend);
 extern "C" long _InterlockedExchangeAdd(long volatile *addend, long value);
 
@@ -66,13 +64,13 @@ int dwSendTo(unsigned int length, const void *data, netadr_s to)
     Sys_EnterCriticalSection((CriticalSection)0x21);
     if (index >= 0 && index < localHandleIndex)
     {
-        sub_1405A9A90(index, nullptr);
+        dwSanityCheckAddressHandle(index, nullptr);
         handle = addressHandles[index].handle;
         if (handle)
             Retain(handle);
     }
     Sys_LeaveCriticalSection((CriticalSection)0x21);
-    router = sub_1405DA910();
+    router = dwGetSocketRouter();
     int result = -7;
     if (handle && router)
     {

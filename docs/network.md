@@ -110,3 +110,32 @@ UDP stays as it is, with the fixes in records/bugs.tsv.
   - `gethostbyname` for names;
   - the SOCKS5 handshake when `net_socksEnabled` is set.
 
+
+## Packet submission contract for a replacement transport
+
+The Store sender `dwSendTo` (1405A9C80, `src/dw/dwnet.cpp`) is below `Sys_SendPacket`:
+
+- `Sys_SendPacket` has already appended the two-byte checksum. `dwSendTo` adds another
+  two-byte **little-endian length** prefix before passing those bytes to the router.
+- Its input admission limit is 1262 bytes, including the checksum supplied by its caller.
+  The router therefore receives at most 1264 bytes. This envelope is distinct from the
+  game protocol carried inside it; an independent UDP implementation must explicitly
+  decide which transport envelope its peer expects.
+- It refreshes the destination's address handle under critical section 0x21. Router
+  state 2 permits submission; state 1 returns zero without sending; other states return
+  -10. A missing handle or router returns -7; an oversized connected send returns -6.
+- Router calls receive temporary intrusive handle references and consume them. The
+  sender releases its own retained reference after leaving the outer critical section.
+  Dropping the router requires replacing handle ownership and connection state too.
+- `dwGetSocketRouter` (1405DA910, PS4 PDB `dw/dwutils.cpp:440`) obtains the `bdNetImpl`
+  singleton, returning null on failure or the instance's socket router otherwise.
+
+`tests/differential/test_dwnet.py` compares returns, image-backed reference counts,
+address-table writes, lock order, refresh calls and transmitted bytes with the Store
+executable. SDK operations are faked: these tests do not initialize Demonware or contact
+any network. The original's raw null pointer for an ABI-level aggregate argument is
+outside the C++ by-value `netadr_s` calling contract used in these tests.
+
+The PS4-host reference has a different `netadr_s` layout (handle index at +0x10 rather
+than the Store build's +0x0C). Store verification does not establish equivalence to that
+server build; its differing layout and dependencies need their own reconstruction.
