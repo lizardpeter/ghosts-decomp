@@ -412,6 +412,6 @@ iw6mp64_MSStore_ship	1405A9EA0	matches	src/dw/dwnet.cpp	Store original vs recons
 iw6_ds_ps4	1402974E0	typed		Store-only unregister reconstruction; table symbols/layout not reconstructed for this reference; do not claim compiled export matches
 iw6mp64_MSStore_ship	1405A9740	matches	src/dw/dwnet.cpp	Store original vs reconstruction: explicit test_dwnet/test_dwrecv cases and mutation checks; SDK boundary modeled, receive/unregister exercised together
 iw6_ds_ps4	140296BB0	typed		Store-only receive reconstruction; reference address layout and SDK/table dependencies differ; reference implementation not claimed
-iw6mp64_MSStore_ship	1405AA0B0	decompiled	src/dw/dwnet.cpp	Store disassembly: IP clearing, local-address special case and handle-derived address; differential verification pending
-iw6mp64_MSStore_ship	1405A9A90	decompiled	src/dw/dwnet.cpp	Store disassembly and PS4 PDB: state-3 lookup, state-2 replacement and intrusive ownership; differential verification pending
+iw6mp64_MSStore_ship	1405AA0B0	matches	src/dw/dwnet.cpp	Store original vs reconstruction: test_dwaddress.py explicit cases; test_dwnet_reconnect.py integrated sender cases; behavior-changing mutations caught; SDK boundary modeled
+iw6mp64_MSStore_ship	1405A9A90	matches	src/dw/dwnet.cpp	Store original vs reconstruction: test_dwaddress.py explicit cases; test_dwnet_reconnect.py integrated sender cases; behavior-changing mutations caught; SDK boundary modeled
 iw6_ds_ps4	140297020	typed		Store-only handle refresh reconstruction; reference table layout/symbols not reconstructed; no reference matching claim

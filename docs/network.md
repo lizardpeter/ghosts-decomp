@@ -170,3 +170,26 @@ expresses that ABI for hybrid calls without claiming complete SDK class layouts.
 Receive tests exercise unregister together with receive and compare packet buffers,
 address outputs, ownership counts, table selection, lifetime updates and call order.
 B0051 records the original's unchecked one-byte transport result for an enhanced fix.
+
+## Stale handles and address recovery
+
+`dwSanityCheckAddressHandle` (1405A9A90) is called by the packet sender and status
+queries before reading a table entry. It uses a supplied router, or obtains one when
+the argument is null. Invalid indices and empty entries return without changing the
+table. It does not acquire a lock itself; callers provide the table lock.
+
+For router state 3, it looks up a replacement using the old handle's endpoint common
+address and security ID. Only replacement state 2 is admitted to the table. On
+admission it releases the current table reference, retains the replacement for the
+table, and clears the entry's four-byte field at +12. Its retained old handle and the lookup's
+output reference are released separately. The lookup consumes its temporary common
+address reference. Tests cover failed lookups that still provide an output reference,
+null candidates, candidates aliasing the old handle, and table changes during a call.
+
+`sub_1405AA0B0` clears the address's IPv4 bytes before checking its type or index. For
+a populated nonlocal IP entry it obtains the real address, copies the port and IPv4
+bytes, and balances its handle reference. The reserved local index becomes loopback.
+An empty in-range IP slot still returns success, with zero IPv4 bytes and the previous
+port; an out-of-range index or non-IP type returns failure. These are original
+behaviors, not enhanced policies. Sender/refresh tests exercise the implementations
+together so a future transport override can preserve the caller-facing contract.
