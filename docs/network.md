@@ -193,3 +193,31 @@ An empty in-range IP slot still returns success, with zero IPv4 bytes and the pr
 port; an out-of-range index or non-IP type returns failure. These are original
 behaviors, not enhanced policies. Sender/refresh tests exercise the implementations
 together so a future transport override can preserve the caller-facing contract.
+
+## Serialized common-address conversion
+
+`sub_1405A8300` converts the serialized common address and security ID into a
+`netadr_s`. The existing `sub_14054FC70` caller supplies the first 8 bytes of its
+input as the security ID and the following 37 bytes as the serialized descriptor.
+The SDK performs deserialization; the reconstruction preserves the game-side
+control flow and ownership around that boundary.
+
+For a nonnull output, housekeeping runs before the output is zeroed and its handle
+index is set to FFFFFFFF. Missing local-common-address or address-map state returns
+failure. Deserialization consumes a temporary local-address reference. The decoded
+common-address object is reference counted and released separately from any handle
+returned by registration.
+
+A loopback descriptor gets the reserved local handle index. Its raw port defaults
+to 0C03 and is replaced by the local network address's port when the network
+instance exists. For a nonloopback descriptor, successful registration uses the
+same equality/free-slot/oldest-entry selection as receive, with lifetime at least
+6600. A newly inserted handle requests a router connection. An existing equivalent
+handle requests connection only in router state 3. Address extraction uses the
+handle after the connection call, including any change to that reference.
+
+B0052 records the original's success return after successful deserialization but
+failed or empty registration. The current caller then forwards the invalid handle
+index. `test_win_net_common.py` exercises that caller with injected SDK failures,
+alongside its existing isolated cases. `dwGetAddressMap` (1405DA000) is reconstructed
+separately and checks both the singleton and router before obtaining the map.
