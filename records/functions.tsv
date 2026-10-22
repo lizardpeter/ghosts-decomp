@@ -419,3 +419,13 @@ iw6mp64_MSStore_ship	1405A8300	matches	src/dw/dwnet.cpp	Store original vs recons
 iw6mp64_MSStore_ship	1405DA000	matches	src/dw/dwutils.cpp	Store original vs reconstruction: test_dwcommon.py; original caller in test_win_net_common.py; behavior-changing mutations caught; SDK boundary modeled
 iw6mp64_MSStore_ship	1405A8790	matches	src/dw/dwnet.cpp	Store original vs reconstruction: test_dwlifetime.py explicit cases; behavior-changing mutations caught (occupied/nonzero/bound and local-skip/clear-value); lock calls and table writes compared; no live network
 iw6mp64_MSStore_ship	1405A87E0	matches	src/dw/dwnet.cpp	Store original vs reconstruction: test_dwlifetime.py explicit cases; behavior-changing mutations caught (occupied/nonzero/bound and local-skip/clear-value); lock calls and table writes compared; no live network
+iw6mp64_MSStore_ship	14019A930	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
+iw6mp64_MSStore_ship	14019A960	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
+iw6mp64_MSStore_ship	14019ADA0	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
+iw6mp64_MSStore_ship	14019AE70	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
+iw6mp64_MSStore_ship	14019AE90	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
+iw6mp64_MSStore_ship	14019AEE0	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
+iw6mp64_MSStore_ship	14019A9A0	decompiled	src/dw/dwlogon-win.cpp	Store logon reconstruction; verification pending
+iw6mp64_MSStore_ship	1405D9F10	decompiled	src/dw/dwutils.cpp	Store logon reconstruction; verification pending
+iw6mp64_MSStore_ship	1405D9F30	decompiled	src/dw/dwutils.cpp	Store logon reconstruction; verification pending
+iw6mp64_MSStore_ship	1405DA070	decompiled	src/dw/dwutils.cpp	Store logon reconstruction; verification pending
