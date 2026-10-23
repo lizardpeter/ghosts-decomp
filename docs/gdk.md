@@ -324,12 +324,36 @@ config, title, tasks, services or error dialogs. Cleanup clears runtime fields
 without calling SDK callbacks or OS imports, preserving the lock and padding.
 This is for offline startup, not unloading an already running SDK: it does not
 release preexisting vendor resources or coordinate live SDK threads.
-All six individual override removals make `test_gdk_offline.py` fail. Its five
+All six individual override removals make `test_gdk_offline.py` fail. Its
 tests reject runtime/SDK calls, exercise empty and poisoned cached state, verify
-output clearing and preserved fields, and run the five inherited thunks through
+output clearing and preserved fields, and run inherited thunks through
 the actual enhanced interface lookup.
 
-The five reconstructed thunks inherit the actual enhanced lookup guard, including
-account addition and token/signature requests. Other original thunks and original
+The fifteen reconstructed thunks inherit the actual enhanced lookup guard, including
+account addition, results, account-repair UI and token/signature requests. Other original thunks and original
 call sites are not redirected by this source-linking step. Full executable
 integration, all remaining SDK paths, and the custom dedicated server are pending.
+
+## Account results and repair UI
+
+`test_gdk_user.py` verifies ten further wrappers: `XUserAddResult`,
+`XUserCheckPrivilege`, `XUserGetId`, `XUserGetState`, token/signature result and
+result-size retrieval, issue-resolution UI start/result and privilege-resolution
+UI start/result. Each retains the original XUser family/version pair and observed
+vtable slot. Query success includes positive HRESULTs, and a successful interface
+acquisition is released even when its method fails. Query failure leaves caller
+outputs untouched and invokes neither method nor release.
+
+The 540 comparisons include null outputs, full-width pointers and token buffer
+sizes, truncation of options/privileges to the observed 32-bit ABI, provider
+writes on method failure and 60 cases connected to the reconstructed runtime.
+The tests model interface providers and OS calls; they do not obtain actual user
+handles, credentials or tokens. These are forwarding-contract tests, not a claim
+to implement the provider's internal validation or asynchronous behavior.
+
+The enhanced tests run all ten through the actual P0007 lookup guard with empty
+and poisoned cached state. They require HRESULT 0x89240100 and unchanged outputs,
+without callbacks, UI, SDK entry or synthesized async completions. This extends
+the existing override through faithful calls; no additional API-specific override
+is needed. A future local identity/server implementation still needs its own
+explicit account, task and credential contract.

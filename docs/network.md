@@ -353,6 +353,13 @@ unavailable without starting an async operation. No completion is fabricated.
 Title and feature queries also fail without SDK access, and game startup skips
 all GDK subsystem initialization. See docs/gdk.md for faithful behavior and tests.
 
+The reconstructed result and repair entry points now share that guard as well:
+account-add results, user ID/state, privilege checks, token result sizes/data and
+both account/privilege repair UI pairs return unavailable without modifying
+caller buffers. Blocking a request alone is insufficient when an independent
+caller can retrieve credentials or initiate repair UI; these calls are tested
+separately through the same enhanced interface boundary.
+
 This extends P0005/P0006 offline startup. Unreconstructed original call sites,
 HTTP providers, remaining SDK thunks and packet transport still need work; this
 is not a claim of whole-game isolation or a working standalone executable.
