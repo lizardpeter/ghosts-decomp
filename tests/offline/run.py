@@ -30,7 +30,7 @@ def check():
         for slot, name in exe.iat.items():
             if name.startswith('recon.dll!'):
                 m.mu.mem_write(slot, struct.pack('<Q', dll.exports[name.split('!',1)[1]]))
-        assert len(manifest['guards']) == 31 and len(manifest['imports']) == 55
+        assert len(manifest['guards']) == 31 + len(package.VENDOR_TASKS) and len(manifest['imports']) == 55
         errors = []
         m.on_import('kernel32.dll!SetLastError', lambda mu: errors.append(mu.reg_read(UC_X86_REG_RCX)))
         m.on_import('ws2_32.dll!WSASetLastError', lambda mu: errors.append(mu.reg_read(UC_X86_REG_RCX)))
@@ -187,7 +187,7 @@ def check():
         assert all(not n.startswith(('winhttp.dll!','xcurl.dll!')) for n in exe.iat.values())
         assert package.sha((output/'iw6mp64_offline.exe').read_bytes()) == manifest['exe_sha256']
         assert exe.pe.verify_checksum()
-        print(f'PASS: 31 original guard entries; original account thunk; {tested} failure imports; dynamic loading, bootstrap, PE and refusal checks')
+        print(f'PASS: {len(manifest["guards"])} original guard entries; original account thunk; {tested} failure imports; dynamic loading, bootstrap, PE and refusal checks')
 
 
 if __name__ == '__main__':

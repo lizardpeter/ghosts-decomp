@@ -22,7 +22,7 @@ def main():
         directory=Path(temp)/'direct'
         manifest=package.package(original,dll_path,directory,mode='direct')
         assert manifest['mode']=='direct' and not manifest['game_join_verified']
-        assert len(manifest['guards'])==41 and len(manifest['imports'])==55
+        assert len(manifest['guards'])==31+len(package.VENDOR_TASKS)+len(package.DIRECT) and len(manifest['imports'])==55
         assert (directory/'LaunchDirect.ps1').exists() and not (directory/'ConfigureSandbox.ps1').exists()
         exe,dll=Image(directory/'iw6mp64_offline.exe'),Image(directory/'recon.dll')
         m=Machine(exe,dll)

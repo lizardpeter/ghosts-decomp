@@ -51,6 +51,7 @@ jobs:
           IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct
           IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
+          IW6_ORIGINALS=.work/originals python3 tests/offline/vendor_tasks.py
       - name: Generated files are current
         run: |
           python3 tools/status.py >/dev/null

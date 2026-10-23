@@ -24,6 +24,20 @@ import symbols
 BUILD = 'iw6mp64_MSStore_ship'
 MAGIC = b'IW6OFFLINE1\0\0\x01\0\0\0'
 PATCHES = {'P0005', 'P0006', 'P0007', 'P0008', 'P0010'}
+# Vendor integrity/reporting service boundaries, independent of game UDP.
+# These are startup-only removals, not successful integrity-response emulation.
+VENDOR_TASKS = {
+    0x1405F0A80: 'Iw6VendorTasksDisabled',  # LiveAntiCheat_Init
+    0x1405EFD60: 'Iw6VendorTasksDisabled',  # banCheck command / service query
+    0x1405F0AB0: 'Iw6VendorTasksDisabled',  # challenge queue ingestion
+    0x1405EFAC0: 'Iw6VendorChallengeUnavailable',  # memory-hash collector
+    0x1405F0D50: 'Iw6VendorChallengeUnavailable',  # challenge processing
+    0x1405F10E0: 'Iw6VendorTasksDisabled',  # pump
+    0x1405F1AB0: 'Iw6VendorTasksDisabled',  # validation-infraction reporting
+    0x1405F2230: 'Iw6VendorTasksDisabled',  # automatic update/query
+    0x1405F2280: 'Iw6VendorTasksDisabled',  # response blob construction
+    0x1405F24F0: 'Iw6VendorTasksDisabled',  # pending SDK submissions
+}
 # C exports adapt the reviewed Win64 ABI without claiming original source names.
 DIRECT = {
     0x14054F200: 'Iw6DirectInit',
@@ -153,6 +167,7 @@ def transform(original, dll_bytes, mode='offline'):
     targets = [(va, name) for va, name in guards() if name in exports]
     if len(targets) != 31 or len({va for va, _ in targets}) != 31:
         raise ValueError('missing or ambiguous guard symbols')
+    targets.extend(sorted(VENDOR_TASKS.items()))
     if mode == 'direct': targets.extend(sorted(DIRECT.items()))
     for va, symbol in targets:
         if symbol not in exports or functions[va] < 5: raise ValueError('invalid guard ' + symbol)
