@@ -35,3 +35,15 @@ extern "C" int XUserGetTokenAndSignatureAsync(void *user, unsigned int options,
     const char *method, const char *url, unsigned long long headerCount, const void *headers,
     unsigned long long bodySize, const void *body, void *async);
 bool sub_1401A1930();
+
+// Account/result forwarding observed in the Store binary; opaque SDK storage.
+extern "C" int XUserAddResult(void *async, void **user);
+extern "C" int XUserCheckPrivilege(void *user, unsigned int options, unsigned int privilege, bool *allowed, unsigned int *reason);
+extern "C" int XUserGetId(void *user, unsigned long long *id);
+extern "C" int XUserGetState(void *user, unsigned int *state);
+extern "C" int XUserGetTokenAndSignatureResult(void *async, unsigned long long size, void *buffer, void **tokenResult, unsigned long long *used);
+extern "C" int XUserGetTokenAndSignatureResultSize(void *async, unsigned long long *size);
+extern "C" int XUserResolveIssueWithUiAsync(void *user, const char *url, void *async);
+extern "C" int XUserResolveIssueWithUiResult(void *async);
+extern "C" int XUserResolvePrivilegeWithUiAsync(void *user, unsigned int options, unsigned int privilege, void *async);
+extern "C" int XUserResolvePrivilegeWithUiResult(void *async);

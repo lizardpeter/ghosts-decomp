@@ -1,6 +1,7 @@
 """P0007: no runtime DLL, Xbox interface, account or token work on these paths."""
 import struct
 import test_gdk as gdk
+import test_gdk_user as user
 from syms import static
 
 UNAVAILABLE = -0x76DBFF00  # HRESULT 0x89240100
@@ -95,3 +96,16 @@ def test_gdk_reconstructed_thunks_stop_at_actual_offline_query(env):
             assert value == expected and not writes and not observed, (symbol, value)
             if symbol == 'XGameGetXboxTitleId':
                 assert buffers[0] == b'TOLD'
+
+
+def test_gdk_account_results_and_repair_ui_stay_unavailable(env):
+    for mode in (0, 1):
+        for spec in user.SPECS:
+            symbol = spec[1]
+            for null in (False, True):
+                args = user.arguments(symbol, wide=True, null=null)
+                value, buffers, writes, observed = env.call(symbol, args, ret='int',
+                    setup=_setup(mode), fakes=_fakes(symbol, inherited=True))
+                expected_buffers = [a for a in args if isinstance(a, bytes)]
+                assert value == UNAVAILABLE and not writes and not observed, (symbol, value)
+                assert buffers == expected_buffers, (symbol, buffers)

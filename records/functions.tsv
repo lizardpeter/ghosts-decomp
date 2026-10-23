@@ -467,3 +467,13 @@ iw6mp64_MSStore_ship	1406AF4C4	matches	src/_external/gdk/xgameruntime.cpp	test_g
 iw6mp64_MSStore_ship	1406B1550	matches	src/_external/gdk/xgameruntime.cpp	test_gdk.py: 71 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
 iw6mp64_MSStore_ship	1406B1D00	matches	src/_external/gdk/xgameruntime.cpp	test_gdk.py: 55 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
 iw6mp64_MSStore_ship	1401A1930	matches	src/win32/gdk.cpp	test_gdk.py: 70 original/recon cases with modeled OS/SDK; 56 connected runtime/thunk/startup cases across batch; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	1406B15C8	decompiled	src/_external/gdk/xgameruntime.cpp	Account/result GDK forwarding reconstruction; verification pending
+iw6mp64_MSStore_ship	1406B1644	decompiled	src/_external/gdk/xgameruntime.cpp	Account/result GDK forwarding reconstruction; verification pending
+iw6mp64_MSStore_ship	1406B1B10	decompiled	src/_external/gdk/xgameruntime.cpp	Account/result GDK forwarding reconstruction; verification pending
+iw6mp64_MSStore_ship	1406B1C84	decompiled	src/_external/gdk/xgameruntime.cpp	Account/result GDK forwarding reconstruction; verification pending
+iw6mp64_MSStore_ship	1406B1DE0	decompiled	src/_external/gdk/xgameruntime.cpp	Account/result GDK forwarding reconstruction; verification pending
+iw6mp64_MSStore_ship	1406B1E8C	decompiled	src/_external/gdk/xgameruntime.cpp	Account/result GDK forwarding reconstruction; verification pending
+iw6mp64_MSStore_ship	1406B201C	decompiled	src/_external/gdk/xgameruntime.cpp	Account/result GDK forwarding reconstruction; verification pending
+iw6mp64_MSStore_ship	1406B20A8	decompiled	src/_external/gdk/xgameruntime.cpp	Account/result GDK forwarding reconstruction; verification pending
+iw6mp64_MSStore_ship	1406B2118	decompiled	src/_external/gdk/xgameruntime.cpp	Account/result GDK forwarding reconstruction; verification pending
+iw6mp64_MSStore_ship	1406B21B8	decompiled	src/_external/gdk/xgameruntime.cpp	Account/result GDK forwarding reconstruction; verification pending

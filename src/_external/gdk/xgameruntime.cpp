@@ -179,3 +179,123 @@ extern "C" int XUserGetTokenAndSignatureAsync(void *user, unsigned int options,
     }
     return result;
 }
+
+extern "C" int XUserAddResult(void *async, void **user)
+{
+    void *api;
+    int result = sub_1406AEE74(userFamily, userVersion, &api);
+    if (result >= 0)
+    {
+        result = ((int (*)(void *, void *, void **))(*(void ***)api)[8])(api, async, user);
+        ReleaseApi(api);
+    }
+    return result;
+}
+
+extern "C" int XUserCheckPrivilege(void *user, unsigned int options, unsigned int privilege, bool *allowed, unsigned int *reason)
+{
+    void *api;
+    int result = sub_1406AEE74(userFamily, userVersion, &api);
+    if (result >= 0)
+    {
+        result = ((int (*)(void *, void *, unsigned int, unsigned int, bool *, unsigned int *))(*(void ***)api)[20])(api, user, options, privilege, allowed, reason);
+        ReleaseApi(api);
+    }
+    return result;
+}
+
+extern "C" int XUserGetId(void *user, unsigned long long *id)
+{
+    void *api;
+    int result = sub_1406AEE74(userFamily, userVersion, &api);
+    if (result >= 0)
+    {
+        result = ((int (*)(void *, void *, unsigned long long *))(*(void ***)api)[11])(api, user, id);
+        ReleaseApi(api);
+    }
+    return result;
+}
+
+extern "C" int XUserGetState(void *user, unsigned int *state)
+{
+    void *api;
+    int result = sub_1406AEE74(userFamily, userVersion, &api);
+    if (result >= 0)
+    {
+        result = ((int (*)(void *, void *, unsigned int *))(*(void ***)api)[14])(api, user, state);
+        ReleaseApi(api);
+    }
+    return result;
+}
+
+extern "C" int XUserGetTokenAndSignatureResult(void *async, unsigned long long size, void *buffer, void **tokenResult, unsigned long long *used)
+{
+    void *api;
+    int result = sub_1406AEE74(userFamily, userVersion, &api);
+    if (result >= 0)
+    {
+        result = ((int (*)(void *, void *, unsigned long long, void *, void **, unsigned long long *))(*(void ***)api)[25])(api, async, size, buffer, tokenResult, used);
+        ReleaseApi(api);
+    }
+    return result;
+}
+
+extern "C" int XUserGetTokenAndSignatureResultSize(void *async, unsigned long long *size)
+{
+    void *api;
+    int result = sub_1406AEE74(userFamily, userVersion, &api);
+    if (result >= 0)
+    {
+        result = ((int (*)(void *, void *, unsigned long long *))(*(void ***)api)[24])(api, async, size);
+        ReleaseApi(api);
+    }
+    return result;
+}
+
+extern "C" int XUserResolveIssueWithUiAsync(void *user, const char *url, void *async)
+{
+    void *api;
+    int result = sub_1406AEE74(userFamily, userVersion, &api);
+    if (result >= 0)
+    {
+        result = ((int (*)(void *, void *, const char *, void *))(*(void ***)api)[29])(api, user, url, async);
+        ReleaseApi(api);
+    }
+    return result;
+}
+
+extern "C" int XUserResolveIssueWithUiResult(void *async)
+{
+    void *api;
+    int result = sub_1406AEE74(userFamily, userVersion, &api);
+    if (result >= 0)
+    {
+        result = ((int (*)(void *, void *))(*(void ***)api)[30])(api, async);
+        ReleaseApi(api);
+    }
+    return result;
+}
+
+extern "C" int XUserResolvePrivilegeWithUiAsync(void *user, unsigned int options, unsigned int privilege, void *async)
+{
+    void *api;
+    int result = sub_1406AEE74(userFamily, userVersion, &api);
+    if (result >= 0)
+    {
+        result = ((int (*)(void *, void *, unsigned int, unsigned int, void *))(*(void ***)api)[21])(api, user, options, privilege, async);
+        ReleaseApi(api);
+    }
+    return result;
+}
+
+extern "C" int XUserResolvePrivilegeWithUiResult(void *async)
+{
+    void *api;
+    int result = sub_1406AEE74(userFamily, userVersion, &api);
+    if (result >= 0)
+    {
+        result = ((int (*)(void *, void *))(*(void ***)api)[22])(api, async);
+        ReleaseApi(api);
+    }
+    return result;
+}
