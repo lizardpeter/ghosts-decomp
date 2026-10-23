@@ -40,6 +40,10 @@ VENDOR_TASKS = {
 }
 # C exports adapt the reviewed Win64 ABI without claiming original source names.
 DIRECT = {
+    0x1401A7DB0: 'Iw6DirectPlayerName',
+    0x1401A7E10: 'Iw6DirectPlayerId',
+    0x14054C360: 'Iw6DirectPlayerId',
+    0x14054C0F0: 'Iw6DirectPlayerIdText',
     0x14054F200: 'Iw6DirectInit',
     0x14054F960: 'Iw6DirectGetPacket',
     0x14054FB70: 'Iw6DirectSendPacket',

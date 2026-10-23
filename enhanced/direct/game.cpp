@@ -1,9 +1,11 @@
 // P0012: Store-only bridge. Absolute state locations are pinned by the package
 // input hash; see docs/direct-connect.md for the disassembly evidence and limits.
 #include "transport.h"
+#include "profile.h"
 #include "qcommon/cmd.h"
 #include "qcommon/dvar.h"
 void Dvar_SetBool(const dvar_t *, bool);
+void Dvar_SetStringByName(const char *, const char *);
 
 namespace
 {
@@ -11,8 +13,27 @@ template<class T> T &State(unsigned long long address) { return *(T *)address; }
 cmd_function_s connectCommand;
 cmd_function_s listenCommand;
 cmd_function_s stopCommand;
+cmd_function_s playerCommand;
+cmd_function_s hostCommand;
 bool commandsRegistered;
 int lastResult;
+bool Identifier(const char *text, unsigned int maximum, unsigned int minimum)
+{
+    if (!text) return false;
+    unsigned int count = 0;
+    for (; text[count]; ++count)
+    {
+        const unsigned char c = (unsigned char)text[count];
+        if (count >= maximum || !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '_')) return false;
+    }
+    return count >= minimum;
+}
+bool ServerRunning()
+{
+    const dvar_t *running = State<const dvar_t *>(0x146A7D6C0);
+    return running && running->type == 0 && running->current.enabled;
+}
 bool LocalNetworkMode()
 {
     const dvar_t *online = State<const dvar_t *>(0x1442B98C8);
@@ -37,6 +58,7 @@ extern "C" int Iw6DirectBeginJoin(const char *endpoint)
     if (!State<unsigned char>(0x143E96821)) return lastResult = -2;
     if (State<int>(0x143E96890) >= 3) return lastResult = -3;
     if (!LocalNetworkMode()) return lastResult = -5;
+    if (!Iw6DirectPlayerId(0)) return lastResult = -9;
     if (!Iw6DirectOpen("0.0.0.0:0", 0) || !Iw6DirectSelectPeer(endpoint))
     { Iw6DirectClose(); return lastResult = -4; }
 
@@ -58,8 +80,47 @@ extern "C" int Iw6DirectBeginJoin(const char *endpoint)
     return lastResult = 1;
 }
 
+// Store SV_StartMap has an extra fourth boolean compared with the reference
+// prototype. Call the reviewed original ABI, preserving asset/entitlement checks.
+extern "C" int Iw6DirectHost(const char *bind, const char *map, const char *gametype)
+{
+    netadr_s address;
+    if (!Iw6DirectParse(bind, &address, 1) || !Identifier(map, 63, 3) ||
+        !Identifier(gametype, 31, 1)) return lastResult = -6;
+    if (!State<unsigned char>(0x143E96821)) return lastResult = -2;
+    if (State<int>(0x143E96890) >= 3 || ServerRunning()) return lastResult = -3;
+    if (!LocalNetworkMode()) return lastResult = -5;
+    if (!Iw6DirectPlayerId(0)) return lastResult = -9;
+    if (!Iw6DirectOpen(bind, 1)) return lastResult = -4;
+    Dvar_SetStringByName("g_gametype", gametype);
+    Dvar_SetStringByName("ui_gametype", gametype);
+    // Map startup may reject missing/unavailable content or fail before spawn.
+    // Result 3 means only that the request was made, not that a game is ready.
+    ((void (*)(LocalClientNum_t, const char *, bool, bool))0x1404BADC0)(LOCAL_CLIENT_0, map, true, false);
+    return lastResult = 3;
+}
+
 namespace
 {
+void ConfigurePlayer()
+{
+    if (Cmd_Argc() != 3) { lastResult = -1; return; }
+    if (State<int>(0x143E96890) >= 3 || ServerRunning()) { lastResult = -3; return; }
+    if (!Iw6DirectPlayerConfigure(Cmd_Argv(1), Cmd_Argv(2))) { lastResult = -9; return; }
+    const char *name = Iw6DirectPlayerName(0);
+    char *cache = (char *)0x149D59D34;
+    unsigned int i = 0;
+    for (; name[i] && i < 31; ++i) cache[i] = name[i];
+    cache[i] = 0;
+    State<unsigned long long>(0x149D59D58) = Iw6DirectPlayerId(0);
+    Dvar_SetStringByName("name", name);
+    lastResult = 4;
+}
+void Host()
+{
+    if (Cmd_Argc() != 4) { lastResult = -6; return; }
+    Iw6DirectHost(Cmd_Argv(1), Cmd_Argv(2), Cmd_Argv(3));
+}
 void Connect()
 {
     if (Cmd_Argc() != 2) { lastResult = -1; return; }
@@ -88,6 +149,8 @@ extern "C" void Iw6DirectInit()
     Cmd_AddCommandInternal("connect", Connect, &connectCommand);
     Cmd_AddCommandInternal("direct_listen", Listen, &listenCommand);
     Cmd_AddCommandInternal("direct_stop", Stop, &stopCommand);
+    Cmd_AddCommandInternal("direct_player", ConfigurePlayer, &playerCommand);
+    Cmd_AddCommandInternal("direct_host", Host, &hostCommand);
     commandsRegistered = true;
 }
 extern "C" bool Iw6DirectSendPacket(int length, const void *data, netadr_s to)

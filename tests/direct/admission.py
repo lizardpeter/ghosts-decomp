@@ -23,7 +23,7 @@ def main():
         m=Machine(exe,dll)
         for slot,name in exe.iat.items():
             if name.startswith('recon.dll!'):m.mu.mem_write(slot,struct.pack('<Q',dll.exports[name.split('!',1)[1]]))
-        fields={b'protocol':b'179',b'checksum':b'123',b'challenge':b'456',b'statver':b'1 2',b'qport':b'12345'}
+        fields={b'protocol':b'179',b'checksum':b'123',b'challenge':b'456',b'statver':b'1 2',b'qport':b'12345',b'xuid':b'123456789abcdef0'}
         info_area=SCRATCH+0x20000
         def info(mu):
             key=m.read_cstr(mu.reg_read(UC_X86_REG_RDX))
@@ -66,14 +66,14 @@ def main():
         address=struct.pack('<I4sH2xI',4,b'\x7f\0\0\1',0x8869,0xFFFFFFFF)
         def setup(online,valid_challenge=True):
             def apply(w):
-                argv=w.alloc(struct.pack('<QQQ',w.cstr(b'connect'),w.cstr(b'Player1'),w.cstr(b'\\protocol\\179')))
+                argv=w.alloc(struct.pack('<QQQ',w.cstr(b'connect'),w.cstr(b'123456789abcdef0'),w.cstr(b'\\protocol\\179')))
                 w.u32(0x1469CEDA0,0);w.u32(0x1469CEDE4,3);w.u64(0x1469CEE08,argv)
                 w.u32(0x149996FE8,123);w.u32(0x148928A8C,2)
                 for pointer,value in [(0x1442B98C8,online),(0x149997130,0),(0x146A7D6C0,1)]:
                     block=w.alloc(bytes(0x10)+struct.pack('<I',value)+bytes(0x40));w.u64(pointer,block)
                 w.write(0x149793C2C,address)
                 w.u32(0x149793C3C,456 if valid_challenge else 457)
-                w.write(0x149793C48,b'Player1\0')
+                w.write(0x149793C48,b'123456789abcdef0\0')
             return apply
         for online,valid in [(False,True),(True,True),(False,False)]:
             outcomes.clear()

@@ -1,6 +1,6 @@
 # Direct connect without vendor services
 
-P0012 adds an experimental direct profile for the pinned Store multiplayer build. It builds a DLL and a patched
+P0012/P0019 add an experimental direct profile for the pinned Store multiplayer build. It builds a DLL and a patched
 EXE copy, registers `connect IPv4:port`, and routes the original challenge request through independent UDP.
 **Entering a map and completing a multiplayer join are not yet verified or complete.** This is not a standalone
 source build: unreconstructed engine code still runs from the pinned original EXE. Neither function records nor
@@ -13,7 +13,11 @@ Use the same LLVM toolchain, Python, pefile and Unicorn dependencies as the othe
 ```sh
 IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct
 python3 tests/direct/transport.py
+python3 tests/direct/profile.py
 IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
+IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
+IW6_ORIGINALS=.work/originals python3 tests/direct/host.py
+IW6_ORIGINALS=.work/originals python3 tests/offline/vendor_tasks.py
 python3 tools/offline/package.py --mode direct \
   --original .work/originals/iw6mp64_MSStore_ship.exe \
   --output .work/direct-package
@@ -27,21 +31,35 @@ ordinary enhanced/offline profiles do not include `enhanced/direct/`. The execut
 The Windows launch experiment, with the original complete game installation available, is:
 
 ```powershell
-.\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -Connect '192.168.1.20:27016'
+.\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -Connect '192.168.1.20:27016' -PlayerName 'LocalPlayer'
+# Listen-server map-start experiment, not a verified headless dedicated server:
+.\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -HostEndpoint '0.0.0.0:27016' -Map 'mp_prison' -GameType 'war'
 ```
 
-This verifies package hashes and queues `+connect` after engine startup. Numeric IPv4 and a nonzero explicit
-port are required. The same command can be entered in a functioning game console. This launch script has not
+The launcher verifies package hashes, prepares a persistent local profile, then queues `direct_player` and
+`connect` or `direct_host` after engine startup. Use `-Profile one` / `-Profile two` for independent local
+profiles and data folders on one Windows account. Numeric IPv4 and a nonzero explicit
+port are required. In a functioning game console, first configure `direct_player <16-digit-hex-ID> "Player Name"`, then
+use `connect IP:port` or `direct_host bind-IP:port map gametype`. IDs must be nonzero; names are 1–31
+ASCII letters, digits, spaces, underscores or hyphens, without leading/trailing spaces. Profile changes
+are refused while connected or hosting. This launch script has not
 been executed on Windows here. Asset discovery, native DLL loading, graphics and menu entry remain unverified;
 only the pinned executables are present in the development test environment.
 
 ## What is connected
 
-The direct profile retains all 31 P0011 vendor guards and all 55 original import redirects. Original WinHTTP,
+The direct profile retains all 31 P0011 vendor guards, the ten P0018 vendor integrity/reporting guards,
+and all 55 original import redirects. See [vendor-disconnection.md](vendor-disconnection.md). Original WinHTTP,
 XCurl, GDK runtime loading, DNS, socket creation/sends and the selected account/reporting/process/broker paths
 remain unavailable. The replacement transport has private Winsock imports in the DLL; they do not go through
 the original IAT. Only this explicit opt-in profile opens game sockets. It is not run inside the network-disabled
 Sandbox, since that configuration also prevents reaching a custom server.
+
+Local IDs are custom-session identifiers, not vendor accounts or proof of authentication. No GDK handles
+are created and GDK initialization still reports unavailable. The launcher uses local cryptographic randomness
+for a first profile ID and retains it in `LOCALAPPDATA/GhostsDirect/<profile>/player.json`; this file is
+separate from game stats and progression. Cloud-save and full stats/profile lifecycle replacements remain
+incomplete. A server must not treat this self-asserted ID as an authorization credential.
 
 The Windows transport uses a nonblocking IPv4 datagram socket and a separate lock; the same transport source
 uses POSIX sockets in native Linux tests. No hostname resolution, TCP, SOCKS, NAT traversal or broadcast
@@ -72,6 +90,9 @@ original names where the original is unknown.
 | 1405A8830 | Report transport task readiness only after client peer selection |
 | 1405A8980 | Report readiness only for the selected endpoint |
 | 1405A9E50 / 1405A87E0 | Ignore DW lifetime-table updates; no DW handles exist |
+| 1401A7DB0 | Engine player-name view reads the local profile |
+| 1401A7E10 / 14054C360 | Engine ID getter reads the local profile |
+| 14054C0F0 | Engine ID-string view reads the local profile |
 
 Source-linked packet/handle callers use the same direct replacements. Address comparisons deliberately require
 matching ports too, including the entry tentatively named NET_CompareBaseAdr by the matcher. NAT rebinding,
@@ -98,7 +119,8 @@ remain to be reconstructed.
 ## Remaining path to a playable game
 
 - **Local identity and session ownership:** 140311570 still fills xuid/xnaddr, stats versions and related fields.
-  These need a local player/profile and custom session contract. Vendor login must stay unavailable, while
+  P0019 now supplies local name/ID views and tests the original challenge using that ID. Complete local
+  stats data and a custom session contract still need reconstruction. Vendor login must stay unavailable, while
   gameplay/UI readiness uses the replacement provider.
 - **Server admission and hosting:** SV_DirectConnect at 1404BC1D0 checks protocol, checksum, challenge and stats
   versions, then uses registered party/session membership. Its final rejection is
@@ -107,9 +129,12 @@ remain to be reconstructed.
   selects that branch. The probe models game VM callbacks and response serialization, so it does not establish
   that an actual player enters the map. Merely
   opening the listener does not populate a party or spawn a server.
-- **Map startup:** matched SV_StartMap at 1404BADC0 and SV_SpawnServer at 1404C2640 still need their complete
-  startup contracts checked, including assets, map/game settings and client/server lifecycle. No speculative
-  hard-coded map-start call has been inserted.
+- **Map startup:** `direct_host` opens the game listener, sets local-network mode and g_gametype/ui_gametype,
+  then calls the original SV_StartMap at 1404BADC0 with the Store four-argument ABI. Tests run its real map
+  normalization and preparation to the SV_SpawnServer boundary at 1404C2640. Asset checks and their rejection
+  path remain intact. World/asset loading, VM initialization, automatic local-player connection and map changes
+  still need native tests. Result 3 means a request was made, not that a playable server exists. This is a
+  listen-server startup experiment; renderer-free dedicated-server lifecycle remains separate work.
 - **Response, stats and gameplay:** the client connectionless handler at 1403129D0 handles challengeResponse,
   connectResponse, syncDataResponse and statResponse. In particular connectResponse still uses the data helper
   at 14018D6B0. Successful admission, gamestate, snapshot/usercmd exchange, disconnect/reconnect and map changes
@@ -139,3 +164,8 @@ valid protocol/checksum/challenge/stats fields and no party members. Local parsi
 game VM callbacks and response serialization are modeled. It checks that local-network mode assigns a free
 client slot and reaches the response boundary, that online mode refuses an unregistered client, and that a bad
 challenge is rejected before admission. This narrows the remaining work; it does not replace native validation.
+
+`tests/direct/host.py` runs the original map-start routine with modeled asset availability and local string
+helpers, stopping at SV_SpawnServer. It checks normalization and the missing-content rejection path. The
+Windows CI launcher test executes profile/argument preparation with Start-Process intercepted; it does not
+launch the EXE. Neither test substitutes for a native game with full assets.

@@ -48,9 +48,11 @@ jobs:
         if: steps.recon.outputs.any == '1'
         run: |
           python3 tests/direct/transport.py
+          python3 tests/direct/profile.py
           IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct
           IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
+          IW6_ORIGINALS=.work/originals python3 tests/direct/host.py
           IW6_ORIGINALS=.work/originals python3 tests/offline/vendor_tasks.py
       - name: Generated files are current
         run: |
@@ -58,3 +60,11 @@ jobs:
           python3 tools/graph/sync.py >/dev/null
           git diff --exit-code -- STATUS.md analysis/graph || {
             echo "::error::STATUS.md or analysis/graph is stale: run tools/status.py and tools/graph/sync.py"; exit 1; }
+
+  launchers:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Direct launcher preparation without executing a game
+        shell: pwsh
+        run: ./tests/direct/launcher.ps1
