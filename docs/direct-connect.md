@@ -82,6 +82,11 @@ peer migration and sharing a client identity across endpoints are not supported 
 now bind to 1469CECF0: `nesting` at +0, argc array at +44 hex, argv array at +68 hex, matching CmdArgs layout.
 This also removes a prior unresolved-data-to-zero binding from the DLL link.
 
+Before a direct join or listener opens, the bridge requires the initialized boolean `onlinegame` dvar and
+sets it to false through Dvar_SetBool (14053E7E0). This selects the engine's existing local-network admission
+and stats behavior; it does not grant a vendor session or report successful vendor authentication. Missing or
+unexpected dvar state is refused. Other UI/platform gates still need a local provider.
+
 The normal join initializer at 140311F70 writes the server address at 14416A10C, qport at 14416A100, retry time
 at 14416A11C and count at 14416A120 before setting connection state 3 at 143E96890. The direct command performs
 this limited transition only after the engine's normal local-client initialization flag at 143E96821 is set,
@@ -97,8 +102,10 @@ remain to be reconstructed.
   gameplay/UI readiness uses the replacement provider.
 - **Server admission and hosting:** SV_DirectConnect at 1404BC1D0 checks protocol, checksum, challenge and stats
   versions, then uses registered party/session membership. Its final rejection is
-  EXE_ERR_UNREGISTERED_CONNECTION. There is also an original local-network admission branch when `onlinegame`
-  is false; this needs testing as a potential way to reuse engine admission without vendor membership. Merely
+  EXE_ERR_UNREGISTERED_CONNECTION. The original local-network admission branch when `onlinegame`
+  is false reaches the response boundary in the admission probe with no party membership; direct mode now
+  selects that branch. The probe models game VM callbacks and response serialization, so it does not establish
+  that an actual player enters the map. Merely
   opening the listener does not populate a party or spawn a server.
 - **Map startup:** matched SV_StartMap at 1404BADC0 and SV_SpawnServer at 1404C2640 still need their complete
   startup contracts checked, including assets, map/game settings and client/server lifecycle. No speculative
@@ -126,3 +133,9 @@ Only local formatting and scratch allocation are modeled for this challenge sequ
 local/guest naming branch. It also verifies that vendor imports remain redirected, different endpoints do not
 alias through FFFFFFFF handles, lifetime updates do not touch the DW table, and GDK initialization still fails.
 This is machine-code path verification, not a native Windows game test or a completed join.
+
+`tests/direct/admission.py` runs the original SV_DirectConnect with synthetic initialized server state,
+valid protocol/checksum/challenge/stats fields and no party members. Local parsing, empty-party queries,
+game VM callbacks and response serialization are modeled. It checks that local-network mode assigns a free
+client slot and reaches the response boundary, that online mode refuses an unregistered client, and that a bad
+challenge is rejected before admission. This narrows the remaining work; it does not replace native validation.

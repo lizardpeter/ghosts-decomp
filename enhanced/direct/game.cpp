@@ -2,6 +2,8 @@
 // input hash; see docs/direct-connect.md for the disassembly evidence and limits.
 #include "transport.h"
 #include "qcommon/cmd.h"
+#include "qcommon/dvar.h"
+void Dvar_SetBool(const dvar_t *, bool);
 
 namespace
 {
@@ -11,6 +13,15 @@ cmd_function_s listenCommand;
 cmd_function_s stopCommand;
 bool commandsRegistered;
 int lastResult;
+bool LocalNetworkMode()
+{
+    const dvar_t *online = State<const dvar_t *>(0x1442B98C8);
+    if (!online || online->type != 0) return false;
+    // Reuse the engine's local-network admission/stats branch. This is gameplay
+    // policy, not a claim of vendor authentication. Do not directly edit a dvar.
+    Dvar_SetBool(online, false);
+    return true;
+}
 }
 
 extern "C" int Iw6DirectProfile() { return 1; }
@@ -18,13 +29,14 @@ extern "C" int Iw6DirectResult() { return lastResult; }
 
 // Only called on the engine command thread, after normal local-client init.
 // Result: 1 started, -1 bad endpoint, -2 inactive client, -3 disconnect first,
-// -4 socket failure. This does not claim account authentication or map loading.
+// -4 socket failure, -5 onlinegame dvar not initialized. This does not claim account authentication or map loading.
 extern "C" int Iw6DirectBeginJoin(const char *endpoint)
 {
     netadr_s peer;
     if (!Iw6DirectParse(endpoint, &peer, 0)) return lastResult = -1;
     if (!State<unsigned char>(0x143E96821)) return lastResult = -2;
     if (State<int>(0x143E96890) >= 3) return lastResult = -3;
+    if (!LocalNetworkMode()) return lastResult = -5;
     if (!Iw6DirectOpen("0.0.0.0:0", 0) || !Iw6DirectSelectPeer(endpoint))
     { Iw6DirectClose(); return lastResult = -4; }
 
@@ -57,6 +69,7 @@ void Listen()
 {
     if (Cmd_Argc() != 2) { lastResult = -1; return; }
     if (State<int>(0x143E96890) >= 3) { lastResult = -3; return; }
+    if (!LocalNetworkMode()) { lastResult = -5; return; }
     lastResult = Iw6DirectOpen(Cmd_Argv(1), 1) ? 2 : -4;
 }
 void Stop()
