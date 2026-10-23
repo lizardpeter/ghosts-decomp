@@ -194,7 +194,9 @@ struct playerState_s
 	int sprintState_sprintButtonUpRequired;  // sprintState.sprintButtonUpRequired
 	unsigned char unknown244[0x278 - 0x244];
 	float mantleState_startPosition[3];  // mantleState.startPosition
-	unsigned char unknown284[0x2E4 - 0x284];
+	unsigned char unknown284[0x2A8 - 0x284];
+	float leanf;
+	unsigned char unknown2AC[0x2E4 - 0x2AC];
 	Weapon weaponsEquipped[15];
 	PlayerEquippedWeaponState weapEquippedData[15];
 	unsigned char unknown410[0x41C - 0x410];

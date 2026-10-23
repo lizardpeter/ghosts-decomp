@@ -351,6 +351,50 @@ frames repeat the same time; making it fractional belongs to the view/interpolat
 6. On hardware, *unverified* until then: server-side behaviour on official-protocol servers (no rate limits beyond the
    above were found), and the CPU cost of 30 replays per frame at 1000 fps.
 
+### 6.5 Implemented (enhanced/client_mp/cl_fixed_cmds.cpp)
+
+The enhanced `CL_CreateNewCommands` (overrides Store 14030BB00) does 6.2:
+
+- **The grid.** While `lastCmdTime + 5 <= cl.serverTime`, a command at `lastCmdTime += 5`, at most 20 a frame; the
+  rest carries. The grid is (re)anchored at `cl.serverTime - 5` on the first frame and whenever `cl.serverTime` is
+  more than 500 ms ahead of or behind it. *Deviation:* a smaller step back (the `CL_SetCGameTime` nudges of -1 and -2)
+  does not re-anchor, it waits, so command times always increase; re-anchoring on every step back would repeat or
+  lower command times, which the server drops (2.2).
+- **Every frame**, commands or not: the keyboard turn (Black Ops' `CL_AdjustAngles`, inlined in the original and
+  copied unchanged), `CL_MouseMove` (P0002's), `CL_GamepadMove` when a pad is active, and the 90° pitch limit, each
+  with the frame's own `frame_msec`/frametime.
+- **Only in a frame that makes commands:** `CL_CmdButtons` (so a tap latched since the last command is sent),
+  `CL_KeyMove` with `frame_msec` set to the time since the previous command-making frame, `sub_1402A9900`, the spawn
+  sight masks, remote control (`sub_14030DF50`) and location selection, and `CL_FinishMove`. All of the frame's
+  commands carry the same input; `cgameExtraButtons` only the first (`CL_FinishMove` clears them).
+- The default-command mode (`unk_143E96824` not 0 or 3) is the original's: one `MSG_SetDefaultUserCmd` command a
+  frame; the grid restarts afterwards.
+- Every frame it also builds the temporary view command `cl_viewCmd` (7.9), never stored or sent.
+
+Known simplifications, on frames that make no command: the mouse's movement in strafe mode or without mouse look
+(which the original turns into that frame's `rightmove`/`forwardmove`) and aim assist's melee target are dropped; a
+sprint tap the gamepad path sees is kept for the next command-making frame; `CG_HandleSpecialStateInput` runs on the
+discarded command (from `CL_GamepadMove`).
+
+**Key fractions.** `CL_KeyState` measures against `com_frameTime`, the commands cover grid time, which trails it by
+the 0-4 ms leftover. A press or release therefore lands in the right command only to within one command: with forward
+held for 100 ms, the sum of `forwardmove · 5` is 12,700 (= 127 · 100) at 60, 165, 240, 360 and 500 fps, 12,695 at
+1000 fps and 12,065 (one command short) at 144 Hz. Making it exact would need key times against the grid instead of
+the frame (an override of `CL_KeyState`); not done.
+
+Tests (tests/enhanced/test_fixed_cmds.py, frame_sim.py drives whole frames in the emulator): 6.4 items 1, 2 and 4.
+The generator at 60, 144, 165, 240, 360, 500 and 1000 fps (fractional frame periods on the integer clock), with
+nudges of +1, -1, -2 ms and a 600 ms reset: every command 5 ms after the previous one, never more than 20 a frame,
+the leftover after every frame below 5 ms; frames without a command still turn the view. Movement invariance: the
+commands of 60, 144, 240 and 1000 fps fed to the Store build's own `Pmove` (noclip and ufo) give bit-identical states
+at every command time. The full move (normal `pm_type`, which needs the world's traces) is not run: *unverified*, as
+the 5 ms row of 3.4. Also: a 300 ms stall (20 a frame, then catching up), an attack tap between two command-making
+frames is sent, the extra buttons only in the frame's first command, a key pressed 2 ms into a span gets 3/5 of
+it, a step back of 300 ms waits and one of 2 s re-anchors, the arrow keys turn the view on every frame (the same
+-14° over 100 ms at 60, 240 and 1000 fps), and the view command's angles and time. Mutation checks: 13 mutations of
+the generator (step, cap, both re-anchor conditions, the key span, buttons, mouse and keyboard turning every frame,
+the view command's angles and time, the extra buttons, the grid comparison, the span bookkeeping) all fail.
+
 ## 7. Prediction and the rendered view
 
 Where the rendered view's angles and origin come from in the Store build, what the prediction does exactly, and what
@@ -635,6 +679,57 @@ skips the branch) and the operand order of one kick-angle addition in `CG_DrawAc
 with different payloads, which the emulator does not distinguish, *unverified*). Three first attempts survived and
 got better inputs: the 0.1 error threshold (offsets of 0.1 and 0.15), the `pm_type < 7` tracemask (`pm_type` 6) and
 `stepRemaining > 0` (a step that exactly cancels the rest of the previous one).
+
+### 7.9 Implemented (enhanced/cgame_mp/cg_view_step.cpp)
+
+7.6 as designed, with these details:
+
+- **The temporary command** (`cl_viewCmd`, built by the enhanced `CL_CreateNewCommands` every frame): the newest
+  stored command's buttons and moves, `serverTime = cl.serverTime`, angles `(unsigned short)floor((clViewangles +
+  cgameKickAngles) · 182.04445 + 0.5)` as `CL_FinishMove` rounds them. *Deviation from 7.6 point 1:* not a fresh
+  command from this frame's keys (building one would consume the key and button state on frames that make no
+  command); the newest command's input is what the keys did up to the last command-making frame, at most one frame
+  old.
+- **`CG_PredictPlayerState`** (overrides 1402D2480): restore, the faithful body (copied unchanged), then the step,
+  for local client 0 when the prediction ran, the switch `cg_renderTimeView` is on, no demo, no `otherFlags 0x2000`,
+  `pm_type` not 1 or 8, no `linkFlags & 4`, and the leftover `L = cl.serverTime - commandTime` is 0..20 ms:
+  - `L > 0`: copies of the 0x3328-byte state and of `cg_pmove`, `cmd = cl_viewCmd`, `oldcmd` = the newest command,
+    `viewChange = 0`; the local client's character info (0x5D8 bytes at the pointer in the thread's TLS block + 0x10,
+    indexed by `clientNum`) saved, `Pmove`, restored; a step (`viewChange`) is subtracted from the copy's height.
+  - `L == 0` and the view command's angles differ from the newest command's (only when `cl.serverTime` repeated):
+    `viewangles = AngleNormalize180(short · 360/65536 + delta_angles)`, pitch held to ±85°, in the plain movement
+    states (`pm_type` 0, 2, 3, not prone, mantling, on a ladder, remote controlling, on a turret or in a vehicle);
+    otherwise the angles stay.
+  - The canonical `origin`, `velocity`, `viewangles`, `bobCycle`, `viewHeightCurrent` and `leanf` are kept and the
+    copy's written in.
+- **`CG_DrawActive`** (1402AB060): the faithful body, then the restore. **`CG_SavePlayerState`** (1402D3170) and
+  **`sub_1402D2410`**: the restore, then the faithful body. `CG_PredictPlayerState_Internal` is not overridden: both
+  of its callers restore first.
+- `cg_renderTimeView` is a plain global of the enhanced DLL (1 = on), not a dvar yet: the tests switch it off for
+  the reference runs.
+- All copies are explicit loops (`Enh_Copy`): no `memcpy`/`memset` calls in the new objects (checked in the
+  objects' disassembly).
+
+Tests (tests/enhanced/test_view_step.py): whole frames (`CG_SavePlayerState`, `CL_CreateNewCommands`,
+`CG_PredictPlayerState`, `CG_DrawActive`) with the faithful prediction running the Store build's own `Pmove` (noclip,
+forward held, the view turning every frame) at 1 ms, 2.5 ms (2/3) and 4.17 ms (4, 4, 4, 4, 4, 5) frames:
+
+1. the drawn origin advances every frame by the frame's own time at the drawn velocity (within 3%), where the
+   reference run (the step off, as the original draws) stands still on frames without a command;
+2. the drawn angles equal `AngleNormalize180(round16(clViewangles + cgameKickAngles) · 360/65536 + delta_angles)` of
+   the same frame, also on a frame whose `cl.serverTime` repeated (no command, no time to move);
+3. after `CG_DrawActive` the whole predicted state is bit-identical to the reference run's, every frame, and so is
+   what `CG_SavePlayerState` saves; `CG_SavePlayerState` without `CG_DrawActive` restores too;
+4. with a `Pmove` fake that adds a predictable event only for the temporary command, `pe` and the saved `pe` stay the
+   reference's;
+5. the character info the animation conditions write is the reference's although the partial steps ran them;
+6. a step up of 8 units in the partial move does not raise the drawn height.
+
+Mutation checks: 10 mutations of the view step (each restore, the character info restore, the step compensation,
+swapping the whole state, the zero-leftover angles, the command, its time, the switch, the copy's `ps`) all fail.
+
+Not done: the viewmodel, sound and the local player's shadow at the swapped position on hardware, and the normal
+(trace-using) movement's own global writes, *unverified* (7.6).
 
 ## Reconstructed for this document
 
