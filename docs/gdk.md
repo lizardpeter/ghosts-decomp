@@ -391,3 +391,10 @@ frame cases with the three reconstructed child pumps connected. Providers and
 OS calls are modeled. P0008 stops these source-linked reporting paths in the
 enhanced build; `test_reporting_offline.py` rejects dependency calls and checks
 that poisoned provider/queue pointers and event payloads are never accessed.
+
+Ten deliberate reporting mutations were rejected: frame admission state, latch
+reset, callback order, frame-argument forwarding, omitted event-task pumping,
+presence dispatch port, save pending reset/provider admission, swapped event
+payloads and omitted event interface release. All five corresponding enhanced
+override removals make the reporting tests fail. The independent telemetry-text
+helper and its sixth override are documented in docs/network.md.

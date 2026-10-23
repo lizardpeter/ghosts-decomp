@@ -426,3 +426,10 @@ rejects lobby dependencies, so it does not merely rely on P0006's null lobby.
 This blocks the source-linked helper, not every original host-migration caller
 or the separate binary matchmaking reporter. Turning down sampling controls
 alone would not provide full disconnection.
+
+The telemetry-text tests reject removing the terminating NUL from the submitted
+length, reading the returned container after cleanup instead of its captured
+pointer and omitting the task-reference decrement. Removing its enhanced
+override fails the dependency-trap test even with P0006 available. Together
+with the GDK reporting checks, 13 source mutations and all six individual P0008
+override removals were rejected.
