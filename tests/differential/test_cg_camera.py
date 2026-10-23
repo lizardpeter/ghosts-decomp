@@ -75,7 +75,7 @@ FOV_FAKES = {
     "zoom": "?CG_GetWeaponZoom@@YAMPEBUcg_s@@TWeapon@@@Z",
     "hybridFov": "?sub_140288830@@YAMPEBUplayerState_s@@TWeapon@@_N2@Z",
     "held": "?sub_140294880@@YA_NPEBUplayerState_s@@@Z",
-    "zooms": "?sub_14028FDA0@@YA_NTWeapon@@_N@Z",
+    "zooms": "?BG_IsAimDownSight@@YA_NTWeapon@@_N@Z",
     "varZoom": "?sub_1402869E0@@YAMPEBUplayerState_s@@TWeapon@@@Z",
     "camera": "?sub_1405B7A60@@YA_NW4LocalClientNum_t@@@Z",
     "cameraFov": "?sub_1405B6C50@@YAMW4LocalClientNum_t@@@Z",

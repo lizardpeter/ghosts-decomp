@@ -34,7 +34,7 @@ bool BG_IsThirdPersonMode(const playerState_s *ps);
 float CG_GetWeaponZoom(const cg_s *cgameGlob, Weapon weapon);
 float sub_140288830(const playerState_s *ps, Weapon weapon, bool isAlternate, bool second);  // a hybrid scope's FOVs (name unknown)
 bool sub_140294880(const playerState_s *ps);              // bgame: ADS zoom is held back (name unknown)
-bool sub_14028FDA0(Weapon weapon, bool isAlternate);       // bgame: the weapon zooms when aiming (name unknown)
+bool BG_IsAimDownSight(Weapon weapon, bool isAlternate);   // bgame/bg_weapons_util.cpp: the weapon zooms when aiming
 float sub_1402869E0(const playerState_s *ps, Weapon weapon);  // bgame: a variable-zoom scope's FOV, or 0 (name unknown)
 bool sub_1405B7A60(LocalClientNum_t localClientNum);       // a remote camera with its own FOV (name unknown)
 float sub_1405B6C50(LocalClientNum_t localClientNum);      // that camera's FOV (name unknown)
@@ -123,7 +123,7 @@ float CG_GetViewFov(LocalClientNum_t localClientNum)
 	else
 	{
 		fov = cg_fov->current.value;
-		if (!unk_143D33E80 && sub_14028FDA0(weapon, isAlternate))
+		if (!unk_143D33E80 && BG_IsAimDownSight(weapon, isAlternate))
 		{
 			float zoomFov = sub_1402869E0(ps, weapon);
 			if (zoomFov == 0.0f)

@@ -498,3 +498,17 @@ iw6mp64_MSStore_ship	140199ED0	matches	src/dw/matchmaking_telemetry.cpp	test_mat
 iw6mp64_MSStore_ship	140199CC0	matches	src/dw/matchmaking_telemetry.cpp	test_matchmaking_telemetry.py: 5 original/recon cases with modeled providers; connected reset cases and mutation checks; executable integration pending
 iw6mp64_MSStore_ship	140199480	matches	src/dw/matchmaking_telemetry.cpp	test_matchmaking_telemetry.py: 14 original/recon cases with modeled providers; connected reset cases and mutation checks; executable integration pending
 iw6mp64_MSStore_ship	140199D70	matches	src/dw/matchmaking_telemetry.cpp	test_matchmaking_telemetry.py: 5 original/recon cases with modeled providers; connected reset cases and mutation checks; executable integration pending
+iw6mp64_MSStore_ship	1402B5B70	matches	src/cgame_mp/cg_ents_mp.cpp	test_cg_camerashake.py: 2000 snapshot pairs and times; mutation-checked
+iw6mp64_MSStore_ship	14029BBB0	matches	src/cgame/cg_camerashake.cpp	test_cg_camerashake.py: 3000 shakes against cg.time and the view origin; mutation-checked
+iw6mp64_MSStore_ship	14029B7B0	matches	src/cgame/cg_camerashake.cpp	test_cg_camerashake.py: 2000 shake sets, the crandom path through the rand import; mutation-checked
+iw6_ds_ps4	1400A4800	compiles	src/cgame/cg_camerashake.cpp	src follows the Store build's cg_s layout (time at +0x71890, the view origin at +0x718E0); the server's cg_s keeps them elsewhere (time at +0x71900), so it is tested against the Store build
+iw6mp64_MSStore_ship	1402905D0	matches	src/bgame/bg_weapons_util.cpp	test_bg_weapons_util.py: 1500 cases with weapon tables, attachments, overlay and perk in scratch memory; mutation-checked
+iw6_ds_ps4	14009D240	matches	src/bgame/bg_weapons_util.cpp	test_bg_weapons_util.py: 1500 cases; mutation-checked
+iw6_ds_ps4	14009C620	matches	src/bgame/bg_weapons_util.cpp	test_bg_weapons_util.py: 600 cases; inlined in the Store build, verified there through BG_KickAngles
+iw6_ds_ps4	1400971C0	matches	src/bgame/bg_weapons_util.cpp	test_bg_weapons_util.py: 600 cases; inlined in the Store build, verified there through BG_KickAngles
+iw6mp64_MSStore_ship	140297FF0	matches	src/bgame/bg_weapons_view.cpp	test_bg_weapons_view.py: 3000 cases; mutation-checked
+iw6_ds_ps4	1400A35F0	matches	src/bgame/bg_weapons_view.cpp	test_bg_weapons_view.py: 3000 cases; mutation-checked
+iw6mp64_MSStore_ship	140297CF0	matches	src/bgame/bg_weapons_view.cpp	test_bg_weapons_view.py: 2000 weaponState_t cases (frame times around the 5 ms step); mutation-checked
+iw6_ds_ps4	1400A3310	matches	src/bgame/bg_weapons_view.cpp	test_bg_weapons_view.py: 2000 cases; mutation-checked
+iw6mp64_MSStore_ship	140530470	matches	src/universal/com_math.cpp	differential test (emulated, original vs recon)
+iw6mp64_MSStore_ship	1405304D0	matches	src/universal/com_math.cpp	test_com_math.py: 300 cases
