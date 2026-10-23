@@ -132,6 +132,9 @@ UINT GetRawInputData(HRAWINPUT hRawInput, UINT uiCommand, void *pData, UINT *pcb
 
 HWND GetForegroundWindow(void);
 BOOL GetCursorPos(POINT *lpPoint);
+
+DWORD timeGetTime(void);  // winmm (timeapi.h)
+
 BOOL SetCursorPos(int X, int Y);
 BOOL ClipCursor(const RECT *lpRect);
 int ShowCursor(BOOL bShow);

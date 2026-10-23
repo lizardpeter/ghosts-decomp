@@ -42,4 +42,8 @@ const dvar_t *Dvar_RegisterInt(const char *dvarName, int value, int min, int max
                                const char *description);
 const dvar_t *Dvar_RegisterString(const char *dvarName, const char *value, unsigned int flags,
                                   const char *description);
+const dvar_t *Dvar_RegisterEnum(const char *dvarName, const char *const *const valueList, int defaultIndex,
+                                unsigned int flags, const char *description);
+const dvar_t *Dvar_RegisterFloat(const char *dvarName, float value, float min, float max, unsigned int flags,
+                                 const char *description);
 void Dvar_SetInt(const dvar_t *dvar, int value);

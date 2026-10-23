@@ -1284,6 +1284,36 @@ bool CG_HandleLocationSelectionInput(LocalClientNum_t localClientNum, usercmd_s 
 	return true;
 }
 
+void sub_1402891D0(unsigned int offHand);  // bgame: empty in the Store build, given the command's offhand (name unknown)
+
+static_assert(__builtin_offsetof(clientActive_t, serverTime) == 0x34D0, "clientActive_t layout (Store build)");
+static_assert(__builtin_offsetof(clientActive_t, cgameUserCmdWeapon) == 0x355C, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, cgameKickAngles) == 0x3574, "clientActive_t layout");
+static_assert(__builtin_offsetof(clientActive_t, cgameExtraButtons) == 0x3608, "clientActive_t layout");
+
+// Store 14030CDF0  client_mp/cl_input.cpp (Black Ops' CL_FinishMove, cl_input_mp.cpp:2435): the weapons the cgame
+// chose, the gamepad flag, the time and the view angles. serverTime is cl->serverTime as it is: Black Ops' clamp to
+// snap.serverTime + 5000 is gone. Two frames that see the same cl->serverTime make two commands with the same time,
+// and the server drops the second (docs/fps.md).
+void CL_FinishMove(LocalClientNum_t localClientNum, usercmd_s *cmd)
+{
+	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+	cmd->weapon = cl->cgameUserCmdWeapon;
+	cmd->offHand = cl->cgameUserCmdOffHand;
+	if (cl->cgameUserCmdAlternate)
+		cmd->buttons |= 0x400000;
+	else
+		cmd->buttons &= ~0x400000u;
+	if (GamerProfile_GetProfileSettings(CL_ControllerIndexFromClientNum(localClientNum))->gpadEnabled)
+		cmd->buttons |= 0x40000000;
+	sub_1402891D0(cmd->offHand);
+	cmd->serverTime = cl->serverTime;
+	for (int i = 0; i < 3; i++)
+		cmd->angles[i] = (unsigned short)(int)floor((double)((cl->clViewangles[i] + cl->cgameKickAngles[i]) * 182.04445f + 0.5f));
+	cmd->buttons |= cl->cgameExtraButtons;
+	cl->cgameExtraButtons = 0;
+}
+
 // Store 14030EB60  client_mp/cl_input.cpp (Black Ops' :2622): builds this frame's command from the keys, mouse and
 // gamepad. The keyboard turn (CL_AdjustAngles) comes first; remote control or an active location selection takes the
 // whole command; otherwise the view may not pitch more than 90 degrees in one command.

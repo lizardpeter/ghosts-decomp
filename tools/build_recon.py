@@ -95,6 +95,21 @@ def original_tls_section(build):
     return 0, 0
 
 
+def exe_tls_section(build):
+    """[start, end) of the TLS template in a build's exe (its TLS directory), for a build without a PDB: an
+    identified TLS variable (records/names.tsv) is the template address plus its offset in the TLS block."""
+    import pefile
+    path = Path(os.environ.get("IW6_ORIGINALS", ROOT / ".work" / "originals")) / f"{build}.exe"
+    if not path.exists():
+        return 0, 0
+    pe = pefile.PE(str(path), fast_load=True)
+    pe.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_TLS"]])
+    if not hasattr(pe, "DIRECTORY_ENTRY_TLS"):
+        return 0, 0
+    t = pe.DIRECTORY_ENTRY_TLS.struct
+    return t.StartAddressOfRawData, t.EndAddressOfRawData + t.SizeOfZeroFill
+
+
 def import_slots(build):
     """{import name: IAT slot va} of the build's exe (for CRT calls a build without a MAP makes through its
     import table: the Store build links the CRT dynamically)."""
@@ -220,7 +235,11 @@ def main():
     asm = ["\t.text"]
     hybrid = ["symbol\tkind\tva"]
     ref_build = symbols.reference_build()
-    tls_lo, tls_hi = original_tls_section(build if reference else ref_build)
+    # TLS: an original TLS variable sits at its offset in this build's TLS block. A build without a PDB knows the
+    # block from its exe and its variables from identifications; a TLS variable it hasn't identified gets the
+    # reference build's offset past the end of this build's block, which keeps the link valid without overlapping.
+    tls_lo, tls_hi = original_tls_section(build) if reference else exe_tls_section(build)
+    ref_lo, ref_hi = original_tls_section(ref_build)
     ref_table = symbols.table(ref_build)
     tls = []
     for u in undefined:
@@ -233,8 +252,8 @@ def main():
             if u in slots:
                 asm += [f"\t.globl {q}", f"{q}:", f"\tmovabsq ${slots[u]:#x}, %rax", "\tjmpq *(%rax)"]
                 hybrid.append(f"{u}\timport\t{slots[u]:09X}")
-            elif u in ref_table and tls_lo <= ref_table[u][0] < tls_hi:
-                tls.append((ref_table[u][0] - tls_lo, q))  # keeps the link valid; not this build's offset
+            elif u in ref_table and ref_lo <= ref_table[u][0] < ref_hi:
+                tls.append((tls_hi - tls_lo + ref_table[u][0] - ref_lo, q))  # keeps the link valid; not this build's
                 hybrid.append(f"{u}\tunresolved-tls\t")
             elif u in ref_table and ref_table[u][1] == "data" or u.startswith("iw6s@"):
                 asm += [f"\t.globl {q}", f"\t.set {q}, 0"]
@@ -244,7 +263,7 @@ def main():
                 hybrid.append(f"{u}\tunresolved-function\t")
             continue
         va, is_func = orig[u] if u in orig else (statics[u], False)
-        if reference and tls_lo <= va < tls_hi:
+        if tls_lo <= va < tls_hi:
             tls.append((va - tls_lo, q))
             hybrid.append(f"{u}\ttls\t{va:09X}")
             continue
@@ -257,7 +276,8 @@ def main():
         asm += ['\t.section .tls$, "dw"', "hybrid_tls_start:"]
         for off, q in sorted(tls):
             asm += [f"\t.skip {off} - (. - hybrid_tls_start)", f"\t.globl {q}", f"{q}:"]
-        asm += [f"\t.skip {tls_hi - tls_lo} - (. - hybrid_tls_start)"]
+        size = max([tls_hi - tls_lo] + [off + 8 for off, _ in tls])
+        asm += [f"\t.skip {size} - (. - hybrid_tls_start)"]
     (BUILD / "hybrid.s").write_text("\n".join(asm) + "\n")
     run("clang", TRIPLE, "-c", BUILD / "hybrid.s", "-o", BUILD / "hybrid.obj")
     (BUILD / "hybrid.tsv").write_text("\n".join(hybrid) + "\n")
