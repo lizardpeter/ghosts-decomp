@@ -30,6 +30,7 @@ def check():
         for slot, name in exe.iat.items():
             if name.startswith('recon.dll!'):
                 m.mu.mem_write(slot, struct.pack('<Q', dll.exports[name.split('!',1)[1]]))
+        assert len(manifest['guards']) == 31 and len(manifest['imports']) == 55
         errors = []
         m.on_import('kernel32.dll!SetLastError', lambda mu: errors.append(mu.reg_read(UC_X86_REG_RCX)))
         m.on_import('ws2_32.dll!WSASetLastError', lambda mu: errors.append(mu.reg_read(UC_X86_REG_RCX)))
@@ -82,6 +83,25 @@ def check():
             assert value == results[export], (imp, value)
             assert errors == [10013 if export in {'Iw6DenySocket','Iw6DenyDns','Iw6DenyAddrInfo'} else 5]
             tested += 1
+        # Requirements are also asserted by original API identity, independently
+        # of the packager's manifest/export selection.
+        original_slots = {name:slot for slot,name in Image(original).iat.items()}
+        required = {
+            'winhttp.dll!WinHttpOpen':0, 'winhttp.dll!WinHttpSendRequest':0,
+            'xcurl.dll!curl_easy_init':0, 'xcurl.dll!curl_easy_setopt':2,
+            'ws2_32.dll!socket':-1, 'ws2_32.dll!WSASocketA':-1,
+            'ws2_32.dll!connect':-1, 'ws2_32.dll!send':-1,
+            'ws2_32.dll!sendto':-1, 'ws2_32.dll!WSASendTo':-1,
+            'ws2_32.dll!WSAIoctl':-1, 'ws2_32.dll!gethostbyname':0,
+            'ws2_32.dll!getaddrinfo':10013, 'kernel32.dll!CreateProcessA':0,
+            'ole32.dll!CoCreateInstance':-0x7FF8FFFB,
+            'shell32.dll!ShellExecuteA':5, 'advapi32.dll!EventRegister':5,
+        }
+        for identity, expected in required.items():
+            slot = original_slots[identity]
+            assert exe.iat[slot].startswith('recon.dll!'), identity
+            target = struct.unpack('<Q',m.mu.mem_read(slot,8))[0]
+            assert m.call(target,[0]*6)[0] == expected, identity
         # Out parameters are cleared on refused DNS, COM and event registration.
         for export, args, index in [
             ('Iw6DenyAddrInfo',[0,0,0,b'POISON!!'],0),
@@ -121,6 +141,16 @@ def check():
         assert m.call(dll.exports['Iw6OfflineGetProcAddress'],[1,b'D3D11CreateDevice\0'])[0] == 123
         assert m.call(dll.exports['Iw6OfflineGetProcAddress'],[1,7])[0] == 123
         assert calls == [1,1]
+        for name, export in [('GetProcAddress','Iw6OfflineGetProcAddress'),
+                             ('LoadLibraryA','Iw6OfflineLoadLibraryA'),
+                             ('LoadLibraryW','Iw6OfflineLoadLibraryW'),
+                             ('LoadLibraryExA','Iw6OfflineLoadLibraryExA'),
+                             ('LoadLibraryExW','Iw6OfflineLoadLibraryExW'),
+                             ('CreateProcessW','Iw6DenyNull'),
+                             ('ShellExecuteW','Iw6DenyStatus')]:
+            result = m.call(dll.exports['Iw6OfflineGetProcAddress'],[1,name.encode()+b'\0'],ret='int64')[0]
+            assert result == dll.exports[export], (name,result)
+        assert calls == [1,1]
         # DLL attach succeeds only for the prepared preferred-base host.
         terminated = []
         m.on_import('kernel32.dll!GetModuleHandleW',lambda mu: mu.reg_write(UC_X86_REG_RAX,exe.base))
@@ -133,6 +163,14 @@ def check():
         assert m.call(entry,[dll.base,1,0],setup=lambda w:w.write(marker,b'BROKEN!!'))[0] == 0
         # Refuse wrong inputs and overwrites; originals stay byte-identical.
         before = package.sha(original.read_bytes())
+        rebuilt, rebuilt_manifest = package.transform(original.read_bytes(),dll_path.read_bytes())
+        assert rebuilt == (output/'iw6mp64_offline.exe').read_bytes()
+        assert rebuilt_manifest == manifest
+        ordinary = ROOT/'build'/package.BUILD/'enhanced/recon.dll'
+        if ordinary.exists():
+            try: package.transform(original.read_bytes(),ordinary.read_bytes())
+            except ValueError: pass
+            else: raise AssertionError('ordinary enhanced DLL accepted as offline')
         for bad in (b'', original.read_bytes()[:-1]):
             try: package.transform(bad,dll_path.read_bytes())
             except ValueError: pass

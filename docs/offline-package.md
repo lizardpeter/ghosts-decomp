@@ -39,7 +39,8 @@ Cleanup and address-formatting APIs remain available. Original process launch, s
 CRT command execution, COM activation and ETW reporting imports are also refused.
 
 The original LoadLibrary/GetProcAddress imports use wrappers that reject known networking/GDK
-module basenames and dynamic WinRT activation entry points. Other libraries remain available
+module basenames and dynamic WinRT activation entry points. Dynamic requests for loader/procedure entry points return the same guarded wrappers; dynamic
+process and shell launch requests return failure adapters. Other libraries remain available
 for rendering and local runtime needs. The adapters' own kernel/error imports go directly to OS
 DLLs, avoiding recursion through the original IAT. This is a reviewed set of boundaries, not a
 complete audit of all dynamic resolution, syscalls, loaded libraries, helper processes or IPC.

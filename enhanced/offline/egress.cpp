@@ -87,5 +87,17 @@ extern "C" void *Iw6OfflineGetProcAddress(void *module, const char *name)
         ((unsigned long long)name > 0xFFFF &&
          (Same(name, "RoGetActivationFactory") || Same(name, "RoActivateInstance"))))
     { Denied(); return nullptr; }
+    // Keep a second dynamic lookup of the loader/procedure APIs inside the
+    // same boundary instead of handing back an unguarded OS entry point.
+    if ((unsigned long long)name > 0xFFFF)
+    {
+        if (Same(name, "GetProcAddress")) return (void *)&Iw6OfflineGetProcAddress;
+        if (Same(name, "LoadLibraryA")) return (void *)&Iw6OfflineLoadLibraryA;
+        if (Same(name, "LoadLibraryW")) return (void *)&Iw6OfflineLoadLibraryW;
+        if (Same(name, "LoadLibraryExA")) return (void *)&Iw6OfflineLoadLibraryExA;
+        if (Same(name, "LoadLibraryExW")) return (void *)&Iw6OfflineLoadLibraryExW;
+        if (Same(name, "CreateProcessA") || Same(name, "CreateProcessW")) return (void *)&Iw6DenyNull;
+        if (Same(name, "ShellExecuteA") || Same(name, "ShellExecuteW")) return (void *)&Iw6DenyStatus;
+    }
     return GetProcAddress(module, name);
 }
