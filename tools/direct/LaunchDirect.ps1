@@ -5,7 +5,7 @@ param(
     [Parameter(Mandatory=$true,ParameterSetName='Host')][string]$HostEndpoint,
     [Parameter(Mandatory=$true,ParameterSetName='Host')][ValidatePattern('^[A-Za-z0-9_]{3,63}$')][string]$Map,
     [Parameter(ParameterSetName='Host')][ValidatePattern('^[A-Za-z0-9_]{1,31}$')][string]$GameType = 'war',
-    [ValidatePattern('^[A-Za-z0-9_-]{1,32}$')][string]$Profile = 'default',
+    [Alias('Profile')][ValidatePattern('^[A-Za-z0-9_-]{1,32}$')][string]$ProfileName = 'default',
     [ValidatePattern('^[A-Za-z0-9_\-](?:[A-Za-z0-9_ \-]{0,29}[A-Za-z0-9_\-])?$')][string]$PlayerName
 )
 $ErrorActionPreference = 'Stop'
@@ -22,25 +22,25 @@ foreach ($item in @(@('iw6mp64_offline.exe',$manifest.exe_sha256),@('recon.dll',
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot $item[0])).Hash
     if ($hash -ne $item[1]) { throw "Package hash mismatch: $($item[0])" }
 }
-$data = Join-Path (Join-Path $env:LOCALAPPDATA 'GhostsDirect') $Profile
+$data = Join-Path (Join-Path $env:LOCALAPPDATA 'GhostsDirect') $ProfileName
 New-Item -ItemType Directory -Force -Path $data | Out-Null
 $profilePath = Join-Path $data 'player.json'
 if (Test-Path -LiteralPath $profilePath) {
-    $profile = Get-Content -Raw -LiteralPath $profilePath | ConvertFrom-Json
-    if ($profile.id -isnot [string] -or $profile.name -isnot [string] -or $profile.format -ne 1 -or $profile.id -notmatch '^[0-9a-fA-F]{16}$' -or $profile.id -eq '0000000000000000' -or $profile.name -notmatch '^[A-Za-z0-9_\-](?:[A-Za-z0-9_ \-]{0,29}[A-Za-z0-9_\-])?$') { throw 'Invalid local player profile.' }
+    $playerRecord = Get-Content -Raw -LiteralPath $profilePath | ConvertFrom-Json
+    if ($playerRecord.id -isnot [string] -or $playerRecord.name -isnot [string] -or $playerRecord.format -ne 1 -or $playerRecord.id -notmatch '^[0-9a-fA-F]{16}$' -or $playerRecord.id -eq '0000000000000000' -or $playerRecord.name -notmatch '^[A-Za-z0-9_\-](?:[A-Za-z0-9_ \-]{0,29}[A-Za-z0-9_\-])?$') { throw 'Invalid local player profile.' }
 } else {
     $bytes = New-Object byte[] 8
     $random = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     try { do { $random.GetBytes($bytes); $id = -join ($bytes | ForEach-Object { $_.ToString('x2') }) } while ($id -eq '0000000000000000') } finally { $random.Dispose() }
-    $profile = [pscustomobject]@{ format = 1; id = $id; name = 'LocalPlayer' }
+    $playerRecord = [pscustomobject]@{ format = 1; id = $id; name = 'LocalPlayer' }
 }
-if ($PlayerName) { $profile.name = $PlayerName }
+if ($PlayerName) { $playerRecord.name = $PlayerName }
 $temporaryProfile = $profilePath + '.tmp'
-[System.IO.File]::WriteAllText($temporaryProfile, ($profile | ConvertTo-Json))
+[System.IO.File]::WriteAllText($temporaryProfile, ($playerRecord | ConvertTo-Json))
 Move-Item -LiteralPath $temporaryProfile -Destination $profilePath -Force
 # The ID is self-asserted custom-session identity, not an authenticated account.
 if ($game.Contains('"') -or $data.Contains('"')) { throw 'Unsupported quote in path.' }
-$arguments = '+set fs_basepath "' + $game + '" +set fs_homepath "' + $data + '" +direct_player ' + $profile.id + ' "' + $profile.name + '" '
+$arguments = '+set fs_basepath "' + $game + '" +set fs_homepath "' + $data + '" +direct_player ' + $playerRecord.id + ' "' + $playerRecord.name + '" '
 if ($PSCmdlet.ParameterSetName -eq 'Host') { $arguments += '+direct_host ' + $endpoint + ' ' + $Map + ' ' + $GameType }
 else { $arguments += '+connect ' + $endpoint }
 Start-Process -FilePath (Join-Path $PSScriptRoot 'iw6mp64_offline.exe') -WorkingDirectory $game -ArgumentList $arguments -Wait
