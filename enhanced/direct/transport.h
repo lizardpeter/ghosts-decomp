@@ -2,6 +2,7 @@
 #include "qcommon/qcommon.h"
 
 // Startup-only direct transport. These APIs never resolve DNS or vendor handles.
+extern "C" int Iw6DirectWireVersion();
 extern "C" int Iw6DirectOpen(const char *bindEndpoint, int server);
 extern "C" void Iw6DirectClose();
 extern "C" int Iw6DirectSelectPeer(const char *endpoint);

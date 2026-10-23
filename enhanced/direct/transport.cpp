@@ -22,6 +22,8 @@ using SOCKET = int;
 namespace
 {
 constexpr int MaxPayload = 1262;
+constexpr int HeaderSize = 8;
+constexpr int MaxWire = HeaderSize + MaxPayload + 2;
 constexpr unsigned int MaxPeers = 64;
 SOCKET udp = INVALID_SOCKET;
 bool initialized;
@@ -94,6 +96,8 @@ bool Permitted(const netadr_s &a)
     return false;
 }
 }
+
+extern "C" int Iw6DirectWireVersion() { return 1; }
 
 extern "C" int Iw6DirectParse(const char *text, netadr_s *address, int allowZeroPort)
 {
@@ -187,14 +191,17 @@ extern "C" int Iw6DirectSend(int length, const void *data, const netadr_s *to)
     if (!to || length < 0 || length > MaxPayload || (length && !data)) return 0;
     Lock guard;
     if (udp == INVALID_SOCKET || !Permitted(*to)) return 0;
-    unsigned char packet[MaxPayload + 2];
-    for (int i = 0; i < length; ++i) packet[i] = ((const unsigned char *)data)[i];
-    const unsigned short checksum = Checksum(packet, length);
-    packet[length] = (unsigned char)(checksum >> 8);
-    packet[length + 1] = (unsigned char)checksum;
+    unsigned char packet[MaxWire];
+    packet[0] = 'I'; packet[1] = 'W'; packet[2] = '6'; packet[3] = 'D';
+    packet[4] = 1; packet[5] = 0; // version and reserved flags
+    packet[6] = (unsigned char)(length >> 8); packet[7] = (unsigned char)length;
+    for (int i = 0; i < length; ++i) packet[HeaderSize + i] = ((const unsigned char *)data)[i];
+    const unsigned short checksum = Checksum(packet + HeaderSize, length);
+    packet[HeaderSize + length] = (unsigned char)(checksum >> 8);
+    packet[HeaderSize + length + 1] = (unsigned char)checksum;
     sockaddr_in destination = Sockaddr(*to);
-    return sendto(udp, (const char *)packet, length + 2, 0,
-                  (const sockaddr *)&destination, sizeof(destination)) == length + 2;
+    return sendto(udp, (const char *)packet, HeaderSize + length + 2, 0,
+                  (const sockaddr *)&destination, sizeof(destination)) == HeaderSize + length + 2;
 }
 extern "C" int Iw6DirectReceive(netadr_s *from, msg_t *message)
 {
@@ -207,7 +214,7 @@ extern "C" int Iw6DirectReceive(netadr_s *from, msg_t *message)
     // Bounded drain: malformed traffic cannot keep one game frame spinning forever.
     for (int count = 0; count < 64; ++count)
     {
-        unsigned char packet[MaxPayload + 3];
+        unsigned char packet[MaxWire + 1];
         sockaddr_in source = {};
 #ifdef _WIN32
         int size = sizeof(source);
@@ -217,9 +224,12 @@ extern "C" int Iw6DirectReceive(netadr_s *from, msg_t *message)
         const int received = (int)recvfrom(udp, (char *)packet, sizeof(packet), 0,
                                           (sockaddr *)&source, &size);
         if (received == SOCKET_ERROR) return 0;
-        if (size != sizeof(source) || source.sin_family != AF_INET || received < 2 || received > MaxPayload + 2) continue;
-        const int length = received - 2;
-        if (length > message->maxsize || Checksum(packet, length) != ((packet[length] << 8) | packet[length + 1])) continue;
+        if (size != sizeof(source) || source.sin_family != AF_INET || received < HeaderSize + 2 || received > MaxWire) continue;
+        if (packet[0] != 'I' || packet[1] != 'W' || packet[2] != '6' || packet[3] != 'D' ||
+            packet[4] != 1 || packet[5] != 0) continue;
+        const int length = received - HeaderSize - 2;
+        if (length != ((packet[6] << 8) | packet[7]) || length > message->maxsize ||
+            Checksum(packet + HeaderSize, length) != ((packet[HeaderSize + length] << 8) | packet[HeaderSize + length + 1])) continue;
         netadr_s address = {};
         address.type = NA_IP;
         address.port = source.sin_port;
@@ -238,7 +248,7 @@ extern "C" int Iw6DirectReceive(netadr_s *from, msg_t *message)
         }
         else if (!Same(address, selected, true)) continue;
         *from = address;
-        for (int i = 0; i < length; ++i) message->data[i] = packet[i];
+        for (int i = 0; i < length; ++i) message->data[i] = packet[HeaderSize + i];
         message->cursize = length;
         return 1;
     }

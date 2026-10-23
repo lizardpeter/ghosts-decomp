@@ -34,3 +34,8 @@ This work does not establish that every possible integrity check, loaded DLL, cr
 been removed. It does not establish ban immunity. Direct UDP is for a custom peer/server, not an official
 service. Native Windows launch and traffic capture during startup, gameplay, disconnect and shutdown remain
 required before claiming complete vendor isolation. No official online compatibility is claimed.
+
+The startup function LiveAntiCheat_Init at 1405F0A80 is also reconstructed faithfully in
+`src/online/live_anticheat.cpp`. Its differential test checks reset/controller-reset/command-registration
+order and arguments, including the original command node and callback. A skipped-initializer mutant is
+detected. The faithful implementation still performs those calls; packaged custom profiles remove them.

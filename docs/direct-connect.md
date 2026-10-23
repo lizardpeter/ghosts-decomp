@@ -67,7 +67,14 @@ fallback is used. A client sends only to the endpoint selected by `connect` and 
 other endpoints. A listener replies only to peers whose valid packet it has received. There are 64 listener
 peer slots, retained until close/reopen; listener peer/session lifecycle is still experimental.
 
-Packets retain the original checksum convention: big-endian 16-bit words, an unshifted odd final byte, carry
+P0020 places an eight-byte custom header before the game payload: ASCII `IW6D`, version byte 1,
+reserved flags byte 0 and a big-endian 16-bit payload length. The receive path requires this header,
+exact length, supported version/flags and valid checksum before exposing data to the game. Both peers
+need this custom transport; retail-format replies are rejected. This is a protocol compatibility
+boundary, not server authentication or an IP blocklist. An explicitly entered destination still receives
+a UDP datagram; complete vendor-traffic isolation is not established by a packet marker.
+
+The inner payload retains the original checksum convention: big-endian 16-bit words, an unshifted odd final byte, carry
 folding and one's complement, followed by two checksum bytes. The replacement checks lengths before reads or
 copies, limits payloads to 1262 bytes, ignores malformed packets and bounds each receive drain to 64 datagrams.
 Failed peer selection clears the old client destination; failed socket reconfiguration closes the old socket.
@@ -169,3 +176,7 @@ challenge is rejected before admission. This narrows the remaining work; it does
 helpers, stopping at SV_SpawnServer. It checks normalization and the missing-content rejection path. The
 Windows CI launcher test executes profile/argument preparation with Start-Process intercepted; it does not
 launch the EXE. Neither test substitutes for a native game with full assets.
+
+`tests/direct/transport.py` also rejects checksum-valid retail-format packets, unsupported envelope
+versions/flags and length mismatches. The package records IW6D/version 1 and refuses a direct DLL
+without the wire-version export. Earlier experimental unwrapped packets are no longer compatible.

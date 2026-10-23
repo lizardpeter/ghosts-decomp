@@ -124,6 +124,8 @@ def transform(original, dll_bytes, mode='offline'):
         raise ValueError('offline exports missing')
     if ('Iw6DirectProfile' in exports) != (mode == 'direct'):
         raise ValueError('DLL build does not match requested offline/direct mode')
+    if mode == 'direct' and 'Iw6DirectWireVersion' not in exports:
+        raise ValueError('direct DLL lacks the custom wire-protocol boundary')
     if exports['Iw6OfflineDllMain'] != dll.OPTIONAL_HEADER.ImageBase + dll.OPTIONAL_HEADER.AddressOfEntryPoint:
         raise ValueError('DLL entry must be the offline attach guard')
     if any(d.VirtualAddress for d in [pe.OPTIONAL_HEADER.DATA_DIRECTORY[13]]):
@@ -198,7 +200,8 @@ def transform(original, dll_bytes, mode='offline'):
                 'exe_sha256': sha(data), 'dll_sha256': sha(dll_bytes),
                 'guards': changes, 'imports': redirected,
                 'native_launch_verified': False, 'whole_process_egress_verified': False,
-                'game_join_verified': False}
+                'game_join_verified': False,
+                'wire_protocol': {'tag':'IW6D','version':1} if mode == 'direct' else None}
     return bytes(data), manifest
 
 

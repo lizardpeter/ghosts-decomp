@@ -115,7 +115,7 @@ def main():
         result=call(0x140311310,[0],ret_type='void',fakes={0x14053E7E0:local_network,0x14053F550:set_string,**(fakes or {})})
         sent=[entry for entry in result[3] if entry[:2]==('import','sendto')]
         assert len(sent)==1,result[3]
-        assert sent[0][3].startswith(b'\xff'*4+b'getchallenge 0 "Player1"\0'),sent
+        assert sent[0][3][:6]==b'IW6D\x01\0' and sent[0][3][8:-2].startswith(b'\xff'*4+b'getchallenge 0 "Player1"\0'),sent
         assert sent[0][-2]==sockaddr_in(b'\x7f\0\0\1',27016),sent
         assert not any(n.startswith(('winhttp.dll!','xcurl.dll!')) for n in m.imports_called)
         # With the original normal naming branch, the same unmodified resend
@@ -129,7 +129,7 @@ def main():
             w.u32(0x14416A11C,-99999)
         result=call(0x140311310,[0],ret_type='void',setup=retry,fakes={**fakes,0x14046AE00:format_id})
         sent=[entry for entry in result[3] if entry[:2]==('import','sendto')]
-        assert len(sent)==1 and sent[0][3].startswith(b'\xff'*4+b'getchallenge 0 "123456789abcdef0"\0'),sent
+        assert len(sent)==1 and sent[0][3][:6]==b'IW6D\x01\0' and sent[0][3][8:-2].startswith(b'\xff'*4+b'getchallenge 0 "123456789abcdef0"\0'),sent
         # The patched original receive ABI returns a checksum-validated packet
         # through msg_t without falling back to Demonware.
         from transport import packet

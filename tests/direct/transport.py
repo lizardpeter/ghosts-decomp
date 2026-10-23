@@ -23,7 +23,7 @@ def checksum(data):
     while total>>16: total=(total&65535)+(total>>16)
     return (~total)&65535
 
-def packet(payload): return payload+struct.pack('>H',checksum(payload))
+def packet(payload): return b'IW6D\x01\0'+struct.pack('>H',len(payload))+payload+struct.pack('>H',checksum(payload))
 
 def load(path):
     lib=C.CDLL(str(path))
@@ -93,7 +93,10 @@ def main():
             stranger.settimeout(1)
             raw,sender=stranger.recvfrom(1400)
             assert raw==packet(payload)
-            for bad in [b'',b'x',b'abc\0\0',b'x'*1265]:
+            for bad in [b'',b'x',b'abc\0\0',b'x'*1273,
+                        b'legacy'+struct.pack('>H',checksum(b'legacy')),
+                        b'IW6D\x02'+packet(b'x')[5:],b'IW6D\x01\x01'+packet(b'x')[6:],
+                        packet(b'x')[:6]+b'\0\x02'+packet(b'x')[8:]]:
                 stranger.sendto(bad,sender)
                 assert not receive(client)[0]
             stranger.sendto(packet(b'good'),sender)

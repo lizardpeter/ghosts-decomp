@@ -559,3 +559,4 @@ iw6mp64_MSStore_ship	140306E80	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_dra
 iw6mp64_MSStore_ship	140306F30	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_draw.py: 50 cases; mutation-checked
 iw6mp64_MSStore_ship	140307110	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_draw.py: 100 cases; mutation-checked
 iw6mp64_MSStore_ship	140306E70	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_draw.py: 50 cases; mutation-checked
+iw6mp64_MSStore_ship	1405F0A80	matches	src/online/live_anticheat.cpp	Differential original-vs-DLL startup order/arguments and command registration; reset/controller/command dependencies modeled. Skipped-initializer mutant detected in a fresh emulator. No native integration claim.
