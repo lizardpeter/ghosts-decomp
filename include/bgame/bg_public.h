@@ -23,40 +23,7 @@
 #define PMF_JUMPING 0x2000   // a jump is in progress: jumpOriginZ is valid and the jump slowdown applies
 #define PMF_NO_JUMP 0x40000  // jump refused (name unknown)
 
-struct playerState_s
-{
-	int commandTime;
-	int pm_type;
-	int pm_time;
-	int pm_flags;
-	int otherFlags;
-	int linkFlags;
-	int bobCycle;
-	float origin[3];
-	float velocity[3];
-	unsigned char unknown34[0x5C - 0x34];
-	int gravity;
-	int speed;
-	float delta_angles[3];
-	int groundEntityNum;
-	float vLadderVec[3];
-	int jumpTime;
-	float jumpOriginZ;
-	unsigned char unknown88[0x150 - 0x88];
-	int pe_timeADSCameUp;  // pe.timeADSCameUp
-	unsigned char unknown154[0x190 - 0x154];
-	int viewHeightTarget;
-	float viewHeightCurrent;
-	int viewHeightLerpTime;
-	int viewHeightLerpTarget;
-	int viewHeightLerpDown;
-	unsigned char unknown1A4[0x240 - 0x1A4];
-	int sprintState_sprintButtonUpRequired;  // sprintState.sprintButtonUpRequired
-	unsigned char unknown244[0x424 - 0x244];
-	float weapCommon_fWeaponPosFrac;  // weapCommon.fWeaponPosFrac
-	float weapCommon_aimSpreadScale;  // weapCommon.aimSpreadScale
-	unsigned char unknown42C[0x620 - 0x42C];
-};
+// playerState_s is in bgame/bg_weapons.h (the lowest header that needs it; client_mp.h includes it)
 
 struct trace_t
 {
