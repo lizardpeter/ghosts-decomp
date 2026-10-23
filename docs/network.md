@@ -408,7 +408,7 @@ constants and paired with their registration calls, not inferred from labels.
 Matchmaking reporter 140199DA0 compares a random value against the first rate,
 but can bypass sampling when 1405F0700(controller, 9) admits a forced event.
 It serializes a binary record and calls 140749C00 through the lobby event log.
-This path is not yet reconstructed. The map-vote/team-balance settings are
+This path is now covered by P0010 below. The map-vote/team-balance settings are
 confirmed registrations; their submission callers are not established here.
 
 Host-migration function 1404C6E40 samples the fourth rate, builds text, and calls
@@ -424,7 +424,7 @@ P0008 also overrides this telemetry-text helper to return 0 without inspecting
 the text or invoking lobby/SDK calls. Its test uses invalid payload pointers and
 rejects lobby dependencies, so it does not merely rely on P0006's null lobby.
 This blocks the source-linked helper, not every original host-migration caller
-or the separate binary matchmaking reporter. Turning down sampling controls
+or the separate binary matchmaking reporter, which P0010 addresses below. Turning down sampling controls
 alone would not provide full disconnection.
 
 The telemetry-text tests reject removing the terminating NUL from the submitted
@@ -433,3 +433,49 @@ pointer and omitting the task-reference decrement. Removing its enhanced
 override fails the dependency-trap test even with P0006 available. Together
 with the GDK reporting checks, 13 source mutations and all six individual P0008
 override removals were rejected.
+
+## Binary matchmaking telemetry
+
+The binary reporter 140199DA0 and five local record/ring helpers are reconstructed
+in `src/dw/matchmaking_telemetry.cpp`. This is descriptive source placement;
+original names and source file are unknown. A 0x9C8-byte opaque record is eligible
+only when byte 1 is nonzero and byte 0 is 3. The original samples a float in [0,1]
+and then reads the sampling dvar. The rate must be strictly greater than the
+sample; equality and unordered comparisons fall through to the forced category-9
+check. After admission it gets a lobby, tests its low-byte admission result,
+gets the event log, serializes into a 0xC00-byte stack buffer, and submits a
+positive serialization size with category 5 and a null optional argument.
+
+The output task, when nonnull, receives its slot-1 virtual call. The reporter
+then rereads the task output pointer before decrementing the current object's
+reference count and invoking slot 0 with flag 1 when the old count was 1.
+Provider callbacks can replace or clear that pointer. An eligible record is
+reset even when sampling rejects it, there is no lobby, or serialization fails.
+An ineligible record is left alone.
+
+Reset 140199300 does more than clear storage: it sets sentinel/default fields,
+reads a mode dvar, calls local telemetry providers, resets shared rings/counters,
+and clamps two arrays of five returned 16-bit metrics into bytes. The second
+metric masks bit 15 for its saturation comparison. Trigger 140199D70 conditionally
+resets the global record and timestamps it. Ring helpers append a qword, snapshot
+50 entries and count the first match among all 50 snapshot slots. Append's
+unchecked global index is B0055; the faithful reconstruction preserves it.
+
+P0010 separately overrides all six entry points. Eligible/forced-send logic is
+never reached. Reporter/reset discard the supplied record into an inert type-3
+block with pending clear, and the trigger does that for the global record.
+These discard paths clear both rings and counters without dvar, clock, provider,
+serialization or SDK calls. Snapshot clears collection state without retaining
+identifiers; append and match collectors do nothing without reading their input.
+No successful submission or task completion is fabricated. Null records are
+accepted by the enhanced discard paths; nonnull records must be caller-owned
+buffers of the observed size.
+
+`test_matchmaking_telemetry.py` contains 113 comparisons with the original,
+including forced sends, equality/NaN sampling, task-pointer replacement, reset
+integration, default fields, saturation and ring wrap/adjacent writes. All SDK
+and game providers are simulated; no original account or vendor service is
+contacted. `test_matchmaking_offline.py` poisons dvars and ring indices and
+rejects dependency calls from each enhanced entry point. Other original
+call sites, independent collectors, direct HTTP providers and complete executable
+integration still need work; this is not whole-process isolation.
