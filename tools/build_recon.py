@@ -127,12 +127,13 @@ def import_slots(build):
 
 def main():
     build = sys.argv[sys.argv.index("--build") + 1] if "--build" in sys.argv else symbols.reference_build()
-    offline = "--offline" in sys.argv
+    direct = "--direct" in sys.argv
+    offline = "--offline" in sys.argv or direct
     enhanced = "--enhanced" in sys.argv or offline
     if offline and build != "iw6mp64_MSStore_ship":
         sys.exit("--offline supports only the pinned Store build")
     reference = symbols.has_map(build)
-    BUILD = out_dir(build) / ("offline" if offline else "enhanced") if enhanced else out_dir(build)
+    BUILD = out_dir(build) / ("direct" if direct else "offline" if offline else "enhanced") if enhanced else out_dir(build)
     BUILD.mkdir(parents=True, exist_ok=True)
     objs, sources = [], []
     for src in sorted((ROOT / "src").rglob("*.cpp")):
@@ -149,6 +150,8 @@ def main():
         enhanced_objs = []
         for src in sorted((ROOT / "enhanced").rglob("*.cpp")):
             rel = src.relative_to(ROOT / "enhanced")
+            if rel.parts[0] == "direct" and not direct:
+                continue
             if rel.parts[0] == "offline" and not offline:
                 continue
             obj = BUILD / "obj" / "enhanced" / rel.with_suffix(".obj")

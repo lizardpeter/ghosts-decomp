@@ -11,3 +11,5 @@ GetModuleHandleW
 SetLastError
 GetCurrentProcess
 TerminateProcess
+AcquireSRWLockExclusive
+ReleaseSRWLockExclusive

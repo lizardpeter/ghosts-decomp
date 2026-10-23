@@ -88,23 +88,29 @@ typedef struct WSAData
 	char szSystemStatus[129];
 } WSADATA;
 
-int WSAStartup(WORD wVersionRequested, WSADATA *lpWSAData);
-int WSAGetLastError(void);
-SOCKET socket(int af, int type, int protocol);
-int closesocket(SOCKET s);
-int ioctlsocket(SOCKET s, long cmd, u_long *argp);
-int setsockopt(SOCKET s, int level, int optname, const char *optval, int optlen);
-int bind(SOCKET s, const struct sockaddr *name, int namelen);
-int connect(SOCKET s, const struct sockaddr *name, int namelen);
-int send(SOCKET s, const char *buf, int len, int flags);
-int recv(SOCKET s, char *buf, int len, int flags);
-int sendto(SOCKET s, const char *buf, int len, int flags, const struct sockaddr *to, int tolen);
-int recvfrom(SOCKET s, char *buf, int len, int flags, struct sockaddr *from, int *fromlen);
-u_short htons(u_short hostshort);
-u_long ntohl(u_long netlong);
-unsigned long inet_addr(const char *cp);
-struct hostent *gethostbyname(const char *name);
-int gethostname(char *name, int namelen);
+#ifdef IW6_PRIVATE_WINSOCK
+#define IW6_WSA __declspec(dllimport)
+#else
+#define IW6_WSA
+#endif
+
+IW6_WSA int WSAStartup(WORD wVersionRequested, WSADATA *lpWSAData);
+IW6_WSA int WSAGetLastError(void);
+IW6_WSA SOCKET socket(int af, int type, int protocol);
+IW6_WSA int closesocket(SOCKET s);
+IW6_WSA int ioctlsocket(SOCKET s, long cmd, u_long *argp);
+IW6_WSA int setsockopt(SOCKET s, int level, int optname, const char *optval, int optlen);
+IW6_WSA int bind(SOCKET s, const struct sockaddr *name, int namelen);
+IW6_WSA int connect(SOCKET s, const struct sockaddr *name, int namelen);
+IW6_WSA int send(SOCKET s, const char *buf, int len, int flags);
+IW6_WSA int recv(SOCKET s, char *buf, int len, int flags);
+IW6_WSA int sendto(SOCKET s, const char *buf, int len, int flags, const struct sockaddr *to, int tolen);
+IW6_WSA int recvfrom(SOCKET s, char *buf, int len, int flags, struct sockaddr *from, int *fromlen);
+IW6_WSA u_short htons(u_short hostshort);
+IW6_WSA u_long ntohl(u_long netlong);
+IW6_WSA unsigned long inet_addr(const char *cp);
+IW6_WSA struct hostent *gethostbyname(const char *name);
+IW6_WSA int gethostname(char *name, int namelen);
 
 #ifdef __cplusplus
 }
