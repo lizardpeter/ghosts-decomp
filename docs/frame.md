@@ -321,7 +321,7 @@ So pair by counting, not by call:
   test's inputs (tests/enhanced/test_frame_wait.py).
 - **Fallbacks:** without `IDXGISwapChain2` there is no object and no wait. If the system refuses the flag, a flip-model
   swap chain is made without it, then the original swap chain.
-- **Keys and mouse buttons** that arrive during the waits are applied at the end of `R_SyncGpu` (P0006; the rule is in docs/input.md, "Dispatching keys after the frame wait"). The mouse is read right after the wait.
+- **Keys and mouse buttons** that arrive during the waits are applied at the end of `R_SyncGpu` (P0009; the rule is in docs/input.md, "Dispatching keys after the frame wait"). The mouse is read right after the wait.
 - **Unverified on hardware:** that the waitable object behaves as documented on this game's swap chain (signal rate
   when minimized or occluded, a `DXGI_STATUS_OCCLUDED` present). Check with PresentMon: one frame queued, and the
   latency between the mouse and the photon.

@@ -266,7 +266,7 @@ of every key in step 5), the reliable commands (every binding in game, and the c
 Today a key applied by the second `Com_EventLoop` waits through `SV_Frame`, the com_maxfps sleep and the back-end
 wait in `R_SyncGpu`, and the frame-latency wait (P0004), while the mouse is read right after them. The rule below
 moves the safe events to right after the wait without reordering anything. Implemented as described
-(enhanced/client/cl_late_input.cpp, records/patches.tsv P0006), with one extra stop: Escape stops the drain released too
+(enhanced/client/cl_late_input.cpp, records/patches.tsv P0009), with one extra stop: Escape stops the drain released too
 (its press always stays queued, so its release follows it). *Unverified* on hardware.
 
 **Where.** In the enhanced `R_SyncGpu`, at its end (after the original's own waits and the com_maxfps sleep, so

@@ -560,6 +560,7 @@ int sub_140630210();
 int sub_1406302D0();
 void R_ProcessWorkerCmdsWithTimeout(int (*isDone)(), int timeout);
 extern "C" unsigned long long __rdtsc();
+void CL_DispatchLateInput();  // enhanced/client/cl_late_input.cpp (P0009)
 extern "C" unsigned long WaitForSingleObjectEx(void *hHandle, unsigned long dwMilliseconds, BOOL bAlertable);
 
 #define WAIT_OBJECT_0 0
@@ -634,7 +635,8 @@ static unsigned long long R_SyncGpuDeadline()
 // src: Store 1406327D0 R_SyncGpu, the front end's wait at the start of a client frame, before the frame's input is
 // read. Enhanced: first waits on the frame-latency waitable object (R_WaitForFrameLatency), so the frame starts, and
 // its mouse and keys are read, once the display has room for it rather than as early as the back end allows. The wait
-// counts against com_maxfps' frame time like the original's waits. The rest is the original.
+// counts against com_maxfps' frame time like the original's waits. At the end, after every wait of the frame, the keys
+// and mouse buttons that arrived meanwhile are applied (CL_DispatchLateInput, P0009). The rest is the original.
 void R_SyncGpu(int (*WorkCallback)(unsigned long long))
 {
 	if (!R_CheckLostDevice())
@@ -700,4 +702,5 @@ void R_SyncGpu(int (*WorkCallback)(unsigned long long))
 		}
 	}
 	R_ProcessWorkerCmdsWithTimeout(sub_1406302D0, 1);
+	CL_DispatchLateInput();
 }
