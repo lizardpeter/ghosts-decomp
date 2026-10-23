@@ -8,6 +8,8 @@ on:
       - tools/direct/native_smoke.py
       - tools/offline/package.py
       - enhanced/offline/controller.cpp
+      - tools/direct/fetch_startup.py
+      - records/native-startup-sources.tsv
   workflow_dispatch:
 
 permissions:
@@ -69,7 +71,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: tools/direct
+          sparse-checkout: |
+            tools/direct
+            records
       - uses: actions/download-artifact@v4
         with:
           name: custom-launch-package
@@ -96,6 +100,8 @@ jobs:
           }
           # Windows searches the executable directory first for these local DLLs.
           Copy-Item game/*.dll package/
+          python tools/direct/fetch_startup.py --output game --report diagnostics/sources.json
+          if ($LASTEXITCODE -ne 0) { throw 'Original startup asset staging failed' }
       - name: Observe fixture and custom game with outbound firewall blocks
         shell: pwsh
         run: |

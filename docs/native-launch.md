@@ -39,6 +39,20 @@ disable the engine's filesystem check. The authentic original is
 The workflow now stages that file under main/ and uses smaller source checkouts
 to shorten subsequent startup iterations.
 
+Run [39971930736](https://github.com/lizardpeter/ghosts-decomp/actions/runs/39971930736)
+cleared that filesystem error and reached `MENU_CONTENT_NOT_AVAILABLE`. The
+Store failure site at 1403705E0 belongs to the FastFile-open path at 140370440:
+it raises a fatal error when opening a required zone fails. This does not by
+itself identify a missing map, a licence failure or a server requirement.
+
+`records/native-startup-sources.tsv` now inventories 48 original core/UI and
+English FastFiles (701,934,318 bytes). `tools/direct/fetch_startup.py` stages this
+subset into the real game directory, preserving paths, checking exact sizes
+and plain MD5 ETags pinned from the source inventory, and reporting newly
+computed SHA-256 values. Existing valid originals are reused. No placeholder
+FastFiles or content-availability bypass is supplied. Maps, streamed PAKs and
+the remainder of the installation are outside this startup subset.
+
 The observer requires a matching, active outbound-block Windows Firewall rule
 for the exact executable path. The workflow also checks that the firewall
 service and profiles are enabled. It removes its temporary rule after stopping
