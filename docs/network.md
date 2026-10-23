@@ -479,3 +479,10 @@ contacted. `test_matchmaking_offline.py` poisons dvars and ring indices and
 rejects dependency calls from each enhanced entry point. Other original
 call sites, independent collectors, direct HTTP providers and complete executable
 integration still need work; this is not whole-process isolation.
+
+The connected reporter/trigger cases execute the reconstructed reset itself;
+only its local provider calls are modeled. Twelve deliberate mutations were
+rejected: record eligibility, sampling equality, forced/binary categories,
+task slot, omitted post-report reset, metric mask, reset sentinel, ring wrap,
+snapshot count, match counter and reset-trigger admission. Removing any of the
+six P0010 overrides also fails the enhanced tests.

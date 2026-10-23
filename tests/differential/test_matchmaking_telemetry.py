@@ -224,3 +224,10 @@ CASES = [
 ]
 CASES[-1]['inputs'].append({'args':[],'setup':setup(),
                           'fakes':{**RESET_FAKES,CLOCK:clock}})
+
+# Per-input maps replace the direct-call fixture for connected reset cases.
+# The runner merges case maps, so do not leave RESET faked at case level.
+for case in CASES:
+    defaults = case.pop('fakes', {})
+    for inp in case['inputs']:
+        inp.setdefault('fakes', defaults)
