@@ -357,3 +357,8 @@ without callbacks, UI, SDK entry or synthesized async completions. This extends
 the existing override through faithful calls; no additional API-specific override
 is needed. A future local identity/server implementation still needs its own
 explicit account, task and credential contract.
+
+Thirteen intentional mutations were rejected: changing query-success admission
+in each of the ten wrappers, swapping options/privilege, truncating token buffer
+size to 32 bits and omitting token-result interface release. Removing the shared
+enhanced lookup override also makes the new account/result test fail.
