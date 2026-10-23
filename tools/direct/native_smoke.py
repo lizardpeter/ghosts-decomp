@@ -138,6 +138,36 @@ def observe(exe, cwd, arguments, seconds):
     return result
 
 
+def audit_imports(exe, requirements):
+    """Map providers without DllMain and check required exports; do not call them."""
+    kernel=C.WinDLL('kernel32',use_last_error=True)
+    kernel.LoadLibraryExW.argtypes=[W.LPCWSTR,W.HANDLE,W.DWORD]
+    kernel.LoadLibraryExW.restype=W.HANDLE
+    kernel.GetProcAddress.argtypes=[W.HANDLE,C.c_void_p]
+    kernel.GetProcAddress.restype=C.c_void_p
+    kernel.FreeLibrary.argtypes=[W.HANDLE]
+    result=[]
+    for provider in json.loads(requirements.read_text()):
+        local=exe.parent/provider['dll']
+        name=str(local) if local.exists() else provider['dll']
+        module=kernel.LoadLibraryExW(name,None,1)  # DONT_RESOLVE_DLL_REFERENCES
+        item={'dll':provider['dll'],'mapped':bool(module)}
+        if not module:
+            item['error']=C.get_last_error()
+        else:
+            try:
+                missing=[]
+                for symbol in provider['symbols']:
+                    value=C.c_char_p(symbol.encode()) if isinstance(symbol,str) else C.c_void_p(symbol)
+                    if not kernel.GetProcAddress(module,C.cast(value,C.c_void_p)):
+                        missing.append(symbol)
+                item['missing_exports']=missing
+            finally:
+                kernel.FreeLibrary(module)
+        result.append(item)
+    return result
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--exe',type=Path,required=True)
@@ -145,6 +175,7 @@ def main():
     parser.add_argument('--firewall-rule',required=True)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--seconds',type=int,default=30)
+    parser.add_argument('--imports',type=Path)
     parser.add_argument('arguments',nargs=argparse.REMAINDER)
     args=parser.parse_args()
     if sys.platform!='win32' or not 1<=args.seconds<=300:
@@ -154,6 +185,8 @@ def main():
     arguments=args.arguments[1:] if args.arguments[:1]==['--'] else args.arguments
     result=observe(exe,args.cwd.resolve(strict=True),arguments,args.seconds)
     result['firewall']=rule
+    if args.imports:
+        result['import_audit']=audit_imports(exe,args.imports)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
     print(json.dumps(result,indent=2))
 

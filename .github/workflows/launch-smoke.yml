@@ -22,6 +22,15 @@ jobs:
           python3 tools/fetch_originals.py iw6mp64_MSStore_ship .work/originals --only exe
           IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct
           python3 tools/offline/package.py --original .work/originals/iw6mp64_MSStore_ship.exe --mode direct --output .work/package
+      - name: Record packaged EXE import requirements
+        run: |
+          python3 - <<'PYTHON'
+          import json, pefile
+          from pathlib import Path
+          pe=pefile.PE('.work/package/iw6mp64_offline.exe')
+          rows=[{'dll':d.dll.decode(), 'symbols':[i.name.decode() if i.name else i.ordinal for i in d.imports]} for d in pe.DIRECTORY_ENTRY_IMPORT]
+          Path('.work/package/imports.json').write_text(json.dumps(rows))
+          PYTHON
       - name: Build a native debug-observer fixture
         run: |
           printf '%s\n' '__declspec(dllimport) void OutputDebugStringA(const char *);' '__declspec(dllimport) void ExitProcess(unsigned int);' 'void probe(void) { OutputDebugStringA("IW6 native observer fixture"); ExitProcess(17); }' > .work/probe.c
@@ -92,7 +101,7 @@ jobs:
                 $result=Get-Content diagnostics/observer.json -Raw | ConvertFrom-Json
                 if ($result.exit_code -ne '0x11' -or !($result.events | Where-Object { $_.text -eq 'IW6 native observer fixture' })) { throw 'Native debug observer evidence mismatch' }
               } else {
-                python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 45 --output diagnostics/game.json -- +set fs_basepath $game +set fs_homepath $profile +set logfile 2 +set r_fullscreen 0 +direct_player 0000000000000001 LocalProbe
+                python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 45 --output diagnostics/game.json --imports package/imports.json -- +set fs_basepath $game +set fs_homepath $profile +set logfile 2 +set r_fullscreen 0 +direct_player 0000000000000001 LocalProbe
                 if ($LASTEXITCODE -ne 0) { throw 'Game observation failed' }
               }
             } finally { Remove-NetFirewallRule -Name $rule }
