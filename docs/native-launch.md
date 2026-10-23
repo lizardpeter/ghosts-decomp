@@ -16,6 +16,18 @@ diagnostic workflow therefore succeeding means observation succeeded; it does
 not mean the game launched successfully. The import-audit follow-up maps each
 required provider without running DllMain and checks its exported symbols.
 
+The follow-up run
+[39969941352](https://github.com/lizardpeter/ghosts-decomp/actions/runs/39969941352)
+isolated XINPUT1_3.dll: loading that provider returned error 126, while every
+other required provider and export mapped successfully. P0021 removes the three
+legacy controller imports, which the pinned EXE requests by ordinals 2, 3 and 4
+(GetState, SetState and GetCapabilities). The custom adapters report device not
+connected (1167), without touching buffers or invoking another provider. The
+offline/direct packages currently use keyboard/mouse; this change does not
+create a replacement controller backend. The faithful source is unchanged.
+Tests enter the original IAT slots with null and invalid pointers and verify
+both the exact adapter selection and the absence of state writes/import calls.
+
 The observer requires a matching, active outbound-block Windows Firewall rule
 for the exact executable path. The workflow also checks that the firewall
 service and profiles are enabled. It removes its temporary rule after stopping

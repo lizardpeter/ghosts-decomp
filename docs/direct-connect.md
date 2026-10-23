@@ -49,7 +49,7 @@ only the pinned executables are present in the development test environment.
 ## What is connected
 
 The direct profile retains all 31 P0011 vendor guards, the ten P0018 vendor integrity/reporting guards,
-and all 55 original import redirects. See [vendor-disconnection.md](vendor-disconnection.md). Original WinHTTP,
+and all 58 original import redirects. See [vendor-disconnection.md](vendor-disconnection.md). Original WinHTTP,
 XCurl, GDK runtime loading, DNS, socket creation/sends and the selected account/reporting/process/broker paths
 remain unavailable. The replacement transport has private Winsock imports in the DLL; they do not go through
 the original IAT. Only this explicit opt-in profile opens game sockets. It is not run inside the network-disabled

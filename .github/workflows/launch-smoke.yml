@@ -6,6 +6,8 @@ on:
     paths:
       - .github/workflows/launch-smoke.yml
       - tools/direct/native_smoke.py
+      - tools/offline/package.py
+      - enhanced/offline/controller.cpp
   workflow_dispatch:
 
 permissions:

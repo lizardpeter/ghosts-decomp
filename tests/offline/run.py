@@ -30,7 +30,7 @@ def check():
         for slot, name in exe.iat.items():
             if name.startswith('recon.dll!'):
                 m.mu.mem_write(slot, struct.pack('<Q', dll.exports[name.split('!',1)[1]]))
-        assert len(manifest['guards']) == 31 + len(package.VENDOR_TASKS) and len(manifest['imports']) == 55
+        assert len(manifest['guards']) == 31 + len(package.VENDOR_TASKS) and len(manifest['imports']) == 58
         errors = []
         m.on_import('kernel32.dll!SetLastError', lambda mu: errors.append(mu.reg_read(UC_X86_REG_RCX)))
         m.on_import('ws2_32.dll!WSASetLastError', lambda mu: errors.append(mu.reg_read(UC_X86_REG_RCX)))
@@ -86,6 +86,16 @@ def check():
         # Requirements are also asserted by original API identity, independently
         # of the packager's manifest/export selection.
         original_slots = {name:slot for slot,name in Image(original).iat.items()}
+        assert not any(name.startswith('xinput1_3.dll!') for name in exe.iat.values())
+        for ordinal,export in ((2,'Iw6NoControllerState'),(3,'Iw6NoControllerVibration'),(4,'Iw6NoControllerCapabilities')):
+            slot = original_slots['xinput1_3.dll!#'+str(ordinal)]
+            assert exe.iat[slot].startswith('recon.dll!')
+            target = struct.unpack('<Q',m.mu.mem_read(slot,8))[0]
+            assert target==dll.exports[export]
+            for pointer in (0,1,0xFFFFFFFFFFFFFFFF):
+                value,buffers,writes,observed = m.call(target,[pointer]*3)
+                assert value==1167 and not buffers and not writes and not observed
+                assert not m.imports_called
         required = {
             'winhttp.dll!WinHttpOpen':0, 'winhttp.dll!WinHttpSendRequest':0,
             'xcurl.dll!curl_easy_init':0, 'xcurl.dll!curl_easy_setopt':2,

@@ -66,8 +66,16 @@ def align(n, a):
     return (n + a - 1) // a * a
 
 
-def adapter(dll, name):
+def adapter(dll, name, ordinal=None):
     dll = dll.lower()
+    if dll == 'xinput1_3.dll':
+        # The pinned EXE imports these by ordinal. The XInput 1.3 export table
+        # maps 2=GetState, 3=SetState, 4=GetCapabilities (not 1,2,3).
+        return {2:'Iw6NoControllerState',3:'Iw6NoControllerVibration',
+                4:'Iw6NoControllerCapabilities'}.get(ordinal) if name is None else {
+                'XInputGetState':'Iw6NoControllerState',
+                'XInputGetCapabilities':'Iw6NoControllerCapabilities',
+                'XInputSetState':'Iw6NoControllerVibration'}.get(name)
     if dll == 'winhttp.dll':
         return 'Iw6DenyMinusOne' if name == 'WinHttpSetStatusCallback' else 'Iw6DenyNull'
     if dll == 'xcurl.dll':
@@ -149,14 +157,15 @@ def transform(original, dll_bytes, mode='offline'):
         current = None
         for imp in desc.imports:
             name = imp.name.decode('ascii') if imp.name else None
-            replacement = adapter(provider, name)
+            replacement = adapter(provider, name, imp.ordinal)
             dest = 'recon.dll' if replacement else provider
             if current is None or current[0] != dest:
                 current = [dest, imp.address - pe.OPTIONAL_HEADER.ImageBase, []]
                 runs.append(current)
             if replacement:
                 if replacement not in exports: raise ValueError('missing adapter ' + replacement)
-                redirected.append({'provider': provider, 'name': name, 'iat_rva': imp.address - pe.OPTIONAL_HEADER.ImageBase, 'export': replacement})
+                redirected.append({'provider': provider, 'name': name, 'ordinal': imp.ordinal,
+                                   'iat_rva': imp.address - pe.OPTIONAL_HEADER.ImageBase, 'export': replacement})
             target = replacement or name
             thunk = add(b'\0\0' + target.encode('ascii') + b'\0', 2) if target else (1 << 63) | imp.ordinal
             current[2].append(thunk)
