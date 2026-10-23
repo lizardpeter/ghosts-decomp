@@ -540,3 +540,22 @@ iw6mp64_MSStore_ship	140297CF0	matches	src/bgame/bg_weapons_view.cpp	test_bg_wea
 iw6_ds_ps4	1400A3310	matches	src/bgame/bg_weapons_view.cpp	test_bg_weapons_view.py: 2000 cases; mutation-checked
 iw6mp64_MSStore_ship	140530470	matches	src/universal/com_math.cpp	differential test (emulated, original vs recon)
 iw6mp64_MSStore_ship	1405304D0	matches	src/universal/com_math.cpp	test_com_math.py: 300 cases
+iw6mp64_MSStore_ship	1402D2900	matches	src/cgame_mp/cg_predict_mp.cpp	test_cg_predict.py: 2,560 cases (fake Pmove; 60 with the original Pmove, noclip/ufo); mutation-checked
+iw6mp64_MSStore_ship	1402D2480	matches	src/cgame_mp/cg_predict_mp.cpp	test_cg_predict.py: 1,500 cases (CG_PredictPlayerState_Internal faked); mutation-checked
+iw6mp64_MSStore_ship	1402D2410	matches	src/cgame_mp/cg_predict_mp.cpp	test_cg_predict.py: 200 cases; mutation-checked
+iw6mp64_MSStore_ship	1402D3170	matches	src/cgame_mp/cg_predict_mp.cpp	test_cg_predict.py: 300 cases; mutation-checked
+iw6mp64_MSStore_ship	1402D2380	matches	src/cgame_mp/cg_predict_mp.cpp	test_cg_predict.py: 100 cases; mutation-checked
+iw6mp64_MSStore_ship	1402D2300	matches	src/cgame_mp/cg_predict_mp.cpp	test_cg_predict.py: 300 snapshots; mutation-checked
+iw6mp64_MSStore_ship	1402D2370	matches	src/cgame_mp/cg_predict_mp.cpp	test_cg_predict.py: 30 cases
+iw6mp64_MSStore_ship	1402D2400	matches	src/cgame_mp/cg_predict_mp.cpp	test_cg_predict.py: 30 cases
+iw6mp64_MSStore_ship	1402CFF20	matches	src/cgame_mp/cg_predict_mp.cpp	test_cg_predict.py: 50 cases; mutation-checked
+iw6mp64_MSStore_ship	1402CFF40	matches	src/cgame_mp/cg_predict_mp.cpp	test_cg_predict.py: 300 cases; mutation-checked
+iw6mp64_MSStore_ship	140305E50	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_predict.py: 50 cases
+iw6mp64_MSStore_ship	1403065F0	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_predict.py: 600 cases around the ring limits, Com_Error faked; mutation-checked
+iw6mp64_MSStore_ship	140306F60	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_predict.py: 300 cases; mutation-checked
+iw6mp64_MSStore_ship	140306FD0	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_predict.py: 100 cases
+iw6mp64_MSStore_ship	1402AB060	matches	src/cgame_mp/cg_draw_mp.cpp	test_cg_draw.py: 600 cases; mutation-checked
+iw6mp64_MSStore_ship	140306E80	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_draw.py: 50 cases
+iw6mp64_MSStore_ship	140306F30	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_draw.py: 50 cases; mutation-checked
+iw6mp64_MSStore_ship	140307110	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_draw.py: 100 cases; mutation-checked
+iw6mp64_MSStore_ship	140306E70	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_draw.py: 50 cases; mutation-checked

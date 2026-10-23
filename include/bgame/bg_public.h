@@ -93,11 +93,36 @@ struct pml_t
 	int turning;
 };
 
+struct trajectory_t
+{
+	int trType;
+	int trTime;
+	int trDuration;
+	float trBase[3];
+	float trDelta[3];
+};
+
+// The part of an entity's state the client interpolates (LerpEntityState): only the trajectories are spelled out.
+struct LerpEntityState
+{
+	int eFlags;
+	trajectory_t pos;
+	trajectory_t apos;
+	unsigned char u[0x68 - 0x4C];  // per entity type; for a player, the torso and waist pitch at +8 and +0xC
+};
+
+// entityState_s: the Store build's layout up to the weapon (what the cgame's item and player code reads)
 struct entityState_s
 {
 	int number;
 	int eType;
+	LerpEntityState lerp;
+	unsigned char unknown70[0xC4 - 0x70];
+	Weapon weapon;  // an item's weapon
 };
+static_assert(sizeof(trajectory_t) == 0x24, "trajectory_t layout");
+static_assert(__builtin_offsetof(entityState_s, lerp.apos) == 0x30, "entityState_s layout (Store build)");
+static_assert(__builtin_offsetof(entityState_s, weapon) == 0xC4, "entityState_s layout (Store build)");
 
 struct OmnvarData
 {

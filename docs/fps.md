@@ -351,6 +351,291 @@ frames repeat the same time; making it fractional belongs to the view/interpolat
 6. On hardware, *unverified* until then: server-side behaviour on official-protocol servers (no rate limits beyond the
    above were found), and the CPU cost of 30 replays per frame at 1000 fps.
 
+## 7. Prediction and the rendered view
+
+Where the rendered view's angles and origin come from in the Store build, what the prediction does exactly, and what
+the enhanced build must change to draw every frame at its own time when usercmds are fixed 5 ms steps (6.3). From the
+disassembly; **(R)** marks the functions reconstructed for this section and passing their differential tests
+(tests/differential/test_cg_predict.py, test_cg_draw.py), *measured* marks numbers from running the Store build's
+own code in the emulator (scratchpad harness, not in the repo), *unverified* what was only read.
+
+### 7.1 Summary
+
+- **The predicted state is not rebuilt from the snapshot every frame.** `CG_SetNextSnap` (1402DBD40) copies each
+  new snapshot's player state into `cg.predictedPlayerState` (20 times a second); between snapshots every frame
+  continues from where the previous frame's prediction ended and runs only the commands that are new. Only while the
+  player stands on an entity or a moving platform, or did within the last second, is the state copied from the
+  snapshot every frame (1402D3230). Section 4.2 and row 5 of section 5 describe a full replay every frame; that holds
+  only on platforms. The cost is one full replay per snapshot plus the new commands per frame:
+  about 20 · (round trip + 25 ms) · fps + fps `PmoveSingle` calls a second, not O(fps² · latency) (3,500 a second at
+  1000 fps and 100 ms instead of ~150,000). On a platform it is a full replay every frame.
+- **The rendered angles are `cg.predictedPlayerState.viewangles`, and only `Pmove` writes them.** The mouse moves
+  `cl.clViewangles` once per frame; `CL_FinishMove` adds the cgame's kick and ADS offset and rounds them to 16 bits
+  into the command; `PmoveSingle` (inside `PM_UpdateViewAngles`) sets `viewangles = AngleNormalize180(short · 360 /
+  65536 + delta_angles)` with the pitch held to ±85° by moving `delta_angles` (*measured*); `CG_CalcViewValues`
+  copies them to the refdef and adds the view effects. Nothing on the first-person path reads `clViewangles`.
+- **No new command, no new angles.** When the newest command's time is not after the predicted state's
+  `commandTime`, the prediction runs no `Pmove` and puts back the angles the last frame ended with
+  (`savedViewangles`). In the original that is a frame whose `cl.serverTime` repeated (2.2): the view does not turn
+  that frame although the mouse moved. With 5 ms commands it would be four frames in five at 1000 fps.
+- **The rendered origin is the predicted origin at the newest command's time**, which in the original is the
+  frame's own `cl.serverTime` (= `cg.time`), plus the step smoothing and the decaying prediction error
+  (`CG_CalcViewValues`), the view height and bob (`CG_OffsetFirstPersonView`).
+- **The kick reaches the view one frame late**, through the next frame's command: the cgame's `kickAngles` are read
+  only by `CG_DrawActive` (R), which hands them to the client for the next usercmd.
+- **For the enhanced build:** run one extra `Pmove` on copies of the predicted state and of `cg_pmove`, with a
+  temporary command from this frame's input and angles at `serverTime = cl.serverTime`; swap only the movement
+  fields of the copy (origin, velocity, view angles, bob, view height, lean) into `cg.predictedPlayerState` at the
+  end of `CG_PredictPlayerState` (R) and put the canonical values back in `CG_DrawActive` (R), with an idempotent
+  restore in every reconstructed reader. Details and the list of things that must not leak in 7.6.
+
+### 7.2 The client frame, in order
+
+What touches the predicted state and the view in one `Com_Frame` (Store VAs; docs/frame.md and docs/fps-frame.md
+give the rest):
+
+| Step | Where | What |
+|---|---|---|
+| 1 | 14031B231 (in 14031B1F0, before the cgame frame) | `CG_SavePlayerState` (R, 1402D3170): the predicted state the last frame ended with: `commandTime`, origin, view angles, the trans state (`CG_ExtractTransPlayerState`, R) and, new in this build, `pe` (the predictable events) |
+| 2 | `CG_DrawActiveFrame` (1402E7860) | `cg.oldTime = cg.time; cg.time = cl.serverTime` |
+| 3 | `CG_ProcessSnapshots` (1402DB4C0) → `CG_SetNextSnap` (1402DBD40) | for each new snapshot: `memcpy(&cg.predictedPlayerState, &snap->ps, 0x3328)`; `CG_BuildItemList` (R) when the item list belongs to another client |
+| 4 | 1402D3230 (1402E7A41) | `cg.predictFromTime = nextSnap->serverTime`; for `pm_type` 1 or 8 or `linkFlags & 4` `CG_InterpolatePlayerState(lc, 0)`, for a demo or `otherFlags & 0x2000` `CG_InterpolatePlayerState(lc, 1)` (the state is blended between the snapshots, nothing is predicted); otherwise, if the snapshot's ground entity is an entity (1..0x7FD) or the predicted state rides a platform, `cg.lastOnEntityTime = cg.time`, and while `cg.time - lastOnEntityTime < 1000` the snapshot's state is copied in again |
+| 5 | `sub_1402D2410` (R, 1402E7DEE) | the early prediction, local client 0 only: `CG_PredictPlayerState_Internal(0, 1)`, then `pe` is put back from the saved copy |
+| 6 | `CL_SyncGpu` → `R_SyncGpu` (1402E7DF5) | the frame wait |
+| 7 | `CL_Input` (R, 1402E7E0C) | `IN_Frame`, `CL_CreateNewCommands`: the mouse into `clViewangles`, one command at `cl.serverTime` with `ANGLE2SHORT(clViewangles + cgameKickAngles)` |
+| 8 | `CG_PredictPlayerState` (R, 1402E7E1C) | `CG_PredictPlayerState_Internal(lc, 0)` and what follows from the state (7.4) |
+| 9 | `CG_TransitionPlayerState` (1402D0750, 1402E7EA7) | fires the predictable events between the saved `eventSequence` and the new one (1402B64C0), the unpredictable ones, the damage feedback |
+| 10 | 1402E817B | `BG_KickAngles` (R) on `cg.frametime`: the new kick |
+| 11 | 1402E819E | `CL_SendCmd` (R) |
+| 12 | `CG_CalcViewValues` (1402EDDD0, 1402E836D) | the refdef from the predicted state (7.5) |
+| 13 | `CG_AddViewWeapon` (1402F38B0, 1402E83B5) | the viewmodel from the predicted state |
+| 14 | `CG_DrawActive` (R, 1402AB060, 1402E8929) | FOV sensitivity, `kickAngles + offsetAngles` and the weapons for the next command, `CL_RenderScene` |
+
+So in the original the command created in step 7 has `serverTime = cl.serverTime = cg.time`, the prediction of
+step 8 ends at that time, and the frame is drawn at it: command time, predicted time and render time are the same
+integer millisecond.
+
+### 7.3 CG_PredictPlayerState_Internal (R, 1402D2900)
+
+`int CG_PredictPlayerState_Internal(LocalClientNum_t lc, int moverEarly)`, Black Ops' function of the same name with
+moving platforms added. Called with `moverEarly` 1 by `sub_1402D2410` (before the frame's command) and 0 by
+`CG_PredictPlayerState` (after it).
+
+1. `current = CL_GetCurrentCmdNumber()` (R, 140305E50). Returns 0 at once for a demo (`cg.demoType`) or
+   `otherFlags & 0x2000` (step 4 interpolates those).
+2. **The platform.** `moverNum = ps.movingPlatformEntity` if it is 0x3A..0x7FD. Otherwise the cached
+   `cg.platformContactEntity` (cg+0xB2750), or, when that is `ENTITYNUM_NONE`, the entity a box trace of the
+   player's bounds in place hits with `allsolid` (140304650, mask 0x810011). If that entity has eType 6 or 14 and a
+   number other than 0x7FF, it becomes `ps.movingPlatformEntity`, `otherFlags |= 0x1000000` unless mantling, and
+   the move starts at `cg.snap->serverTime` instead of `cg.predictFromTime`.
+3. `cg_pmove.ps = &cg.predictedPlayerState`. Only when `unk_143E96824 == 0` and `moverEarly == (lc == 0)` (so the
+   early call for client 0, the late call for the others): `CG_AdjustPositionForMover` (1402B1F60) moves the origin
+   with the platform from that start time to `cg.time`, and for a real platform `BG_UpdateAnglesMovingPlatform`
+   turns the view (`delta_angles[1]`), the platform's angular velocity (`cg.platformAngularVelocity`, degrees per
+   second, from the angle change over `cg.time - start`; not written when that is 0), the velocity and, mantling, the
+   mantle start point are turned with it, and `sub_140178C50` passes the origin change on.
+4. **Pmove set-up:** `handler = 0`, `tracemask` 0x2814011 below `pm_type` 7, else 0x810011, 0x800011 for
+   `pm_type` 5; `viewChange = 0`, `contactEntity = ENTITYNUM_NONE`, `viewChangeTime = cg.stepViewStart`. Bounds,
+   `oldcmd` and the rest of `cg_pmove` carry over from the last call.
+5. `CL_GetUserCmd` (R, 1403065F0) of `current - 127` (it always succeeds) and of `current` (the newest,
+   `latestCmd`).
+6. **The replay**, if `ps.commandTime < latestCmd.serverTime`: for `cmdNum` from `current - 127` to `current`, the
+   command into `cg_pmove.cmd`; it is used if `commandTime <= serverTime <= latestCmd.serverTime` and the command
+   before it is still in the ring (so `current - 127` itself never is: 127 commands at most). A command at exactly
+   `commandTime` is a zero-length `Pmove` (no `PmoveSingle`: nothing moves, the angles stay; only the torso and
+   waist pitch are recomputed). For each:
+   - **The prediction error**, when `ps.commandTime == cg.savedCommandTime` (the replay has reached the time the last
+     frame ended at): the origin moved with the platform from `cg.time` back to `cg.oldTime`, against the saved
+     origin. Unless the snapshot was a teleport (`cg.noPredictionError`, cg+0x10E832), if the difference is longer
+     than 0.1 and the player is not on a platform: `predictedError = predictedError · max(0, (cg_errordecay - (time -
+     predictedErrorTime)) / cg_errordecay) + (saved - new)` (zero first when `cg_errordecay` is 0) and
+     `predictedErrorTime = cg.oldTime`. In the incremental case the comparison is with the state itself and the
+     difference is 0; it can only be non-zero on the frame after a reset.
+   - `Pmove(&cg_pmove)` (R).
+   - **Item pickups** (Black Ops' `CG_TouchItemPrediction`, inlined), for `pm_type` 0 or 1: every item in
+     `cg_itemEntities` whose announcement is not pending (`predictedPickupTime` 0 or before `cg.time`), that
+     `BG_PlayerTouchesItem` and `BG_CanItemBeGrabbed` accept and that is a weapon type 5 (sub_140267140) or an
+     equipped weapon whose ammo the player can take (sub_140267880): `predictedPickupTime = cg.time + 5000` and
+     event 10 for it (sub_1402B8F80, predicted). This is the only event the prediction raises itself.
+7. **No new command** (`ps.commandTime >= latestCmd.serverTime`): unless `cg.viewTeleported`, `ps.viewangles =
+   cg.savedViewangles`.
+8. If `cg.platformContactEntity` is still `ENTITYNUM_NONE`, it takes `cg_pmove.contactEntity`. Nothing else in the
+   build ever resets it (*unverified*: only a reset of the whole `cg_s` would).
+9. Returns 1.
+
+**What it writes:** `cg.predictedPlayerState` (all of it, through `Pmove`; the view angles on the no-command path;
+`movingPlatformEntity`, `otherFlags`, origin, velocity, mantle point and `delta_angles` through the platform),
+`cg.predictedError`, `cg.predictedErrorTime`, `cg.platformAngularVelocity`, `cg.platformContactEntity`, `cg_pmove`
+(`ps`, `cmd`, `oldcmd`, `tracemask`, `handler`, `viewChange`, `viewChangeTime`, `contactEntity` and what `Pmove`
+writes: `fTorsoPitch`, `fWaistPitch`, `groundSurfaceType`, ...), the items' `predictedPickupTime`. Events: the
+predictable events `Pmove` adds to `ps.pe` (footsteps, jumps, landings, weapon fire, through
+`BG_AddPredictableEventToPlayerstate`) are not fired here but by step 9, which compares with the trans state saved
+at step 1.
+
+**The early call and `pe`.** After a reset (step 3 or 4) the early call replays every unacknowledged command, and
+`Pmove` adds their events to `pe` again. `sub_1402D2410` then copies the saved `pe` back, so step 9 fires only the
+events of the commands the late call adds (the frame's new command). Events of the server's newer snapshot state in
+`pe` are overwritten by this too (*unverified* whether that loses any).
+
+### 7.4 CG_PredictPlayerState (R, 1402D2480)
+
+In order: `cg.lastAimSpreadScale = ps.aimSpreadScale`; `CG_PredictPlayerState_Internal(lc, 0)` (its result is not
+used); `CL_SetStance(lc, STAND)` when `pm_flags & 0x400`; no cursor hint clears the hint string (0) and entity
+(0x7FF); **the step smoothing** (moved here from Black Ops' internal function): when `cg_pmove.viewChange` is
+non-zero, its time differs from `cg.stepViewStart`, the view didn't jump, `pm_type` is 0, 2 or 3 and
+`|viewChange| >= cg_viewZSmoothingMin`, the remaining part of the previous step (`(1 - (viewChangeTime -
+stepViewStart) / (cg_viewZSmoothingTime · 1000)) · stepViewChange`, only inside that time) plus the new change,
+clamped to ±`cg_viewZSmoothingMax`, becomes `cg.stepViewChange` from `cg.stepViewStart = viewChangeTime` (a command
+time); otherwise `stepViewChange` is zeroed once `cg.time - stepViewStart` passes the smoothing time. Then the
+player's own entity: pose origin = predicted origin, pose angles from its `apos` trajectory at `cg.time` (not while
+mantling), `sub_1402CC6E0` for a melee charge target; the vehicle entity's state from `ps.vehicleState`
+(sub_140277AB0) when it is valid and of eType 12 or 14; `sub_140306FD0` (R) hands the vehicle state to the client;
+`BG_PlayerStateToEntityState` and `BG_PlayerToEntity_ProcessEvents` into the player entity's `nextState`, copied to
+`currentState`, then the torso and waist pitch from `cg_pmove`; `cg.predictedPlayerEntity`; `cg.groundSurfaceType`;
+`CL_SetUserCmdOrigin` (R, 140306F60: origin, velocity, bob cycle, movement direction and `cl.serverTime` for the next
+usercmd); sub_1402EF5D0 (the platform's motion since the saved origin); `cg.predictedWeaponPosFrac`; 1405BAAA0
+(remote camera transitions, which may set `clViewangles`); 1402D0AC0.
+
+### 7.5 Where the rendered view comes from
+
+**Angles.** `CG_CalcViewValues` (1402EDDD0) starts the frame's `refdefViewAngles` (cg+0xA9A90) from
+`cg.predictedPlayerState.viewangles` and changes them, in first person: the linked-entity adjustment (1402E75C0,
+only with `eFlags & 0x200000`), the roll relative to the link angles for `pm_type` 1 or 8 or `linkFlags & 4`
+(140264DB0), `CG_OffsetFirstPersonView` (1402E9930: `BG_CalculateViewMovement_Angles`, the bob, the damage kick, the
+lean roll), a pitch offset `atan(x · refdef.tanHalfFovY)` in degrees outside `pm_type` 5 and 6 (x a dvar or
+140266F80), and the camera shake (`CG_ShakeCamera`, R).
+The angles in the predicted state come only from `PmoveSingle`, i.e. from a command:
+
+1. `CL_MouseMove` (R) adds the frame's mouse movement to `cl.clViewangles` (once a frame, docs/input.md).
+2. `CL_FinishMove` (R): `cmd.angles[i] = (unsigned short)floor((clViewangles[i] + cgameKickAngles[i]) · 182.04445 +
+   0.5)`: 16 bits, a step of 0.0055°. `cgameKickAngles` are the cgame's `kickAngles + offsetAngles` as
+   `CG_DrawActive` (R) set them at the end of the previous frame.
+3. `PmoveSingle` → `PM_UpdateViewAngles` (PS4 PDB names; the Store build's measured): `viewangles[i] =
+   AngleNormalize180(cmd.angles[i] · 360/65536 + delta_angles[i])`; for normal and noclip movement the pitch is held
+   to ±85° by changing `delta_angles[0]` (*measured*: 86° gives 85 with `delta_angles[0] = -1.001`); prone, ladder,
+   mantle, turret, vehicle and remote control clamp differently (PS4 PDB, *unverified* in the Store build). A
+   zero-length `Pmove` leaves the angles as they are (*measured*).
+4. On the no-new-command path the angles are `savedViewangles` (7.3 step 7).
+
+`delta_angles` enter only in step 3 (the server and the platform code move them). `clViewangles` are read directly
+only off the first-person path: the free third-person spectator camera (1402E9C10 with `otherFlags & 0x2000`) and
+the remote-camera transitions (1405B6B40, 1405BAAA0). **So when no new command is predicted, the original does not
+show the new `clViewangles`.** The view kick is never added to the view directly: it rides on the next command, so
+the view shows it one frame late and quantized.
+
+**Origin.** `refdef.vieworg = ps.origin`, then (`CG_CalcViewValues`): the step smoothing `z -= (1 - min(1, (cg.time
+- stepViewStart) / (int)(cg_viewZSmoothingTime · 1000))) · stepViewChange` for `pm_type` 0, 2 and 3 when the view
+didn't jump and `cg.time >= stepViewStart`; the prediction error `+= f · predictedError` with `f = (cg_errordecay - (cg.time -
+predictedErrorTime)) / cg_errordecay` while 0 < f < 1 (else `predictedErrorTime = 0`), not on a platform and not for
+`pm_type` 1 or 8; then `CG_OffsetFirstPersonView`: `+ viewHeightCurrent`, the bob (from `bobCycle` and the
+velocity), the landing dip, at least 8 above the origin. All in integer milliseconds of `cg.time`; the origin itself
+is the state at the newest command time.
+
+### 7.6 What a view at the render time needs
+
+With fixed 5 ms commands (6.2) the newest command time `lastCmdTime` trails the render time `cl.serverTime` by
+`L = 0..4` ms, and most frames create no command.
+
+**(a) The current frame's angles without a new command.** Today they would stay at `savedViewangles` (7.5). They
+have to come from a `Pmove` with a command that carries this frame's angles, so that the same clamps apply as to the
+next real command (the ±85° pitch, prone, ladder, mantle, turret and vehicle limits all live in
+`PM_UpdateViewAngles`).
+
+**(b) The origin at the render time.** One `Pmove` of `L` ms on a copy.
+
+Both come from one extra step. The functions to override, all reconstructed now:
+
+1. **`CL_CreateNewCommands` (R, 14030BB00)**, besides the 5 ms grid of 6.2: every frame, build the command a command
+   at `cl.serverTime` would be (the frame's keys, buttons, weapon and `CL_FinishMove`'s angles from this frame's
+   `clViewangles + cgameKickAngles`) into an enhanced static `s_viewCmd`, without storing or sending it, and note
+   whether the frame stored a real command.
+2. **`CG_PredictPlayerState` (R, 1402D2480)**: first restore (point 4), then the faithful body. Then, when the
+   prediction ran (`_Internal` returned 1, `pm_type` neither 1 nor 8, no `linkFlags & 4`, not a demo):
+   - `viewPs = cg.predictedPlayerState` (0x3328 bytes), `viewPm = cg_pmove[lc]` (0x178), `viewPm.ps = &viewPs`,
+     `viewPm.oldcmd = ` the newest real command, `viewPm.cmd = s_viewCmd` with `serverTime = cl.serverTime`;
+   - if `L > 0`: save the local client's character info (the 0x5D8 bytes `BG_AnimUpdatePlayerStateConditions`
+     writes through the bgame thread-local, at `+0x10 + clientNum · 0x5D8`), `Pmove(&viewPm)`, restore it;
+   - if `L == 0` and the frame stored no command (only when `cl.serverTime` repeated), compute
+     `viewPs.viewangles[i] = AngleNormalize180(s_viewCmd.angles[i] · 360/65536 + viewPs.delta_angles[i])`, the pitch
+     clamped to ±85° (the normal-movement rule; keep the old angles in the special movement states);
+   - if `viewPm.viewChange != 0` (the partial step went up or down a step), `viewPs.origin[2] -= viewPm.viewChange`,
+     so the view starts the smoothing the canonical step will start a frame later instead of jumping;
+   - save the canonical values of the swapped fields in an enhanced static and set a flag, then write the copy's
+     `origin`, `velocity`, `viewangles`, `bobCycle`, `viewHeightCurrent` and `leanf` (0x2A8) into
+     `cg.predictedPlayerState`. Nothing else: not `commandTime`, `delta_angles`, `pm_flags`, `pe`, the weapon state,
+     `groundEntityNum` or the platform fields.
+3. **`CG_DrawActive` (R, 1402AB060)**: the faithful body, then restore. The swap is live exactly from the end of the
+   prediction to the end of the cgame frame: `CG_TransitionPlayerState` (reads only `pe`, `damageEvent`,
+   `otherFlags`: not swapped), `BG_KickAngles` (weapon fields), `CL_SendCmd`, `CG_CalcViewValues`, `CG_AddViewWeapon`
+   (the gun follows the view, as it should) and the scene.
+4. **The restore** (idempotent, a no-op without the flag) also at the start of `CG_SavePlayerState` (R),
+   `sub_1402D2410` (R) and `CG_PredictPlayerState_Internal` (R), in case `CG_DrawActiveFrame` returned before
+   `CG_DrawActive`. `CG_SetNextSnap`'s and 1402D3230's copies come after step 1 of 7.2, so they always see the
+   restored state.
+
+**What must not leak, and how the above keeps it out:**
+
+| Effect of the temporary step | Kept out by |
+|---|---|
+| its events (footsteps, jump, landing, weapon fire) | they are added to `viewPs.pe`, which is never swapped in; `CG_TransitionPlayerState` and `BG_PlayerToEntity_ProcessEvents` see the canonical `pe` |
+| weapon state (firing, reload, ADS fraction) | not swapped |
+| the prediction error and its decay | `_Internal` is not run for it; `CG_SavePlayerState` saves the restored origin |
+| the step smoothing state | `cg.stepViewStart`/`stepViewChange` are written only by `CG_PredictPlayerState` from the canonical `cg_pmove`; the temporary `viewChange` only lowers the view |
+| `cg_pmove`'s carried fields (`oldcmd`, `viewChange`, `contactEntity`, `fTorsoPitch`, `groundSurfaceType`, `remoteTurretFireTime`, `lastUpdateCMDServerTime`) | the step uses a copy |
+| `cg.platformContactEntity`, the platform's angular velocity | set only in `_Internal` |
+| item pickup events | the item loop is in `_Internal` |
+| the player entity, `CL_SetUserCmdOrigin`, the vehicle state, the stance | done by the faithful body before the swap, from the canonical state |
+| the character info's animation conditions (global, per client) | saved and restored around the step |
+| `delta_angles` (the pitch clamp moves them) | not swapped |
+| global memory written by `Pmove` itself | *measured* for noclip and ufo steps of 1 to 66 ms on private buffers: one thread-local word (TLS +0xD0, 0 → 1, *probably a one-time initialisation guard*); normal movement *unverified* |
+
+**Verifying it in the emulator** (the harness of tests/differential with the enhanced DLL):
+
+1. Drive `CL_CreateNewCommands` and `CG_PredictPlayerState` frame by frame at 1, 2, 2.5 (alternating 2 and 3) and
+   4.17 ms frames with a real noclip `Pmove` (the two animation-condition calls faked, as in test_cg_predict.py):
+   the swapped origin must advance every frame by the frame's own time (at constant speed, `speed · Δt` within one
+   ms of rounding), the view angles must equal `AngleNormalize180(round16(clViewangles + kick) + delta_angles)` of
+   the same frame, and the canonical state must be bit-identical to a run without the extra step.
+2. Run `CG_DrawActive` and check that `cg.predictedPlayerState` is byte-identical to the canonical state after it;
+   call `CG_SavePlayerState` without `CG_DrawActive` in between and check the same.
+3. Give `viewPs` a step that fires a weapon event (a `Pmove` fake that adds an event to `pe`): `pe` and
+   `cg.predictedPlayerState.pe_eventSequence` must be unchanged after the frame.
+4. The faithful functions are unchanged when the extra step is off: the differential tests of 7.8 run on the
+   enhanced DLL with the feature disabled.
+5. On hardware, *unverified* until then: the viewmodel and the local player's shadow at the swapped position, normal
+   movement's global writes, and the cost (one `PmoveSingle` per frame).
+
+### 7.7 Frame-rate dependencies found
+
+| # | VA | Where | Effect | Severity |
+|---|---|---|---|---|
+| 14 | 1402D2900 | no command newer than the predicted state: the view angles stay at the last frame's | the view does not turn on frames whose `cl.serverTime` repeated (≥ 500 fps, about once per corrected snapshot); with fixed-length commands it would be most frames | visible (rare in the original) |
+| 15 | 1402AB060, 14030CDF0 | the kick reaches the view only through the next command | kick one frame late and quantized to 16 bits: 16 ms at 60 fps, 1 ms at 1000 fps | cosmetic |
+| 16 | 1402D3230 | on an entity or a platform (and for 1 s after) the predicted state is reset to the snapshot every frame | full replay every frame there: O(fps · window) per frame, the row-5 cost, but only on platforms | performance |
+| 17 | 1402D2900 | 127-command window (the oldest of the 128 is never predicted, it has no predecessor) | at 1000 fps a round trip past ~100 ms makes the replay start late with a long first step (row 5) | visible (row 5) |
+| 18 | 1402D2900 | the platform's angular velocity from the integer `cg.time - start`, written only when that is non-zero | with a repeated `cg.time` the previous value stays | none / barely |
+| 19 | 1402D2480, 1402EDDD0 | step smoothing and error decay | by command times and `cg.time` in ms: frame-rate independent | none |
+| 20 | 1402D2900 | `cg.platformContactEntity` is set once and never reset | a platform once touched is checked every frame afterwards (not frame-rate dependent) | none (*unverified* effect) |
+| 21 | 1402EDDD0 | the error decay drops the whole error when `f >= 1`, i.e. when `cg.time == predictedErrorTime` (= the `cg.oldTime` of the frame that found it) | a prediction error found in a frame whose `cg.time` did not advance (repeated `cl.serverTime`, ≥ 500 fps) is applied as a snap instead of decaying over `cg_errordecay` | visible (rare) |
+
+Row 5 of section 5 (the cost) is corrected by 7.1: the full replay happens once per snapshot, not every frame,
+except on platforms (row 16).
+
+### 7.8 Tests
+
+`CG_PredictPlayerState_Internal`: of 2,560 inputs about 2,490 are usable (the others fault in the original itself:
+local client 1, whose `cg_pmove` overlaps `cg_itemEntities`, and some real-`Pmove` states), among them 28 that run
+the original `Pmove` for real (noclip and ufo, up to eight commands). Covered: the demo and `otherFlags 0x2000`
+exits, all three platform sources, both arguments for clients 0 and 1, the replay with repeated, older-than-the-ring
+and newer command times, about 150 prediction-error updates (decay 0, 100, negative, NaN), about 130 item pickup
+events, the no-command path and the contact cache. 53 mutations of 14 functions (comparisons, constants, dropped
+statements and conditions, swapped operands and arguments) all fail their tests, except two equivalent ones:
+`sinceStart > 0` for `>= 0` in the step smoothing (`sinceStart` 0 means `viewChangeTime == stepViewStart`, which
+skips the branch) and the operand order of one kick-angle addition in `CG_DrawActive` (it only differs for two NaNs
+with different payloads, which the emulator does not distinguish, *unverified*). Three first attempts survived and
+got better inputs: the 0.1 error threshold (offsets of 0.1 and 0.15), the `pm_type < 7` tracemask (`pm_type` 6) and
+`stepRemaining > 0` (a step that exactly cancels the rest of the previous one).
+
 ## Reconstructed for this document
 
 | Function | VA | File | Test |
@@ -360,3 +645,9 @@ frames repeat the same time; making it fractional belongs to the view/interpolat
 | `Jump_*` (10 functions) | 140260900..140261190 (PS4 too) | bgame/bg_jump.cpp | test_bg_jump.py |
 | `Pmove` | 140273A90 (PS4 140082BE0) | bgame/bg_pmove.cpp | test_bg_pmove.py |
 | `Com_InitDvars` | 140460F80 | qcommon/common.cpp | test_common_dvars.py |
+| `CG_PredictPlayerState_Internal`, `CG_PredictPlayerState`, `sub_1402D2410` | 1402D2900, 1402D2480, 1402D2410 | cgame_mp/cg_predict_mp.cpp | test_cg_predict.py |
+| `CG_SavePlayerState`, `CG_ClearSavedPlayerState`, `CG_BuildItemList`, `CG_ClearItemList`, `CG_ItemListLocalClientNum` | 1402D3170, 1402D2380, 1402D2300, 1402D2370, 1402D2400 | cgame_mp/cg_predict_mp.cpp | test_cg_predict.py |
+| `CG_ClearTransPlayerState`, `CG_ExtractTransPlayerState` | 1402CFF20, 1402CFF40 | cgame_mp/cg_predict_mp.cpp (Black Ops: cgame/cg_playerstate.cpp) | test_cg_predict.py |
+| `CL_GetCurrentCmdNumber`, `CL_GetUserCmd`, `CL_SetUserCmdOrigin`, `sub_140306FD0` | 140305E50, 1403065F0, 140306F60, 140306FD0 | client_mp/cl_cgame_mp.cpp | test_cg_predict.py |
+| `CG_DrawActive` | 1402AB060 | cgame_mp/cg_draw_mp.cpp | test_cg_draw.py |
+| `CL_SetFOVSensitivityScale`, `CL_SetUserCmdAimValues`, `CL_SetUserCmdWeapons`, `CL_SetExtraButtons` | 140306E80, 140306F30, 140307110, 140306E70 | client_mp/cl_cgame_mp.cpp | test_cg_draw.py |

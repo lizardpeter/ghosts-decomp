@@ -59,23 +59,7 @@ struct clSnapshot_s
 	unsigned char tail[0x34B8 - 0x3484];
 };
 
-struct PlayerVehicleState
-{
-	int entity;  // ENTITYNUM_NONE (0x7FF) or 0 when not in a vehicle
-	int flags;
-	int targetEntity;
-	float origin[3];
-	float angles[3];
-	float velocity[3];
-	float angVelocity[3];
-	float tilt[2];
-	float tiltVelocity[2];
-	float gunAngles[2];
-	unsigned int splineId;
-	unsigned int splineNodeIndex;
-	float splineLambda;
-	float corridorSpeeds[2];
-};
+// PlayerVehicleState is in bgame/bg_weapons.h (playerState_s holds one)
 
 struct outPacket_t
 {

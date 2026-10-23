@@ -109,9 +109,39 @@ struct ADSOverlay
 extern WeaponCompleteDef *bg_weaponCompleteDefs[];
 extern WeaponDef *bg_weaponDefs[];
 
+struct PlayerVehicleState
+{
+	int entity;  // ENTITYNUM_NONE (0x7FF) or 0 when not in a vehicle
+	int flags;
+	int targetEntity;
+	float origin[3];
+	float angles[3];
+	float velocity[3];
+	float angVelocity[3];
+	float tilt[2];
+	float tiltVelocity[2];
+	float gunAngles[2];
+	unsigned int splineId;
+	unsigned int splineNodeIndex;
+	float splineLambda;
+	float corridorSpeeds[2];
+};
+
+struct EntityEvent
+{
+	int eventType;
+	int eventParm;
+};
+
+struct PlayerEquippedWeaponState
+{
+	unsigned char unknown0[0x10];
+};
+
 // playerState_s: only the fields reconstructed code uses are spelled out, at the Store build's offsets, with the PS4
 // server PDB's names. Up to 0x620 the Store build's playerState_s has the PS4 server's layout (it grows later, in the
-// HUD data; docs/input.md); the perks are where the code of both builds reads them.
+// HUD data; docs/input.md); the perks and meleeChargeEnt are where the code of both builds reads them. The whole
+// struct is 0x3328 bytes in the Store build (the size the cgame copies from a snapshot; 0x3248 in the PS4 server).
 struct playerState_s
 {
 	int commandTime;
@@ -123,7 +153,9 @@ struct playerState_s
 	int bobCycle;
 	float origin[3];
 	float velocity[3];
-	unsigned char unknown34[0x5C - 0x34];
+	unsigned char unknown34[0x44 - 0x34];
+	int movingPlatformEntity;  // the entity the player rides (0x3A..0x7FD), else ENTITYNUM_NONE
+	unsigned char unknown48[0x5C - 0x48];
 	int gravity;
 	int speed;
 	float delta_angles[3];
@@ -131,24 +163,63 @@ struct playerState_s
 	float vLadderVec[3];
 	int jumpTime;
 	float jumpOriginZ;
-	unsigned char unknown88[0x150 - 0x88];
+	unsigned char unknown88[0xA8 - 0x88];
+	int movementDir;
+	unsigned char unknownAC[0xBC - 0xAC];
+	PlayerVehicleState vehicleState;
+	int eFlags;
+	int pe_eventSequence;  // pe (playerEvents_t): the predictable events
+	EntityEvent pe_events[4];
+	int pe_oldEventSequence;
 	int pe_timeADSCameUp;  // pe.timeADSCameUp
-	unsigned char unknown154[0x190 - 0x154];
+	int unpredictableEventSequence;
+	int unpredictableEventSequenceOld;
+	EntityEvent unpredictableEvents[4];
+	int clientNum;
+	int viewmodelIndex;
+	float viewangles[3];
 	int viewHeightTarget;
 	float viewHeightCurrent;
 	int viewHeightLerpTime;
 	int viewHeightLerpTarget;
 	int viewHeightLerpDown;
-	unsigned char unknown1A4[0x240 - 0x1A4];
+	unsigned char unknown1A4[0x1B4 - 0x1A4];
+	int damageEvent;
+	unsigned char unknown1B8[0x210 - 0x1B8];
+	int cursorHint;
+	unsigned int cursorHintString;
+	int cursorHintEntIndex;
+	unsigned char unknown21C[0x23C - 0x21C];
+	int locationSelectionInfo;
 	int sprintState_sprintButtonUpRequired;  // sprintState.sprintButtonUpRequired
-	unsigned char unknown244[0x41C - 0x244];
+	unsigned char unknown244[0x278 - 0x244];
+	float mantleState_startPosition[3];  // mantleState.startPosition
+	unsigned char unknown284[0x2E4 - 0x284];
+	Weapon weaponsEquipped[15];
+	PlayerEquippedWeaponState weapEquippedData[15];
+	unsigned char unknown410[0x41C - 0x410];
 	Weapon weapCommon_weapon;
 	int weapCommon_weapFlags;         // PWF_ALT_MODE
 	float weapCommon_fWeaponPosFrac;  // 0 hip .. 1 fully aimed down the sight (Pmove's ADS transition)
 	float weapCommon_aimSpreadScale;  // weapCommon.aimSpreadScale
-	unsigned char unknown42C[0xE14 - 0x42C];
+	unsigned char unknown42C[0xE08 - 0x42C];
+	int meleeChargeEnt;
+	unsigned char unknownE0C[0xE14 - 0xE0C];
 	unsigned int perks[2];  // the code of both builds reads them here (the PS4 PDB's type dump says 0xD5C)
+	unsigned char unknownE1C[0x3328 - 0xE1C];
 };
+static_assert(__builtin_offsetof(playerState_s, movingPlatformEntity) == 0x44, "playerState_s layout");
+static_assert(__builtin_offsetof(playerState_s, vehicleState) == 0xBC, "playerState_s layout");
+static_assert(__builtin_offsetof(playerState_s, eFlags) == 0x124, "playerState_s layout");
+static_assert(__builtin_offsetof(playerState_s, pe_timeADSCameUp) == 0x150, "playerState_s layout");
+static_assert(__builtin_offsetof(playerState_s, clientNum) == 0x17C, "playerState_s layout");
+static_assert(__builtin_offsetof(playerState_s, viewangles) == 0x184, "playerState_s layout");
+static_assert(__builtin_offsetof(playerState_s, cursorHint) == 0x210, "playerState_s layout");
+static_assert(__builtin_offsetof(playerState_s, locationSelectionInfo) == 0x23C, "playerState_s layout");
+static_assert(__builtin_offsetof(playerState_s, weaponsEquipped) == 0x2E4, "playerState_s layout");
+static_assert(__builtin_offsetof(playerState_s, weapEquippedData) == 0x320, "playerState_s layout");
+static_assert(__builtin_offsetof(playerState_s, meleeChargeEnt) == 0xE08, "playerState_s layout");
+static_assert(sizeof(playerState_s) == 0x3328, "playerState_s size (Store build)");
 static_assert(__builtin_offsetof(playerState_s, gravity) == 0x5C, "playerState_s layout");
 static_assert(__builtin_offsetof(playerState_s, jumpOriginZ) == 0x84, "playerState_s layout");
 static_assert(__builtin_offsetof(playerState_s, viewHeightTarget) == 0x190, "playerState_s layout");
