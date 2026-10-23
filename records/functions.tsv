@@ -492,9 +492,9 @@ iw6mp64_MSStore_ship	14030F710	matches	src/client/cl_keys.cpp	differential test 
 iw6mp64_MSStore_ship	14030F4B0	matches	src/client/cl_keys.cpp	differential test against the Store build (emulated; every handler faked and logged)
 iw6_ds_ps4	140199A60	compiles	src/qcommon/common.cpp	src follows the Store build (keys, characters and packets); the server keeps only the console half, and the auto inputs cannot set up an event queue; matches on the Store build
 iw6_ds_ps4	140244FE0	compiles	src/win32/win_main.cpp	src follows the Store build, which records g_wv.sysMsgTime in the pump (the server does not); tested on the Store build, where it matches
-iw6mp64_MSStore_ship	140199300	decompiled	src/dw/matchmaking_telemetry.cpp	Binary matchmaking telemetry reconstruction; verification pending
-iw6mp64_MSStore_ship	140199DA0	decompiled	src/dw/matchmaking_telemetry.cpp	Binary matchmaking telemetry reconstruction; verification pending
-iw6mp64_MSStore_ship	140199ED0	decompiled	src/dw/matchmaking_telemetry.cpp	Binary matchmaking telemetry reconstruction; verification pending
-iw6mp64_MSStore_ship	140199CC0	decompiled	src/dw/matchmaking_telemetry.cpp	Binary matchmaking telemetry reconstruction; verification pending
-iw6mp64_MSStore_ship	140199480	decompiled	src/dw/matchmaking_telemetry.cpp	Binary matchmaking telemetry reconstruction; verification pending
-iw6mp64_MSStore_ship	140199D70	decompiled	src/dw/matchmaking_telemetry.cpp	Binary matchmaking telemetry reconstruction; verification pending
+iw6mp64_MSStore_ship	140199300	matches	src/dw/matchmaking_telemetry.cpp	test_matchmaking_telemetry.py: 13 original/recon cases with modeled providers; connected reset cases and mutation checks; executable integration pending
+iw6mp64_MSStore_ship	140199DA0	matches	src/dw/matchmaking_telemetry.cpp	test_matchmaking_telemetry.py: 58 original/recon cases with modeled providers; connected reset cases and mutation checks; executable integration pending
+iw6mp64_MSStore_ship	140199ED0	matches	src/dw/matchmaking_telemetry.cpp	test_matchmaking_telemetry.py: 18 original/recon cases with modeled providers; connected reset cases and mutation checks; executable integration pending
+iw6mp64_MSStore_ship	140199CC0	matches	src/dw/matchmaking_telemetry.cpp	test_matchmaking_telemetry.py: 5 original/recon cases with modeled providers; connected reset cases and mutation checks; executable integration pending
+iw6mp64_MSStore_ship	140199480	matches	src/dw/matchmaking_telemetry.cpp	test_matchmaking_telemetry.py: 14 original/recon cases with modeled providers; connected reset cases and mutation checks; executable integration pending
+iw6mp64_MSStore_ship	140199D70	matches	src/dw/matchmaking_telemetry.cpp	test_matchmaking_telemetry.py: 5 original/recon cases with modeled providers; connected reset cases and mutation checks; executable integration pending
