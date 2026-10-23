@@ -5,6 +5,8 @@
     python3 tools/build_recon.py --build <id>    # the same against another build -> build/<id>/
     python3 tools/build_recon.py --build <id> --enhanced   # the enhanced build -> build/<id>/enhanced/
 
+    python3 tools/build_recon.py --build iw6mp64_MSStore_ship --offline  # experimental offline adapters + DLL attach guard
+
   The default links against the reference build (MAP + PDB). Another build (the Store build) resolves names
   through tools/symbols.py: records/names.tsv and the matcher's identifications.
 
@@ -125,9 +127,12 @@ def import_slots(build):
 
 def main():
     build = sys.argv[sys.argv.index("--build") + 1] if "--build" in sys.argv else symbols.reference_build()
-    enhanced = "--enhanced" in sys.argv
+    offline = "--offline" in sys.argv
+    enhanced = "--enhanced" in sys.argv or offline
+    if offline and build != "iw6mp64_MSStore_ship":
+        sys.exit("--offline supports only the pinned Store build")
     reference = symbols.has_map(build)
-    BUILD = out_dir(build) / "enhanced" if enhanced else out_dir(build)
+    BUILD = out_dir(build) / ("offline" if offline else "enhanced") if enhanced else out_dir(build)
     BUILD.mkdir(parents=True, exist_ok=True)
     objs, sources = [], []
     for src in sorted((ROOT / "src").rglob("*.cpp")):
@@ -144,6 +149,8 @@ def main():
         enhanced_objs = []
         for src in sorted((ROOT / "enhanced").rglob("*.cpp")):
             rel = src.relative_to(ROOT / "enhanced")
+            if rel.parts[0] == "offline" and not offline:
+                continue
             obj = BUILD / "obj" / "enhanced" / rel.with_suffix(".obj")
             obj.parent.mkdir(parents=True, exist_ok=True)
             run("clang++", "-std=c++17", f"-I{ROOT / 'enhanced' / 'include'}", *CFLAGS, "-c", src, "-o", obj)
@@ -231,7 +238,9 @@ def main():
             import_libs.append(lib)
             names = [l.strip() for l in d.read_text().splitlines()]
             dll_imports |= {n for n in names[names.index("EXPORTS") + 1:] if n and not n.startswith(";")}
-    undefined = [u for u in undefined if not (u in dll_imports and u not in slots)]
+    undefined = [u for u in undefined if not (
+        (u in dll_imports and u not in slots) or
+        (u.startswith("__imp_") and u[6:] in dll_imports))]
     asm = ["\t.text"]
     hybrid = ["symbol\tkind\tva"]
     ref_build = symbols.reference_build()
@@ -283,7 +292,7 @@ def main():
     (BUILD / "hybrid.tsv").write_text("\n".join(hybrid) + "\n")
 
     dll = BUILD / "recon.dll"
-    run("lld-link", "/dll", "/noentry", "/nodefaultlib", "/base:0x180000000", "/fixed", f"/out:{dll}",
+    run("lld-link", "/dll", *( ["/entry:Iw6OfflineDllMain"] if offline else ["/noentry"] ), "/nodefaultlib", "/base:0x180000000", "/fixed", f"/out:{dll}",
         *(["/force:multiple", f"/map:{BUILD / 'recon.map'}"] if enhanced else []),
         *[f"/export:{e}" for e in exports],  # x64: no leading underscore on C names
         *objs, *env_objs, BUILD / "hybrid.obj", *import_libs, quiet_duplicates=enhanced)
