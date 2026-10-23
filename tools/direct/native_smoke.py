@@ -89,8 +89,9 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None):
             if not kernel.GetThreadContext(thread,address):
                 return {}
             values={name:hex(C.c_uint64.from_address(address+offset).value) for name,offset in
-                    [('rax',120),('rcx',128),('rdx',136),('rsp',152),('r8',184),('r9',192),('rip',248)]}
-            stack=C.create_string_buffer(128)
+                    [('rax',120),('rcx',128),('rdx',136),('rbx',144),('rsp',152),('rbp',160),
+                     ('rsi',168),('rdi',176),('r8',184),('r9',192),('rip',248)]}
+            stack=C.create_string_buffer(512)
             read=SIZE()
             if kernel.ReadProcessMemory(process.process,int(values['rsp'],16),stack,len(stack),C.byref(read)):
                 values['stack_qwords']=[hex(int.from_bytes(stack.raw[i:i+8],'little')) for i in range(0,read.value,8)]
@@ -120,6 +121,40 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None):
             return True
         user.EnumWindows(callback(top),0)
         return titles
+    def thread_snapshot():
+        class ThreadEntry(C.Structure):
+            _fields_=[('size',W.DWORD),('usage',W.DWORD),('tid',W.DWORD),('pid',W.DWORD),
+                      ('base_priority',W.LONG),('delta_priority',W.LONG),('flags',W.DWORD)]
+        kernel.CreateToolhelp32Snapshot.argtypes=[W.DWORD,W.DWORD]
+        kernel.CreateToolhelp32Snapshot.restype=W.HANDLE
+        kernel.Thread32First.argtypes=[W.HANDLE,C.POINTER(ThreadEntry)]
+        kernel.Thread32Next.argtypes=[W.HANDLE,C.POINTER(ThreadEntry)]
+        kernel.SuspendThread.argtypes=[W.HANDLE]
+        kernel.SuspendThread.restype=W.DWORD
+        kernel.ResumeThread.argtypes=[W.HANDLE]
+        handle=kernel.CreateToolhelp32Snapshot(4,0)
+        if handle==C.c_void_p(-1).value:
+            return []
+        threads=[]
+        try:
+            entry=ThreadEntry();entry.size=C.sizeof(entry)
+            more=kernel.Thread32First(handle,C.byref(entry))
+            while more:
+                if entry.pid==process.pid:
+                    thread=kernel.OpenThread(0xA,False,entry.tid)
+                    if thread:
+                        suspended=False
+                        try:
+                            suspended=kernel.SuspendThread(thread)!=0xFFFFFFFF
+                            if suspended:
+                                threads.append({'tid':entry.tid,'registers':registers(entry.tid)})
+                        finally:
+                            if suspended: kernel.ResumeThread(thread)
+                            kernel.CloseHandle(thread)
+                more=kernel.Thread32Next(handle,C.byref(entry))
+        finally:
+            kernel.CloseHandle(handle)
+        return threads
     startup, process = Startup(), Process()
     startup.cb = C.sizeof(startup)
     command = C.create_unicode_buffer(subprocess.list2cmdline([str(exe),*arguments]))
@@ -136,6 +171,12 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None):
                     break
                 result['timed_out'] = True
                 result['window_text'] = windows()
+                result['threads']=thread_snapshot()
+                times=[W.FILETIME() for _ in range(4)]
+                kernel.GetProcessTimes.argtypes=[W.HANDLE,*([C.POINTER(W.FILETIME)]*4)]
+                if kernel.GetProcessTimes(process.process,*(C.byref(t) for t in times)):
+                    result['cpu_seconds']={name:round(((value.dwHighDateTime<<32)|value.dwLowDateTime)/1e7,3)
+                                           for name,value in zip(('kernel','user'),times[2:])}
                 if screenshot:
                     env=dict(os.environ,IW6_SMOKE_SCREENSHOT=str(screenshot.resolve()))
                     capture='''$ErrorActionPreference='Stop'

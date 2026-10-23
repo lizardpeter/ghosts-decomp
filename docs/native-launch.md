@@ -78,6 +78,14 @@ before stopping the process, so an open window is not mistaken for a completed
 menu load. Pending zone names are a read-only queue snapshot and may include
 already processed requests; they are not a file-open failure trace.
 
+Run [39974678078](https://github.com/lizardpeter/ghosts-decomp/actions/runs/39974678078)
+kept the process open for 90 seconds, without a fatal dialog. Its 1024x768 desktop
+capture was entirely black. That is not evidence of a rendered menu and cannot
+alone distinguish a game stall from an unavailable test-session display. The
+observer now briefly suspends and resumes each game thread to collect read-only
+register/stack snapshots at timeout, and records CPU time. The workflow preserves
+runtime log files and display-adapter metadata for the next diagnosis.
+
 The observer requires a matching, active outbound-block Windows Firewall rule
 for the exact executable path. The workflow also checks that the firewall
 service and profiles are enabled. It removes its temporary rule after stopping

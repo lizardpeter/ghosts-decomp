@@ -133,6 +133,15 @@ jobs:
               }
             } finally { Remove-NetFirewallRule -Name $rule }
           }
+          Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,AdapterRAM,Status | ConvertTo-Json | Set-Content diagnostics/display.json
+          foreach ($root in @('game','package')) {
+            Get-ChildItem $root -Recurse -File -Filter '*.log' | ForEach-Object {
+              $relative=[System.IO.Path]::GetRelativePath((Resolve-Path $root).Path,$_.FullName)
+              $target=Join-Path (Join-Path 'diagnostics/runtime-logs' $root) $relative
+              New-Item -ItemType Directory -Force (Split-Path -Parent $target) | Out-Null
+              Copy-Item -LiteralPath $_.FullName -Destination $target
+            }
+          }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
