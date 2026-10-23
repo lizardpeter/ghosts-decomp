@@ -1,0 +1,106 @@
+name: Native custom launch diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/launch-smoke.yml
+      - tools/direct/native_smoke.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          sudo apt-get install -y -q clang lld llvm >/dev/null
+          pip install -q pefile
+          python3 tools/fetch_originals.py iw6mp64_MSStore_ship .work/originals --only exe
+          IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct
+          python3 tools/offline/package.py --original .work/originals/iw6mp64_MSStore_ship.exe --mode direct --output .work/package
+      - name: Build a native debug-observer fixture
+        run: |
+          printf '%s\n' '__declspec(dllimport) void OutputDebugStringA(const char *);' '__declspec(dllimport) void ExitProcess(unsigned int);' 'void probe(void) { OutputDebugStringA("IW6 native observer fixture"); ExitProcess(17); }' > .work/probe.c
+          printf '%s\n' 'LIBRARY KERNEL32.dll' 'EXPORTS' 'OutputDebugStringA' 'ExitProcess' > .work/probe.def
+          llvm-dlltool -m i386:x86-64 -d .work/probe.def -l .work/probe.lib
+          clang --target=x86_64-pc-windows-msvc -c .work/probe.c -o .work/probe.obj
+          lld-link /nodefaultlib /entry:probe /subsystem:console /out:.work/package/observer_fixture.exe .work/probe.obj .work/probe.lib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: custom-launch-package
+          path: .work/package/
+          retention-days: 3
+          compression-level: 0
+
+  launch:
+    needs: package
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: custom-launch-package
+          path: package
+      - name: Acquire authentic original startup dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force game/english, diagnostics/profile | Out-Null
+          $sources = @'
+          amd_ags64.dll 74be72a42ef88f7305e7511fcad6133ac0fe16b59f1715a9f84fb8ab5b0e61a8
+          bink2w64.dll a2f189a03fd667c11e824a8525ee14832f857cd10ca7aa03d19b1c29a4971f63
+          code_pre_gfx_mp.ff b5ca58940b00dd5269a5f03f68bb5916abf25267010b16f3196d2359995fa3c3
+          patch_code_pre_gfx_mp.ff 69bc4c68fc6c8fd2e0a436319ebf3b84c9d7092a889de164b6408621c9047938
+          english/eng_code_pre_gfx_mp.ff 807a29400d6a5f1adaddebcfed0a2c1a414b6da972161cf23609528222f15247
+          english/eng_patch_code_pre_gfx_mp.ff c76630bbc29ce96a53775bf3ffd4cd2a15edc40e68cd1501faf7e8422a01bd8c
+          '@
+          foreach ($line in $sources.Trim().Split("`n")) {
+            $parts=$line.Trim().Split(' ')
+            $target=Join-Path 'game' $parts[0]
+            Invoke-WebRequest -Uri ('https://r2.houseofkublai.com/ghosts/DUMP/'+$parts[0]) -OutFile $target
+            if ((Get-FileHash $target -Algorithm SHA256).Hash -ne $parts[1]) { throw "Original hash mismatch: $target" }
+          }
+          # Windows searches the executable directory first for these local DLLs.
+          Copy-Item game/*.dll package/
+      - name: Observe fixture and custom game with outbound firewall blocks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if ((Get-Service MpsSvc).Status -ne 'Running') { throw 'Firewall service is unavailable' }
+          foreach ($profile in Get-NetFirewallProfile -PolicyStore ActiveStore) {
+            if (!$profile.Enabled) { throw 'An active firewall profile is disabled' }
+          }
+          $manifest=Get-Content package/manifest.json -Raw | ConvertFrom-Json
+          foreach ($pair in @(@('iw6mp64_offline.exe',$manifest.exe_sha256),@('recon.dll',$manifest.dll_sha256))) {
+            if ((Get-FileHash (Join-Path package $pair[0])).Hash -ne $pair[1]) { throw 'Package integrity mismatch' }
+          }
+          $game=(Resolve-Path game).Path
+          $profile=(Resolve-Path diagnostics/profile).Path
+          foreach ($binary in @('observer_fixture.exe','iw6mp64_offline.exe')) {
+            $exe=(Resolve-Path (Join-Path package $binary)).Path
+            $rule='Iw6CustomSmoke-'+[guid]::NewGuid().ToString('N')
+            New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Outbound -Program $exe -Action Block -Profile Any | Out-Null
+            try {
+              if ($binary -eq 'observer_fixture.exe') {
+                python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 10 --output diagnostics/observer.json
+                if ($LASTEXITCODE -ne 0) { throw 'Native debug observer failed' }
+                $result=Get-Content diagnostics/observer.json -Raw | ConvertFrom-Json
+                if ($result.exit_code -ne '0x11' -or !($result.events | Where-Object { $_.text -eq 'IW6 native observer fixture' })) { throw 'Native debug observer evidence mismatch' }
+              } else {
+                python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 45 --output diagnostics/game.json -- +set fs_basepath $game +set fs_homepath $profile +set logfile 2 +set r_fullscreen 0 +direct_player 0000000000000001 LocalProbe
+                if ($LASTEXITCODE -ne 0) { throw 'Game observation failed' }
+              }
+            } finally { Remove-NetFirewallRule -Name $rule }
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-launch-diagnostics
+          path: diagnostics/
+          retention-days: 3
+          if-no-files-found: error
