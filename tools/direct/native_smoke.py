@@ -10,6 +10,7 @@ from ctypes import wintypes as W
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -31,7 +32,7 @@ $a = $r | Get-NetFirewallApplicationFilter
     return r
 
 
-def observe(exe, cwd, arguments, seconds):
+def observe(exe, cwd, arguments, seconds, pending_zones=False):
     if C.sizeof(C.c_void_p) != 8:
         raise RuntimeError('Use 64-bit Python')
     kernel = C.WinDLL('kernel32', use_last_error=True)
@@ -135,6 +136,18 @@ def observe(exe, cwd, arguments, seconds):
                     break
                 result['timed_out'] = True
                 result['window_text'] = windows()
+                if pending_zones:
+                    # Store DB thread iterates 0x48-byte requests at 145F05860
+                    # (140370280). A queue snapshot is not a failed-file trace.
+                    queue=C.create_string_buffer(40*0x48)
+                    read=SIZE()
+                    names=[]
+                    if kernel.ReadProcessMemory(process.process,0x145F05860,queue,len(queue),C.byref(read)):
+                        for offset in range(0,read.value,0x48):
+                            name=queue.raw[offset:offset+0x40].split(b'\0',1)[0]
+                            if re.fullmatch(rb'[A-Za-z0-9_./-]{1,63}',name):
+                                names.append(name.decode('ascii'))
+                    result['pending_zone_names']=names
                 kernel.TerminateProcess(process.process,0xE0010002)
                 terminated = True
                 deadline = time.monotonic()+5
@@ -224,6 +237,7 @@ def main():
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--seconds',type=int,default=30)
     parser.add_argument('--imports',type=Path)
+    parser.add_argument('--pending-zones',action='store_true',help='read the pinned Store DB request queue at timeout')
     parser.add_argument('arguments',nargs=argparse.REMAINDER)
     args=parser.parse_args()
     if sys.platform!='win32' or not 1<=args.seconds<=300:
@@ -231,7 +245,7 @@ def main():
     exe=args.exe.resolve(strict=True)
     rule=firewall(exe,args.firewall_rule)
     arguments=args.arguments[1:] if args.arguments[:1]==['--'] else args.arguments
-    result=observe(exe,args.cwd.resolve(strict=True),arguments,args.seconds)
+    result=observe(exe,args.cwd.resolve(strict=True),arguments,args.seconds,args.pending_zones)
     result['firewall']=rule
     if args.imports:
         result['import_audit']=audit_imports(exe,args.imports)

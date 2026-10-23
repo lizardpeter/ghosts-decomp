@@ -8,6 +8,7 @@ LoadLibraryExA
 LoadLibraryExW
 GetModuleFileNameW
 GetModuleHandleW
+GetCurrentDirectoryA
 SetLastError
 GetCurrentProcess
 TerminateProcess

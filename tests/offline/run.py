@@ -30,10 +30,27 @@ def check():
         for slot, name in exe.iat.items():
             if name.startswith('recon.dll!'):
                 m.mu.mem_write(slot, struct.pack('<Q', dll.exports[name.split('!',1)[1]]))
-        assert len(manifest['guards']) == 31 + len(package.VENDOR_TASKS) and len(manifest['imports']) == 58
+        assert len(manifest['guards']) == 31 + len(package.VENDOR_TASKS) + len(package.LOCAL_FILES) and len(manifest['imports']) == 58
         errors = []
         m.on_import('kernel32.dll!SetLastError', lambda mu: errors.append(mu.reg_read(UC_X86_REG_RCX)))
         m.on_import('ws2_32.dll!WSASetLastError', lambda mu: errors.append(mu.reg_read(UC_X86_REG_RCX)))
+        # Asset lookup must use the selected game working directory, including
+        # spaces, instead of the separate package's module directory.
+        local_path=b'C:\\Games\\Ghosts assets'
+        for length in (0,256,len(local_path)):
+            calls=[]
+            m.on_import('kernel32.dll!AcquireSRWLockExclusive',lambda mu:calls.append('lock'))
+            m.on_import('kernel32.dll!ReleaseSRWLockExclusive',lambda mu:calls.append('unlock'))
+            def directory(mu):
+                assert mu.reg_read(UC_X86_REG_RCX)==256
+                calls.append('directory')
+                if 0<length<256:
+                    m._emulated_write(mu.reg_read(UC_X86_REG_RDX),local_path+b'\0')
+                mu.reg_write(UC_X86_REG_RAX,length)
+            m.on_import('kernel32.dll!GetCurrentDirectoryA',directory)
+            value=m.call(0x140548F90,[],ret='cstr')[0]
+            assert value==(local_path if 0<length<256 else None),value
+            assert calls==['lock','directory','unlock'],calls
         # Every vendor entry branches to its exact enhanced export before executing original code.
         for guard in manifest['guards']:
             va, target = int(guard['va'],16), int(guard['export_va'],16)

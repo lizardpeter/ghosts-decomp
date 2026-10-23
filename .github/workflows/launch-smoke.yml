@@ -8,6 +8,7 @@ on:
       - tools/direct/native_smoke.py
       - tools/offline/package.py
       - enhanced/offline/controller.cpp
+      - enhanced/offline/files.cpp
       - tools/direct/fetch_startup.py
       - records/native-startup-sources.tsv
   workflow_dispatch:
@@ -127,7 +128,7 @@ jobs:
                 $result=Get-Content diagnostics/observer.json -Raw | ConvertFrom-Json
                 if ($result.exit_code -ne '0x11' -or !($result.events | Where-Object { $_.text -eq 'IW6 native observer fixture' })) { throw 'Native debug observer evidence mismatch' }
               } else {
-                python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 45 --output diagnostics/game.json --imports package/imports.json -- +set fs_basepath $game +set fs_homepath $profile +set logfile 2 +set r_fullscreen 0 +direct_player 0000000000000001 LocalProbe
+                python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 45 --output diagnostics/game.json --imports package/imports.json --pending-zones -- +set fs_basepath $game +set fs_homepath $profile +set logfile 2 +set r_fullscreen 0 +direct_player 0000000000000001 LocalProbe
                 if ($LASTEXITCODE -ne 0) { throw 'Game observation failed' }
               }
             } finally { Remove-NetFirewallRule -Name $rule }

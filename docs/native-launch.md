@@ -53,6 +53,22 @@ computed SHA-256 values. Existing valid originals are reused. No placeholder
 FastFiles or content-availability bypass is supplied. Maps, streamed PAKs and
 the remainder of the installation are outside this startup subset.
 
+That complete startup subset still produced the same error in run
+[39972909100](https://github.com/lizardpeter/ghosts-decomp/actions/runs/39972909100).
+Inspection then exposed the launcher's path mismatch: 1405488C0 builds its
+CreateFileA paths using 140548F90, which caches the EXE parent through
+GetModuleFileNameA. This ignores the fs_basepath used by the earlier filesystem
+check. Our separate package directory therefore points the database at the
+wrong root even though the selected working directory contains the originals.
+
+P0022 replaces that helper only in custom offline/direct packages. It caches
+the startup working directory under an SRW lock, retains the original 256-byte
+path bound, and returns null on API failure/oversize so callers retain their
+existing relative-path fallback. LaunchDirect.ps1 already sets WorkingDirectory
+to GameDirectory. Tests enter the patched original helper with a spaced path,
+API failure and an oversized result; they assert the actual returned root and
+lock/API/unlock order. Original content checks remain in place.
+
 The observer requires a matching, active outbound-block Windows Firewall rule
 for the exact executable path. The workflow also checks that the firewall
 service and profiles are enabled. It removes its temporary rule after stopping

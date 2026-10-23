@@ -38,6 +38,7 @@ VENDOR_TASKS = {
     0x1405F2280: 'Iw6VendorTasksDisabled',  # response blob construction
     0x1405F24F0: 'Iw6VendorTasksDisabled',  # pending SDK submissions
 }
+LOCAL_FILES = {0x140548F90: 'Iw6LocalGameDirectory'}
 # C exports adapt the reviewed Win64 ABI without claiming original source names.
 DIRECT = {
     0x1401A7DB0: 'Iw6DirectPlayerName',
@@ -183,6 +184,7 @@ def transform(original, dll_bytes, mode='offline'):
     if len(targets) != 31 or len({va for va, _ in targets}) != 31:
         raise ValueError('missing or ambiguous guard symbols')
     targets.extend(sorted(VENDOR_TASKS.items()))
+    targets.extend(sorted(LOCAL_FILES.items()))
     if mode == 'direct': targets.extend(sorted(DIRECT.items()))
     for va, symbol in targets:
         if symbol not in exports or functions[va] < 5: raise ValueError('invalid guard ' + symbol)
