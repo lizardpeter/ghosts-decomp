@@ -2,7 +2,7 @@
 //
 // The original BG_CalculateWeaponMovement_Recoil (src/bgame/bg_weapons_view.cpp) integrates the frame's time
 // (weaponState_t::frametime, cg.frametime * 0.001f) in steps of at most 5 ms, so above 200 fps the steps are the
-// frame's own 1-4 ms and the recoil changes with the frame rate (B0063: its peak is 12% lower at 1 ms frames).
+// frame's own 1-4 ms and the recoil changes with the frame rate (B0064: its peak is 12% lower at 1 ms frames).
 //
 // Enhanced: the real recoil state advances in whole 5 ms steps of the cgame's time (weaponState_t::time), each one
 // exactly the original's step at 200 fps; what the viewmodel shows is that state advanced to the frame's time by one

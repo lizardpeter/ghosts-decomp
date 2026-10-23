@@ -2,7 +2,7 @@
 //
 // The original BG_KickAngles (src/bgame/bg_weapons_util.cpp) integrates in steps of at most 5 ms of the msec it is
 // given. The cgame calls it once a frame with cg.frametime, so up to 200 fps the steps are 5 ms, but above that they
-// are the frame's own 1-4 ms, and the kick changes with the frame rate (B0062: at 1000 fps it peaks about 7% lower).
+// are the frame's own 1-4 ms, and the kick changes with the frame rate (B0063: at 1000 fps it peaks about 7% lower).
 // The kicked angles go into the usercmd, so the server sees the difference.
 //
 // Enhanced, for the cgame's own kick (cg_s, kickAVel/kickAngles): the real state advances only in whole 5 ms steps,
