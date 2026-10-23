@@ -1,4 +1,4 @@
-// enhanced/bgame/bg_recoil.cpp: the viewmodel's recoil on a fixed 5 ms grid of the cgame's time.
+// enhanced/bgame/bg_recoil.cpp: the viewmodel's recoil on a fixed 5 ms grid of the cgame's time (records/patches.tsv P0015).
 //
 // The original BG_CalculateWeaponMovement_Recoil (src/bgame/bg_weapons_view.cpp) integrates the frame's time
 // (weaponState_t::frametime, cg.frametime * 0.001f) in steps of at most 5 ms, so above 200 fps the steps are the

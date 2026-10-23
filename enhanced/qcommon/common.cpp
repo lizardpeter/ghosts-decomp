@@ -1,4 +1,4 @@
-// enhanced/qcommon/common.cpp: com_maxfps up to 1000 (records/patches.tsv, the frame-rate patch).
+// enhanced/qcommon/common.cpp: com_maxfps up to 1000 (records/patches.tsv P0013).
 //
 // The original registers com_maxfps with a maximum of 100 (B0024). Com_Frame turns it into a minimum frame time of
 // 1000 / com_maxfps whole milliseconds, so a cap gives 1000/k fps (250, 200, 166, ...), and 0 is uncapped (at most

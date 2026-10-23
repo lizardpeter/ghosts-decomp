@@ -1,0 +1,15 @@
+; Private imports bypass the original EXE's intercepted IAT.
+LIBRARY KERNEL32.dll
+EXPORTS
+GetProcAddress
+LoadLibraryA
+LoadLibraryW
+LoadLibraryExA
+LoadLibraryExW
+GetModuleFileNameW
+GetModuleHandleW
+SetLastError
+GetCurrentProcess
+TerminateProcess
+AcquireSRWLockExclusive
+ReleaseSRWLockExclusive

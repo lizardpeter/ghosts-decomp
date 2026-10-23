@@ -1,4 +1,4 @@
-// enhanced/bgame/bg_kick.cpp: the view kick on a fixed 5 ms grid (records/patches.tsv, the view-kick patch).
+// enhanced/bgame/bg_kick.cpp: the view kick on a fixed 5 ms grid (records/patches.tsv P0014).
 //
 // The original BG_KickAngles (src/bgame/bg_weapons_util.cpp) integrates in steps of at most 5 ms of the msec it is
 // given. The cgame calls it once a frame with cg.frametime, so up to 200 fps the steps are 5 ms, but above that they
