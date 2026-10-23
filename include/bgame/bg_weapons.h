@@ -56,11 +56,94 @@ struct ClipAmmo
 
 struct WeaponDef
 {
-	unsigned char unknown0[0xA56];
+	unsigned char unknown0[0x640];
+	float fGunMaxPitch;  // 0x640: degrees the viewmodel's recoil may reach
+	float fGunMaxYaw;
+	unsigned char unknown648[0xA56 - 0x648];
 	bool meleeOnly;  // 0xA56, as in the PS4 PDB
+	unsigned char unknownA57[0xA88 - 0xA57];
+	bool oldWeapon;  // 0xA88
 };
 
-struct playerState_s;
+
+// The weapon tables (bgame/bg_weapons_setup.cpp), indexed by Weapon::data & 0xFF. Same layouts in the PS4 server
+// and the Store build; only the fields the reconstructed code reads are spelled out.
+struct AttViewKick
+{
+	unsigned char unknown0[0x14];
+	float hipViewKickCenterSpeed;
+	unsigned char unknown18[0x2C - 0x18];
+	float adsViewKickCenterSpeed;
+};
+
+struct WeaponAttachment
+{
+	unsigned char unknown0[0xB8];
+	const AttViewKick *viewKick;
+	unsigned char unknownC0[0x10C - 0xC0];
+	float viewCenterScale;  // 0: no change
+};
+
+struct WeaponCompleteDef
+{
+	unsigned char unknown0[0xB4];
+	float fAdsViewKickCenterSpeed;
+	float fHipViewKickCenterSpeed;
+	unsigned char unknownBC[0xC8 - 0xBC];
+	int altWeapon;  // Weapon::data of the alternate mode; only its low byte is tested
+};
+
+enum weapOverlayReticle_t
+{
+	WEAPOVERLAYRETICLE_NONE = 0x0,
+	WEAPOVERLAYRETICLE_CROSSHAIR = 0x1,
+	WEAPOVERLAYRETICLE_NUM = 0x2,
+};
+
+struct ADSOverlay
+{
+	unsigned char unknown0[0x20];
+	weapOverlayReticle_t reticle;
+};
+
+extern WeaponCompleteDef *bg_weaponCompleteDefs[];
+extern WeaponDef *bg_weaponDefs[];
+
+// playerState_s: only the fields bgame code reconstructed so far reads, at the offsets both builds' code uses.
+struct playerState_s
+{
+	unsigned char unknown0[0x41C];
+	Weapon weapCommon_weapon;
+	int weapCommon_weapFlags;     // PWF_ALT_MODE
+	float weapCommon_fWeaponPosFrac;  // 0 hip .. 1 fully aimed down the sight (Pmove's ADS transition)
+	unsigned char unknown428[0xE14 - 0x428];
+	unsigned int perks[2];        // the code of both builds reads them here (the PS4 PDB's type dump says 0xD5C)
+};
+
+// The viewmodel's movement state for one frame (bgame/bg_weapons_view.cpp); the cgame builds it from cg_s
+// (Store 1402F38B0) and saves it back. Same layout in both builds.
+struct weaponState_t
+{
+	const playerState_s *ps;
+	float xyspeed;
+	float frametime;        // seconds: cg.frametime * 0.001
+	float fLastIdleFactor;
+	int time;
+	int damageTime;
+	float v_dmg_pitch;
+	float v_dmg_roll;
+	float baseAngles[3];
+	float baseOrigin[3];
+	float recoilAngles[3];
+	float recoilSpeed[3];
+	float swayAngles[3];
+	float swayOrigin[3];
+	float swayViewAngles[3];
+	float bobAngles[3];
+	int shellShockStart;
+	int shellShockDuration;
+	int shellShockFadeTime;
+};
 
 const WeaponDef *BG_WeaponDef(const Weapon weapon, bool isAlternate);              // bgame/bg_weapons_util.h:384
 unsigned long long BG_ClipForWeapon(const Weapon weapon, bool isAlternate);       // bgame/bg_weapons_ammo.cpp:45

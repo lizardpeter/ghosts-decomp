@@ -29,6 +29,14 @@ struct SpawnSightGlob
 	unsigned char unknown298[0x600 - 0x298];
 };
 
+// The snapshot the client keeps per server frame (snapshot_s): the Store build's is 0x104 bytes larger than the PS4
+// server's in front of serverTime (a larger playerState_s). Only serverTime is spelled out.
+struct snapshot_s
+{
+	unsigned char unknown0[0x3C7C];
+	int serverTime;
+};
+
 struct cg_s
 {
 	// predictedPlayerState (playerState_s): only these fields
@@ -45,14 +53,23 @@ struct cg_s
 	unsigned char unknown240[0x41C - 0x240];
 	Weapon ps_weapon;              // weapCommon.weapon
 	int ps_weapFlags;              // weapCommon.weapFlags; bit 14: the alternate (underbarrel) mode
-	unsigned char unknown424[0x7188C - 0x424];
-	int frametime;
-	unsigned char unknown71890[0x718C8 - 0x71890];
+	unsigned char unknown424[0x3388 - 0x424];
+	snapshot_s *snap;              // the snapshot cg.time has passed
+	snapshot_s *nextSnap;          // the one after it, or NULL; entities are interpolated between the two
+	unsigned char unknown3398[0x71888 - 0x3398];
+	float frameInterpolation;      // (time - snap->serverTime) / (nextSnap->serverTime - snap->serverTime), at least 0
+	int frametime;                 // time - oldTime, in milliseconds (0 when time went back)
+	int time;                      // the client's game time in milliseconds: cl.serverTime when the frame began
+	int oldTime;
+	unsigned char unknown71898[0x718C8 - 0x71898];
 	// refdef (refdef_t): only these fields
 	int refdef_displayViewport[4];
 	float refdef_tanHalfFovX;      // tan(horizontal FOV / 2): what the renderer's projection uses
 	float refdef_tanHalfFovY;
-	unsigned char unknown718E0[0xB1B18 - 0x718E0];
+	float refdef_vieworg[3];
+	unsigned char unknown718EC[0xA9A90 - 0x718EC];
+	float refdefViewAngles[3];     // the view angles the frame is drawn with (shake, kick and bob added)
+	unsigned char unknownA9A9C[0xB1B18 - 0xA9A9C];
 	float zoomSensitivity;         // tan(fov / 2) / tan(65 / 2): the mouse sensitivity scale while zoomed
 	unsigned char unknownB1B1C[0xB4EF8 - 0xB1B1C];
 	unsigned int hybridScopeState;  // 2 or 3: one of a hybrid scope's two FOVs; 4 or 5: switching (name unknown)
