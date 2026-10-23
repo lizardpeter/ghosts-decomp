@@ -1,8 +1,9 @@
 # Experimental offline package
 
 P0011 adds a startup-only integration experiment for the **pinned Store multiplayer executable**.
-It is not a verified runnable game or a whole-process egress guarantee. Native Windows launch,
-asset loading, graphics, menu progression and outbound traffic capture remain unverified.
+It is not a verified runnable game or a whole-process egress guarantee. Actual direct-profile Windows
+startup attempts and their blockers are recorded in [native-launch.md](native-launch.md). Successful
+asset/graphics/menu startup, full offline-profile launch and outbound traffic capture remain unverified.
 The default faithful and enhanced DLL builds retain their existing behavior. `src/` is unchanged.
 
 ## Build and test
@@ -25,8 +26,9 @@ launch and whole-process egress have not been verified.
 
 ## Integration boundary
 
-The packager redirects the 31 original function entries covered by P0005/P0006/P0007/P0008/P0010
-to their enhanced exports. Calls and function pointers that enter those original addresses now
+The offline packager redirects 42 original entries: 31 covered by P0005/P0006/P0007/P0008/P0010,
+ten integrity/reporting entries from P0018, and the P0022 local asset-root helper.
+Calls and function pointers that enter those original addresses now
 reach the guards. It does not redirect arbitrary engine exports, interior entry points, or every
 possible vendor function. No function is promoted to `integrated` based on these emulator tests.
 
@@ -37,6 +39,10 @@ into contiguous runs when a provider changes. The original WinHTTP and XCurl imp
 Winsock socket creation, send, connect, extension lookup and DNS imports fail with WSAEACCES.
 Cleanup and address-formatting APIs remain available. Original process launch, shell launch,
 CRT command execution, COM activation and ETW reporting imports are also refused.
+P0021 replaces the three legacy XINPUT1_3 ordinal imports with device-not-connected adapters;
+the custom profiles currently use keyboard/mouse. There are 58 IAT redirects in total.
+P0022 selects the startup working directory for FastFile/sound lookup, allowing the custom EXE
+to reside in its separate package while the launcher selects the real installation directory.
 
 The original LoadLibrary/GetProcAddress imports use wrappers that reject known networking/GDK
 module basenames and dynamic WinRT activation entry points. Dynamic requests for loader/procedure entry points return the same guarded wrappers; dynamic

@@ -32,7 +32,7 @@ $a = $r | Get-NetFirewallApplicationFilter
     return r
 
 
-def observe(exe, cwd, arguments, seconds, pending_zones=False):
+def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None):
     if C.sizeof(C.c_void_p) != 8:
         raise RuntimeError('Use 64-bit Python')
     kernel = C.WinDLL('kernel32', use_last_error=True)
@@ -136,6 +136,24 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False):
                     break
                 result['timed_out'] = True
                 result['window_text'] = windows()
+                if screenshot:
+                    env=dict(os.environ,IW6_SMOKE_SCREENSHOT=str(screenshot.resolve()))
+                    capture='''$ErrorActionPreference='Stop'
+Add-Type -AssemblyName System.Drawing,System.Windows.Forms
+$screen=[System.Windows.Forms.SystemInformation]::VirtualScreen
+$image=New-Object System.Drawing.Bitmap($screen.Width,$screen.Height)
+$graphics=[System.Drawing.Graphics]::FromImage($image)
+try {
+  $graphics.CopyFromScreen($screen.Left,$screen.Top,0,0,$image.Size)
+  $image.Save($env:IW6_SMOKE_SCREENSHOT,[System.Drawing.Imaging.ImageFormat]::Png)
+} finally { $graphics.Dispose(); $image.Dispose() }
+'''
+                    try:
+                        subprocess.run(['powershell','-NoProfile','-Command',capture],env=env,
+                                       capture_output=True,check=True,timeout=10)
+                        result['screenshot']=screenshot.name
+                    except (subprocess.SubprocessError,OSError) as error:
+                        result['screenshot_error']=str(error)
                 if pending_zones:
                     # Store DB thread iterates 0x48-byte requests at 145F05860
                     # (140370280). A queue snapshot is not a failed-file trace.
@@ -238,6 +256,7 @@ def main():
     parser.add_argument('--seconds',type=int,default=30)
     parser.add_argument('--imports',type=Path)
     parser.add_argument('--pending-zones',action='store_true',help='read the pinned Store DB request queue at timeout')
+    parser.add_argument('--screenshot',type=Path,help='capture the disposable Windows test desktop at timeout')
     parser.add_argument('arguments',nargs=argparse.REMAINDER)
     args=parser.parse_args()
     if sys.platform!='win32' or not 1<=args.seconds<=300:
@@ -245,7 +264,7 @@ def main():
     exe=args.exe.resolve(strict=True)
     rule=firewall(exe,args.firewall_rule)
     arguments=args.arguments[1:] if args.arguments[:1]==['--'] else args.arguments
-    result=observe(exe,args.cwd.resolve(strict=True),arguments,args.seconds,args.pending_zones)
+    result=observe(exe,args.cwd.resolve(strict=True),arguments,args.seconds,args.pending_zones,args.screenshot)
     result['firewall']=rule
     if args.imports:
         result['import_audit']=audit_imports(exe,args.imports)

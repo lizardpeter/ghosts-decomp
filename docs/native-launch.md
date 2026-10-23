@@ -69,6 +69,15 @@ to GameDirectory. Tests enter the patched original helper with a spaced path,
 API failure and an oversized result; they assert the actual returned root and
 lock/API/unlock order. Original content checks remain in place.
 
+Run [39974085602](https://github.com/lizardpeter/ghosts-decomp/actions/runs/39974085602)
+with P0022 cleared the fatal content error. The game stayed open for the full
+45-second observation without a fatal dialog or a second-chance exception.
+This establishes progress through startup, not a rendered menu or gameplay.
+The next diagnostic allows 90 seconds and captures the disposable test desktop
+before stopping the process, so an open window is not mistaken for a completed
+menu load. Pending zone names are a read-only queue snapshot and may include
+already processed requests; they are not a file-open failure trace.
+
 The observer requires a matching, active outbound-block Windows Firewall rule
 for the exact executable path. The workflow also checks that the firewall
 service and profiles are enabled. It removes its temporary rule after stopping

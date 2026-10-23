@@ -42,14 +42,15 @@ profiles and data folders on one Windows account. Numeric IPv4 and a nonzero exp
 port are required. In a functioning game console, first configure `direct_player <16-digit-hex-ID> "Player Name"`, then
 use `connect IP:port` or `direct_host bind-IP:port map gametype`. IDs must be nonzero; names are 1–31
 ASCII letters, digits, spaces, underscores or hyphens, without leading/trailing spaces. Profile changes
-are refused while connected or hosting. This launch script has not
-been executed on Windows here. Asset discovery, native DLL loading, graphics and menu entry remain unverified;
-only the pinned executables are present in the development test environment.
+are refused while connected or hosting. Windows launcher preparation is tested with process launch intercepted.
+Actual Windows startup attempts use the native debug observer and authentic startup assets; see
+[native-launch.md](native-launch.md). Successful graphics/menu startup and a completed join remain unverified.
 
 ## What is connected
 
 The direct profile retains all 31 P0011 vendor guards, the ten P0018 vendor integrity/reporting guards,
-and all 58 original import redirects. See [vendor-disconnection.md](vendor-disconnection.md). Original WinHTTP,
+the P0022 local asset-root replacement and all 58 original import redirects. Its total is 56 entry
+replacements, including the 14 direct identity/transport entries. See [vendor-disconnection.md](vendor-disconnection.md). Original WinHTTP,
 XCurl, GDK runtime loading, DNS, socket creation/sends and the selected account/reporting/process/broker paths
 remain unavailable. The replacement transport has private Winsock imports in the DLL; they do not go through
 the original IAT. Only this explicit opt-in profile opens game sockets. It is not run inside the network-disabled
