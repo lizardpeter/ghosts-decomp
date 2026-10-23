@@ -28,6 +28,17 @@ create a replacement controller backend. The faithful source is unchanged.
 Tests enter the original IAT slots with null and invalid pointers and verify
 both the exact adapter selection and the absence of state writes/import calls.
 
+With P0021 applied, run
+[39970959738](https://github.com/lizardpeter/ghosts-decomp/actions/runs/39970959738)
+passed the initial loader breakpoint and mapped all required imports. The
+45-second observation then found a Fatal Error dialog: initialization could not
+load fileSysCheck.cfg. This was a missing diagnostic input, not a reason to
+disable the engine's filesystem check. The authentic original is
+`ghosts/DUMP/main/fileSysCheck.cfg` (77 bytes, SHA-256
+`d753023fba1af8e6952c7d7204a1737d26bce038d689570798a46565fa6d3fbd`).
+The workflow now stages that file under main/ and uses smaller source checkouts
+to shorten subsequent startup iterations.
+
 The observer requires a matching, active outbound-block Windows Firewall rule
 for the exact executable path. The workflow also checks that the firewall
 service and profiles are enabled. It removes its temporary rule after stopping

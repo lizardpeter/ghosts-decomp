@@ -18,6 +18,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/*/
+            /src/
+            /include/
+            /enhanced/
+            /records/
+            /tools/
+            /analysis/iw6_ds_ps4/map/publics.tsv
+            /analysis/iw6_ds_ps4/pdb/statics.tsv
+            /analysis/iw6_ds_ps4/pdb/sections.tsv
+            /analysis/iw6mp64_MSStore_ship/functions.tsv
+            /analysis/iw6mp64_MSStore_ship/match/functions.tsv
       - run: |
           sudo apt-get install -y -q clang lld llvm >/dev/null
           pip install -q pefile
@@ -53,6 +68,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/direct
       - uses: actions/download-artifact@v4
         with:
           name: custom-launch-package
@@ -61,7 +78,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          New-Item -ItemType Directory -Force game/english, diagnostics/profile | Out-Null
+          New-Item -ItemType Directory -Force game/english, game/main, diagnostics/profile | Out-Null
           $sources = @'
           amd_ags64.dll 74be72a42ef88f7305e7511fcad6133ac0fe16b59f1715a9f84fb8ab5b0e61a8
           bink2w64.dll a2f189a03fd667c11e824a8525ee14832f857cd10ca7aa03d19b1c29a4971f63
@@ -69,6 +86,7 @@ jobs:
           patch_code_pre_gfx_mp.ff 69bc4c68fc6c8fd2e0a436319ebf3b84c9d7092a889de164b6408621c9047938
           english/eng_code_pre_gfx_mp.ff 807a29400d6a5f1adaddebcfed0a2c1a414b6da972161cf23609528222f15247
           english/eng_patch_code_pre_gfx_mp.ff c76630bbc29ce96a53775bf3ffd4cd2a15edc40e68cd1501faf7e8422a01bd8c
+          main/fileSysCheck.cfg d753023fba1af8e6952c7d7204a1737d26bce038d689570798a46565fa6d3fbd
           '@
           foreach ($line in $sources.Trim().Split("`n")) {
             $parts=$line.Trim().Split(' ')
