@@ -74,6 +74,51 @@ def observe(exe, cwd, arguments, seconds):
     kernel.TerminateProcess.argtypes = [W.HANDLE,W.UINT]
     kernel.ReadProcessMemory.argtypes = [W.HANDLE,PTR,PTR,SIZE,C.POINTER(SIZE)]
     kernel.GetFinalPathNameByHandleW.argtypes = [W.HANDLE,W.LPWSTR,W.DWORD,W.DWORD]
+    kernel.OpenThread.argtypes = [W.DWORD,W.BOOL,W.DWORD]
+    kernel.OpenThread.restype = W.HANDLE
+    kernel.GetThreadContext.argtypes = [W.HANDLE,PTR]
+    def registers(tid):
+        thread=kernel.OpenThread(8,False,tid)
+        if not thread:
+            return {}
+        try:
+            buffer=C.create_string_buffer(1248)
+            address=(C.addressof(buffer)+15)&~15
+            C.c_uint32.from_address(address+48).value=0x100003
+            if not kernel.GetThreadContext(thread,address):
+                return {}
+            values={name:hex(C.c_uint64.from_address(address+offset).value) for name,offset in
+                    [('rax',120),('rcx',128),('rdx',136),('rsp',152),('r8',184),('r9',192),('rip',248)]}
+            stack=C.create_string_buffer(128)
+            read=SIZE()
+            if kernel.ReadProcessMemory(process.process,int(values['rsp'],16),stack,len(stack),C.byref(read)):
+                values['stack_qwords']=[hex(int.from_bytes(stack.raw[i:i+8],'little')) for i in range(0,read.value,8)]
+            return values
+        finally:
+            kernel.CloseHandle(thread)
+    def windows():
+        user=C.WinDLL('user32',use_last_error=True)
+        callback=C.WINFUNCTYPE(W.BOOL,W.HWND,W.LPARAM)
+        user.EnumWindows.argtypes=[callback,W.LPARAM]
+        user.EnumChildWindows.argtypes=[W.HWND,callback,W.LPARAM]
+        user.GetWindowThreadProcessId.argtypes=[W.HWND,C.POINTER(W.DWORD)]
+        user.GetWindowTextW.argtypes=[W.HWND,W.LPWSTR,C.c_int]
+        titles=[]
+        def text(hwnd,_):
+            value=C.create_unicode_buffer(4096)
+            user.GetWindowTextW(hwnd,value,len(value))
+            if value.value:
+                titles.append(value.value)
+            return True
+        def top(hwnd,_):
+            pid=W.DWORD()
+            user.GetWindowThreadProcessId(hwnd,C.byref(pid))
+            if pid.value==process.pid:
+                text(hwnd,0)
+                user.EnumChildWindows(hwnd,callback(text),0)
+            return True
+        user.EnumWindows(callback(top),0)
+        return titles
     startup, process = Startup(), Process()
     startup.cb = C.sizeof(startup)
     command = C.create_unicode_buffer(subprocess.list2cmdline([str(exe),*arguments]))
@@ -89,6 +134,7 @@ def observe(exe, cwd, arguments, seconds):
                 if terminated:
                     break
                 result['timed_out'] = True
+                result['window_text'] = windows()
                 kernel.TerminateProcess(process.process,0xE0010002)
                 terminated = True
                 deadline = time.monotonic()+5
@@ -113,6 +159,8 @@ def observe(exe, cwd, arguments, seconds):
             elif event.code==1:
                 data = event.info.exception
                 item.update(code=hex(data.record.code),address=hex(data.record.address or 0),first_chance=bool(data.first))
+                if data.record.code not in (0x80000003,0x40010006,0x4001000A):
+                    item['registers']=registers(event.tid)
                 if data.record.code != 0x80000003:
                     status = 0x80010001  # let the application's own handlers run
             elif event.code==8:
