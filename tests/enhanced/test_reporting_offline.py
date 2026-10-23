@@ -1,6 +1,7 @@
 """P0008: reconstructed reporting paths never drive vendor work."""
 import test_gdk as gdk
 import test_gdk_reporting as reporting
+import test_dwreporting as telemetry
 from syms import static
 
 OVERRIDES = {reporting.FRAME,reporting.EVENTS,reporting.SAVES,reporting.PRESENCE,'XGameEventWrite'}
@@ -67,3 +68,12 @@ def test_reporting_event_submission_refused_without_reading_payload_or_sdk(env):
         value,buffers,writes,observed = env.call('XGameEventWrite',[pointer]*6,ret='int',
             setup=setup(255),fakes=fakes('XGameEventWrite'))
         assert value == -0x76DBFF00 and not buffers and not writes and not observed
+
+
+def test_reporting_telemetry_text_sender_never_reads_payload_or_contacts_lobby(env):
+    hooks = {name:forbid for name in telemetry.FAKES}
+    for pointer in (0,1,0xFFFFFFFFFFFFFFFF):
+        for category in (0,9,11,0xFFFFFFFF):
+            value,buffers,writes,observed = env.call(telemetry.SEND,[pointer,category],
+                ret='int',setup=setup(255),fakes=hooks)
+            assert value == 0 and not buffers and not writes and not observed

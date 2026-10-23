@@ -176,3 +176,32 @@ void sub_1405DC020(unsigned int reason)
     authBusy[1] = 1;
     Live_DemonwareDisconnectCleanup(0);
 }
+
+#include "dw/reporting.h"
+// Lowered SDK forwarding contracts, not complete SDK class definitions.
+unsigned char sub_140748BB0(void *lobby);
+void *sub_1407463D0(void *lobby);
+void **sub_140749A50(void *log, void **task, const char *text, unsigned int size,
+                   unsigned int category, void *optional);
+
+int sub_1405D6A90(const char *text, unsigned int category)
+{
+    void *lobby = dwGetActiveLobbyService();
+    if (!lobby || !sub_140748BB0(lobby))
+        return 0;
+    void *log = sub_1407463D0(lobby);
+    unsigned long long length = 0;
+    while (text[length])
+        ++length;
+    void *temporary;
+    void **returned = sub_140749A50(log, &temporary, text,
+                                  (unsigned int)(length + 1), category, nullptr);
+    void *captured = *returned;
+    if (temporary)
+    {
+        int old = __atomic_fetch_add((int *)((char *)temporary + 8), -1, __ATOMIC_SEQ_CST);
+        if (old == 1 && temporary)
+            ((void (*)(void *, unsigned int))(*(void ***)temporary)[0])(temporary, (unsigned int)old);
+    }
+    return captured ? 1 : 0;
+}

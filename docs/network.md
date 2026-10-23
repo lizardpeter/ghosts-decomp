@@ -391,3 +391,38 @@ unreconstructed original call sites still require reconstruction/integration.
 A separate generic analytics/crash-upload route has not been established here;
 its absence is not claimed. The checks emulate providers and make no real account
 or network requests.
+
+### Explicit gameplay telemetry
+
+The original also registers telemetry sampling controls in 1405E92D0. The
+following default fractions are read from the original PE's floating-point
+constants and paired with their registration calls, not inferred from labels.
+
+| Control | Default fraction | Stored dvar pointer |
+|---|---:|---|
+| `match_making_telemetry_chance` | 0.05 | 14A05F8D0 |
+| `log_mapvote_chance` | 0.01 | 14A05F8D8 |
+| `log_teambalance_chance` | 0.01 | 14A05F8E0 |
+| `log_host_migration_chance` | 0.10 | 14A05F8E8 |
+
+Matchmaking reporter 140199DA0 compares a random value against the first rate,
+but can bypass sampling when 1405F0700(controller, 9) admits a forced event.
+It serializes a binary record and calls 140749C00 through the lobby event log.
+This path is not yet reconstructed. The map-vote/team-balance settings are
+confirmed registrations; their submission callers are not established here.
+
+Host-migration function 1404C6E40 samples the fourth rate, builds text, and calls
+1405D6A90 with category 11. That submission helper is now reconstructed. It
+obtains the active lobby, checks its admission byte, obtains its event log and
+submits text with a length including the terminating NUL. A nonnull returned
+reference container determines success. Its separately supplied temporary task
+is decremented and virtually destroyed only when the old count was 1; return
+success uses the captured pointer even if cleanup changes the container.
+`test_dwreporting.py` compares 100 provider/ownership cases with the original.
+
+P0008 also overrides this telemetry-text helper to return 0 without inspecting
+the text or invoking lobby/SDK calls. Its test uses invalid payload pointers and
+rejects lobby dependencies, so it does not merely rely on P0006's null lobby.
+This blocks the source-linked helper, not every original host-migration caller
+or the separate binary matchmaking reporter. Turning down sampling controls
+alone would not provide full disconnection.

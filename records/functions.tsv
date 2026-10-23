@@ -482,3 +482,4 @@ iw6mp64_MSStore_ship	14019F390	decompiled	src/win32/gdk.cpp	GDK frame/reporting-
 iw6mp64_MSStore_ship	1401A1320	decompiled	src/win32/gdk.cpp	GDK frame/reporting-pump reconstruction; verification pending
 iw6mp64_MSStore_ship	1401A1CA0	decompiled	src/win32/gdk.cpp	GDK frame/reporting-pump reconstruction; verification pending
 iw6mp64_MSStore_ship	1406AF274	decompiled	src/_external/gdk/xgameruntime.cpp	GDK event submission forwarding reconstruction; verification pending
+iw6mp64_MSStore_ship	1405D6A90	decompiled	src/dw/dwutils.cpp	Telemetry text submission reconstruction; verification pending

@@ -36,3 +36,10 @@ void dwLobbyPump(int controller)
 {
     dwLobbyActivity = 0;
 }
+
+// P0008: do not inspect or submit telemetry text to the vendor event log.
+#include "dw/reporting.h"
+int sub_1405D6A90(const char *text, unsigned int category)
+{
+    return 0;
+}
