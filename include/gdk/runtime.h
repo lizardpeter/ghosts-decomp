@@ -47,3 +47,9 @@ extern "C" int XUserResolveIssueWithUiAsync(void *user, const char *url, void *a
 extern "C" int XUserResolveIssueWithUiResult(void *async);
 extern "C" int XUserResolvePrivilegeWithUiAsync(void *user, unsigned int options, unsigned int privilege, void *async);
 extern "C" int XUserResolvePrivilegeWithUiResult(void *async);
+void sub_1401A1760(int frame);
+void sub_14019F390();
+void sub_1401A1320();
+void sub_1401A1CA0();
+extern "C" int XGameEventWrite(void *user, const char *scid, const char *session,
+    const char *name, const char *dimensions, const char *measurements);

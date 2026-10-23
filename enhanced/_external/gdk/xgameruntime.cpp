@@ -34,3 +34,10 @@ extern "C" void XGameRuntimeUninitialize()
     gdkRuntime.report = nullptr;
     gdkRuntime.uninitialize = nullptr;
 }
+
+// P0008: refuse direct achievement/stat event submissions without SDK access.
+extern "C" int XGameEventWrite(void *user, const char *scid, const char *session,
+    const char *name, const char *dimensions, const char *measurements)
+{
+    return (int)0x89240100;
+}

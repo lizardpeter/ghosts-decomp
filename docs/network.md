@@ -363,3 +363,31 @@ separately through the same enhanced interface boundary.
 This extends P0005/P0006 offline startup. Unreconstructed original call sites,
 HTTP providers, remaining SDK thunks and packet transport still need work; this
 is not a claim of whole-game isolation or a working standalone executable.
+
+## Reporting to account services
+
+The original includes account-linked reporting in addition to authentication.
+The following routes are established by the Store disassembly and the GDK/HTTP
+call graph; this is a static inventory, not a captured list of live traffic.
+
+| Route | Original behavior | Reconstructed enhanced boundary |
+|---|---|---|
+| Xbox achievement/stat events | Game achievement path 14019F3D0 calls XblEventsWriteInGameEvent 1406D1880; XSAPI reaches XGameEventWrite 1406AF274 | P0008 rejects direct reconstructed XGameEventWrite; event-task pump 14019F390 is inert |
+| Presence and social/session services | XSAPI uses libHttpClient/XCurl and the RTA websocket | P0008 stops presence pump 1401A1CA0 and the GDK frame driver; direct SDK/session/HTTP paths remain pending |
+| Connected Storage cloud saves | GDK gamesave tasks and completion queue | P0008 drops pending work in reconstructed save pump 1401A1320 without dispatch or provider access; direct save APIs remain pending |
+| Vendor login and lobby stats/storage | Demonware auth/lobby clients and service getters | P0005/P0006 block their reconstructed entry points; original callers and remaining service methods remain pending |
+| Account sign-in, tokens and repair UI | Xbox runtime interfaces | P0007 guards reconstructed runtime/account entry points; original call sites remain pending |
+
+The main game GDK frame driver 1401A1760 can retry sign-in, advance online
+initialization and call the task, save, user, friend, event, store, presence and
+session frame functions. P0008 clears its two scheduling latches and invokes
+none of these dependencies. Direct pump callers are guarded separately, because
+skipping this parent alone does not guard callers outside it.
+
+No successful upload, event receipt or async completion is fabricated. These
+changes do not prove that the entire original process sends no traffic: direct
+WinHTTP/XCurl providers, XSAPI events above the thunk, session operations and
+unreconstructed original call sites still require reconstruction/integration.
+A separate generic analytics/crash-upload route has not been established here;
+its absence is not claimed. The checks emulate providers and make no real account
+or network requests.

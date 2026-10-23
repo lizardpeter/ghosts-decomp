@@ -362,3 +362,32 @@ Thirteen intentional mutations were rejected: changing query-success admission
 in each of the ten wrappers, swapping options/privilege, truncating token buffer
 size to 32 bits and omitting token-result interface release. Removing the shared
 enhanced lookup override also makes the new account/result test fail.
+
+## Frame and reporting drivers
+
+The Store game frame 1401A1760 is now reconstructed in `src/win32/gdk.cpp`.
+Original subsystem names remain unknown; callback declarations use observed
+call-site widths. In particular, branch results inspect the entire low byte,
+not just bit zero. The driver rereads the signed-in query, so callbacks can
+change the result within a single frame. It preserves sign-in/online-ready
+latching, conditional online initialization and the unconditional ordered task,
+save, user, friend, event, store, presence and session pumps.
+
+Separate reconstructions cover event-task pump 14019F390, presence pump
+1401A1CA0 and cloud-save pump 1401A1320. Presence/save dispatch completion port 1
+with timeout 0 before their game task manager. Save processing also requires a
+signed-in result, a nonnull provider and a pending flag; its callbacks precede
+clearing that flag. Queues are dispatched even when no save work is admitted.
+
+`XGameEventWrite` first invokes the thread guard, then queries the event IID
+BBFBDCC7-BFE7-409B-A5CA-EDF054960B4D as both family and version and forwards six
+arguments through slot 3. Thread-guard query failure does not abort the separate
+event query. A successful acquisition is released even on method failure.
+
+`test_gdk_reporting.py` compares these five functions with the original in 360
+cases, including changing callback results, noncanonical true bytes, callback
+writes to scheduling fields, null event payloads, provider failures and four
+frame cases with the three reconstructed child pumps connected. Providers and
+OS calls are modeled. P0008 stops these source-linked reporting paths in the
+enhanced build; `test_reporting_offline.py` rejects dependency calls and checks
+that poisoned provider/queue pointers and event payloads are never accessed.

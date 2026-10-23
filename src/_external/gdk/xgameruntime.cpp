@@ -299,3 +299,20 @@ extern "C" int XUserResolvePrivilegeWithUiResult(void *async)
     }
     return result;
 }
+
+IW6_STATIC const unsigned char eventIID[16] IW6_AT("", "eventIID");
+extern "C" int XGameEventWrite(void *user, const char *scid, const char *session,
+    const char *name, const char *dimensions, const char *measurements)
+{
+    XThreadAssertNotTimeSensitive();
+    void *api;
+    int result = sub_1406AEE74(eventIID, eventIID, &api);
+    if (result >= 0)
+    {
+        result = ((int (*)(void *, void *, const char *, const char *, const char *,
+            const char *, const char *))(*(void ***)api)[3])(
+                api, user, scid, session, name, dimensions, measurements);
+        ReleaseApi(api);
+    }
+    return result;
+}

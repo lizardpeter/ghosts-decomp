@@ -477,3 +477,8 @@ iw6mp64_MSStore_ship	1406B201C	matches	src/_external/gdk/xgameruntime.cpp	test_g
 iw6mp64_MSStore_ship	1406B20A8	matches	src/_external/gdk/xgameruntime.cpp	test_gdk_user.py: 54 original/recon cases per function, including 6 connected runtime cases; modeled OS/SDK only; mutation-sensitive; executable integration pending
 iw6mp64_MSStore_ship	1406B2118	matches	src/_external/gdk/xgameruntime.cpp	test_gdk_user.py: 54 original/recon cases per function, including 6 connected runtime cases; modeled OS/SDK only; mutation-sensitive; executable integration pending
 iw6mp64_MSStore_ship	1406B21B8	matches	src/_external/gdk/xgameruntime.cpp	test_gdk_user.py: 54 original/recon cases per function, including 6 connected runtime cases; modeled OS/SDK only; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	1401A1760	decompiled	src/win32/gdk.cpp	GDK frame/reporting-pump reconstruction; verification pending
+iw6mp64_MSStore_ship	14019F390	decompiled	src/win32/gdk.cpp	GDK frame/reporting-pump reconstruction; verification pending
+iw6mp64_MSStore_ship	1401A1320	decompiled	src/win32/gdk.cpp	GDK frame/reporting-pump reconstruction; verification pending
+iw6mp64_MSStore_ship	1401A1CA0	decompiled	src/win32/gdk.cpp	GDK frame/reporting-pump reconstruction; verification pending
+iw6mp64_MSStore_ship	1406AF274	decompiled	src/_external/gdk/xgameruntime.cpp	GDK event submission forwarding reconstruction; verification pending
