@@ -39,6 +39,11 @@ jobs:
       - name: Enhanced build tests
         if: steps.recon.outputs.any == '1'
         run: IW6_ORIGINALS=.work/originals python3 tests/enhanced/run.py
+      - name: Experimental offline integration
+        if: steps.recon.outputs.any == '1'
+        run: |
+          IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --offline
+          IW6_ORIGINALS=.work/originals python3 tests/offline/run.py
       - name: Generated files are current
         run: |
           python3 tools/status.py >/dev/null
