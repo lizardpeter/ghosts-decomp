@@ -24,6 +24,20 @@ import symbols
 BUILD = 'iw6mp64_MSStore_ship'
 MAGIC = b'IW6OFFLINE1\0\0\x01\0\0\0'
 PATCHES = {'P0005', 'P0006', 'P0007', 'P0008', 'P0010'}
+# C exports adapt the reviewed Win64 ABI without claiming original source names.
+DIRECT = {
+    0x14054F200: 'Iw6DirectInit',
+    0x14054F960: 'Iw6DirectGetPacket',
+    0x14054FB70: 'Iw6DirectSendPacket',
+    0x140469E70: 'Iw6DirectCompare',
+    0x140469EC0: 'Iw6DirectCompare',
+    0x140469F20: 'Iw6DirectCompare',
+    0x1405A8830: 'Iw6DirectHandleState',
+    0x1405A8980: 'Iw6DirectAddressState',
+    0x1405A9E50: 'Iw6DirectIgnoreHandle',
+    0x1405A87E0: 'Iw6DirectIgnoreHandle',
+}
+
 
 
 def sha(data):
@@ -75,7 +89,8 @@ def guards():
             for name, (addr, kind) in table.items() if addr == va and kind == 'function']
 
 
-def transform(original, dll_bytes):
+def transform(original, dll_bytes, mode='offline'):
+    if mode not in {'offline', 'direct'}: raise ValueError('unknown package mode')
     cfg = tomllib.loads((ROOT / 'target.toml').read_text())
     expected = next(b['exe']['sha256'] for b in cfg['build'] if b['id'] == BUILD)
     if sha(original) != expected:
@@ -89,6 +104,8 @@ def transform(original, dll_bytes):
     exports = {e.name.decode(): dll.OPTIONAL_HEADER.ImageBase + e.address for e in dll.DIRECTORY_ENTRY_EXPORT.symbols if e.name}
     if not {'Iw6OfflineBootstrap', 'Iw6OfflineDllMain', 'Iw6DenySocket'} <= exports.keys():
         raise ValueError('offline exports missing')
+    if ('Iw6DirectProfile' in exports) != (mode == 'direct'):
+        raise ValueError('DLL build does not match requested offline/direct mode')
     if exports['Iw6OfflineDllMain'] != dll.OPTIONAL_HEADER.ImageBase + dll.OPTIONAL_HEADER.AddressOfEntryPoint:
         raise ValueError('DLL entry must be the offline attach guard')
     if any(d.VirtualAddress for d in [pe.OPTIONAL_HEADER.DATA_DIRECTORY[13]]):
@@ -136,6 +153,7 @@ def transform(original, dll_bytes):
     targets = [(va, name) for va, name in guards() if name in exports]
     if len(targets) != 31 or len({va for va, _ in targets}) != 31:
         raise ValueError('missing or ambiguous guard symbols')
+    if mode == 'direct': targets.extend(sorted(DIRECT.items()))
     for va, symbol in targets:
         if symbol not in exports or functions[va] < 5: raise ValueError('invalid guard ' + symbol)
         offset = pe.get_offset_from_rva(va - pe.OPTIONAL_HEADER.ImageBase)
@@ -157,23 +175,26 @@ def transform(original, dll_bytes):
     struct.pack_into('<II', data, pe.OPTIONAL_HEADER.DATA_DIRECTORY[1].get_file_offset(), imports_rva, len(descriptors)+20)
     put(pe.OPTIONAL_HEADER.get_field_absolute_offset('CheckSum'), 0)
     put(pe.OPTIONAL_HEADER.get_field_absolute_offset('CheckSum'), pefile.PE(data=bytes(data)).generate_checksum())
-    manifest = {'format': 1, 'build': BUILD, 'original_sha256': expected,
+    manifest = {'format': 1, 'mode': mode, 'build': BUILD, 'original_sha256': expected,
                 'exe_sha256': sha(data), 'dll_sha256': sha(dll_bytes),
                 'guards': changes, 'imports': redirected,
-                'native_launch_verified': False, 'whole_process_egress_verified': False}
+                'native_launch_verified': False, 'whole_process_egress_verified': False,
+                'game_join_verified': False}
     return bytes(data), manifest
 
 
-def package(original, dll, output):
+def package(original, dll, output, mode='offline'):
     dll_bytes = dll.read_bytes()
-    patched, manifest = transform(original.read_bytes(), dll_bytes)
+    patched, manifest = transform(original.read_bytes(), dll_bytes, mode)
     output.mkdir(parents=True, exist_ok=False)
     try:
         (output / 'iw6mp64_offline.exe').write_bytes(patched)
         (output / 'recon.dll').write_bytes(dll_bytes)
         (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-        for name in ('ConfigureSandbox.ps1', 'LaunchSandbox.ps1'):
+        for name in (() if mode == 'direct' else ('ConfigureSandbox.ps1', 'LaunchSandbox.ps1')):
             shutil.copyfile(ROOT / 'tools/offline' / name, output / name)
+        if mode == 'direct':
+            shutil.copyfile(ROOT / 'tools/direct/LaunchDirect.ps1', output / 'LaunchDirect.ps1')
     except BaseException:
         shutil.rmtree(output)
         raise
@@ -183,8 +204,9 @@ def package(original, dll, output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--original', type=Path, required=True)
-    parser.add_argument('--dll', type=Path, default=ROOT / 'build' / BUILD / 'offline/recon.dll')
+    parser.add_argument('--mode', choices=['offline','direct'], default='offline')
+    parser.add_argument('--dll', type=Path)
     parser.add_argument('--output', type=Path, required=True, help='new directory; must not exist')
     args = parser.parse_args()
-    result = package(args.original, args.dll, args.output)
+    result = package(args.original, args.dll or ROOT / 'build' / BUILD / args.mode / 'recon.dll', args.output, args.mode)
     print(f"Packaged {len(result['guards'])} guard jumps and {len(result['imports'])} import redirects; native verification pending")

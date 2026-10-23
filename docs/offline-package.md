@@ -70,6 +70,8 @@ It points `fs_basepath` to the mapped game assets. Missing dependencies, Store s
 Sandbox graphics support or asset path requirements can still prevent launch; none has been
 validated on Windows here. Direct execution outside the sandbox loses this containment.
 
+The separate experimental direct profile is documented in [direct-connect.md](direct-connect.md).
+
 Network-disabled containment is deliberately broad: it also prevents connections to a future
 custom dedicated server. A future dedicated transport needs its own implementation and a
 separately reviewed launch policy. Do not enable unrestricted networking based only on these stubs.

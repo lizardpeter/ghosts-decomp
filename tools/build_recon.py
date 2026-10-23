@@ -7,6 +7,8 @@
 
     python3 tools/build_recon.py --build iw6mp64_MSStore_ship --offline  # experimental offline adapters + DLL attach guard
 
+    python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct   # vendor guards plus independent game UDP
+
   The default links against the reference build (MAP + PDB). Another build (the Store build) resolves names
   through tools/symbols.py: records/names.tsv and the matcher's identifications.
 
