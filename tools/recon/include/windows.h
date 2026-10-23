@@ -141,6 +141,14 @@ BOOL ScreenToClient(HWND hWnd, POINT *lpPoint);
 BOOL ClientToScreen(HWND hWnd, POINT *lpPoint);
 BOOL PostMessageA(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
 
+#define PM_NOREMOVE 0x0000
+#define PM_REMOVE 0x0001
+BOOL PeekMessageA(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
+BOOL GetMessageA(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax);
+BOOL TranslateMessage(const MSG *lpMsg);
+LRESULT DispatchMessageA(const MSG *lpMsg);
+void PostQuitMessage(int nExitCode);
+
 #ifdef __cplusplus
 }
 #endif

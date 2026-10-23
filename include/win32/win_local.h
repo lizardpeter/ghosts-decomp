@@ -37,10 +37,35 @@ enum sysEventType_t
 	SE_CONSOLE = 0x3,
 };
 
+// An event in the system event queue (PS4 server PDB layout, which the Store build has too: evPortIndex is never
+// written there, so it stays 0)
+struct sysEvent_t
+{
+	int evPortIndex;
+	int evTime;
+	sysEventType_t evType;
+	int evValue;
+	int evValue2;
+	int evPtrLength;  // the size of evPtr's allocation (SE_CONSOLE: the text and its terminator)
+	void *evPtr;      // Com_AllocEvent'ed; freed by whoever takes the event
+};
+static_assert(sizeof(sysEvent_t) == 0x20, "sysEvent_t layout");
+
+#define MAX_QUED_EVENTS 256
+#define MASK_QUED_EVENTS (MAX_QUED_EVENTS - 1)
+
 extern WinVars_t g_wv;          // win32/win_main.cpp
 extern const dvar_t *in_mouse;  // win32/win_input.cpp
 
+// win32/win_main.cpp
 void Sys_QueEvent(int time, sysEventType_t type, int value, int value2, int ptrLength, void *ptr);
+void Sys_ShutdownEvents();
+void Sys_LoadingKeepAlive();
+sysEvent_t Sys_GetEvent();
+
+char *Sys_ConsoleInput();         // win32/win_syscon.cpp
+void *Com_AllocEvent(int size);   // qcommon/common.cpp
+void Com_Quit_f();                // qcommon/common.cpp
 
 // win32/win_input.cpp
 void IN_RecenterMouse();

@@ -483,3 +483,12 @@ iw6mp64_MSStore_ship	1401A1320	matches	src/win32/gdk.cpp	test_gdk_reporting.py: 
 iw6mp64_MSStore_ship	1401A1CA0	matches	src/win32/gdk.cpp	test_gdk_reporting.py: 2 original/recon cases with modeled providers; mutation-sensitive; executable integration pending
 iw6mp64_MSStore_ship	1406AF274	matches	src/_external/gdk/xgameruntime.cpp	test_gdk_reporting.py: 30 original/recon cases with modeled providers; mutation-sensitive; executable integration pending
 iw6mp64_MSStore_ship	1405D6A90	matches	src/dw/dwutils.cpp	test_dwreporting.py: 100 original/recon cases with modeled providers; mutation-sensitive; executable integration pending
+iw6mp64_MSStore_ship	14054E400	matches	src/win32/win_main.cpp	differential test against the Store build (emulated; message queue model, Store MainWndProc as the window procedure)
+iw6mp64_MSStore_ship	14054E860	matches	src/win32/win_main.cpp	differential test against the Store build (emulated; message queue model, Store MainWndProc as the window procedure)
+iw6mp64_MSStore_ship	14054E280	matches	src/win32/win_main.cpp	differential test against the Store build (emulated; message queue model, Store MainWndProc as the window procedure)
+iw6mp64_MSStore_ship	14054DB80	matches	src/win32/win_main.cpp	differential test against the Store build (emulated; message queue model, Store MainWndProc as the window procedure)
+iw6mp64_MSStore_ship	140460130	matches	src/qcommon/common.cpp	differential test against the Store build (emulated; real Sys_GetEvent and window procedure, handlers and packet sources faked and logged)
+iw6mp64_MSStore_ship	14030F710	matches	src/client/cl_keys.cpp	differential test against the Store build (emulated; every handler faked and logged)
+iw6mp64_MSStore_ship	14030F4B0	matches	src/client/cl_keys.cpp	differential test against the Store build (emulated; every handler faked and logged)
+iw6_ds_ps4	140199A60	compiles	src/qcommon/common.cpp	src follows the Store build (keys, characters and packets); the server keeps only the console half, and the auto inputs cannot set up an event queue; matches on the Store build
+iw6_ds_ps4	140244FE0	compiles	src/win32/win_main.cpp	src follows the Store build, which records g_wv.sysMsgTime in the pump (the server does not); tested on the Store build, where it matches

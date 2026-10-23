@@ -1,12 +1,14 @@
 // client/cl_keys.cpp
 //
 // Reconstructed from the PS4 dedicated server (iw6_ds_ps4, PDB iw6mp64_dh_server_orbis, changelist 715098), which
-// keeps the binding and key-state half of this file; the key-event and console-input half is client-only and
-// will come from the Store build. Functions appear in original line order; each is tagged with its address in
-// that build and its original line.
+// keeps the binding and key-state half of this file; the key-event half is client-only and comes from the
+// Microsoft Store build (iw6mp64_MSStore_ship), tagged with Store addresses: CL_KeyEvent and CL_CharEvent, named and
+// placed after Black Ops' (server PDB, client/cl_keys.cpp:2219 and 2759; IW6 line numbers unknown). Functions appear in
+// original line order; each is tagged with its address in that build and its original line.
 
 #include <ctype.h>
 #include <string.h>
+#include <windows.h>
 
 #include <iw6_static.h>
 
@@ -16,6 +18,31 @@
 #include "qcommon/qcommon.h"
 
 #define IW6_SOURCE "client/cl_keys.cpp"
+
+struct ScreenPlacement;
+
+// Elsewhere in the client (Store build; docs/input.md, "The key path")
+extern const dvar_t *cl_bypassMouseInput;      // client_mp/cl_main_mp.cpp
+extern bool unk_14416A0F9[1];                  // per local client: Escape in game opens the main menu, not the in-game one (name unknown)
+void Message_Key(LocalClientNum_t localClientNum, int key);              // client/cl_keys.cpp, Store 140311190
+bool Field_CharEvent(LocalClientNum_t localClientNum, const ScreenPlacement *scrPlace, field_t *edit, int ch);  // 14030FD40
+const ScreenPlacement *sub_140344A20(LocalClientNum_t localClientNum);  // the placement the chat line is drawn with
+void CL_StopLogoOrCinematic(LocalClientNum_t localClientNum);           // client_mp/cl_main_mp.cpp, Store 140316A40
+int UI_SetActiveMenu(LocalClientNum_t localClientNum, int menu);         // ui_mp/ui_main_mp.cpp
+int sub_140527D90(LocalClientNum_t localClientNum);                     // the menu Escape opens while disconnected
+bool sub_140222E90();                                                   // LUI: always true in the Store build
+void sub_140222ED0(LocalClientNum_t localClientNum, int controllerIndex, int key, int down, int keyCatchers);  // LUI key event
+void sub_140221EC0(LocalClientNum_t localClientNum, int ch);            // LUI character event
+int sub_140503AD0(LocalClientNum_t localClientNum, int key);            // the menu wants this key despite cl_bypassMouseInput
+bool CL_IsGamepadEnabled(LocalClientNum_t localClientNum);              // client_mp/cl_input.cpp
+
+// g_bindCommands indices CL_KeyEvent tests (the Store build's table, 1409919F0 + 10 entries: 101 commands)
+#define BIND_ATTACK 0x1                     // +attack
+#define BIND_ATTACK_AKIMBO_ACCESSIBLE 0x27  // +attack_akimbo_accessible
+#define BIND_TALK 0x51                      // +talk; 0x52 -talk
+#define BIND_LAST_HELD 0x54                 // bindings up to here come in +/- pairs (odd +, even -)
+#define BIND_CHATMODEPUBLIC 0x58
+#define BIND_CHATMODETEAM 0x59
 
 // The bindable commands; a key's binding is an index into this table (0 = unbound). File static.
 IW6_STATIC const char *g_bindCommands[45] IW6_AT("", "g_bindCommands");
@@ -278,6 +305,218 @@ void Key_SwapBind_f()
 
 	Key_SetBinding(LOCAL_CLIENT_0, keys[0], bindings[1]);
 	Key_SetBinding(LOCAL_CLIENT_0, keys[1], bindings[0]);
+}
+
+// Store 14030F710 (Black Ops' CL_KeyEvent, client/cl_keys.cpp:2219: lineage). A key or mouse button went down or up
+// (Com_EventLoop's SE_KEY, or CL_GamepadButtonEvent for keys that aren't gamepad buttons). Updates the key state,
+// then gives the key to the first taker: location selection, Escape, LUI (which sees every key unless the console
+// has them), the console, a menu, the chat line, and last the key's binding (CL_ExecBinding). `time` isn't used:
+// the button handlers take com_frameTime.
+void CL_KeyEvent(LocalClientNum_t localClientNum, int key, int down, unsigned int time)
+{
+	PlayerKeyState *keyState = &playerKeys[localClientNum];
+	if (keyState->keys[K_ALT].down && key == K_F4 && down)
+	{
+		PostQuitMessage(0);
+		return;
+	}
+
+	clientUIActive_t *uiGlobals = CL_GetLocalClientUIGlobals(localClientNum);
+	KeyState *keys = &keyState->keys[key];
+	const int prevDown = keys->down;
+	keys->down = down;
+	if (down)
+	{
+		keys->repeats++;
+		if (keys->repeats == 1)
+			keyState->anyKeyDown++;
+		if (keys->repeats > 1)
+		{
+			// auto-repeat reaches only the console, the chat line, and a menu's arrow and page keys
+			if (!(uiGlobals->keyCatchers & (KEYCATCH_CONSOLE | KEYCATCH_MESSAGE)))
+			{
+				if (!(uiGlobals->keyCatchers & KEYCATCH_UI))
+					return;
+				switch (key)
+				{
+				case K_UPARROW:
+				case K_DOWNARROW:
+				case K_LEFTARROW:
+				case K_RIGHTARROW:
+				case K_PGDN:
+				case K_PGUP:
+					break;
+				default:
+					return;
+				}
+			}
+			if (key == '`' || key == '~' || key == K_ESCAPE)
+				return;
+		}
+	}
+	else
+	{
+		keys->repeats = 0;
+		keyState->anyKeyDown--;
+		if (keyState->anyKeyDown < 0)
+			keyState->anyKeyDown = 0;
+	}
+
+	// selecting a location (airstrike map): Escape cancels, a fire key confirms, everything else is eaten
+	if ((uiGlobals->keyCatchers & KEYCATCH_LOCATION_SELECTION) && down > 0)
+	{
+		if (key == K_ESCAPE)
+			keyState->locSelInputState = LOC_SEL_INPUT_CANCEL;
+		else if (keys->binding == BIND_ATTACK || keys->binding == BIND_ATTACK_AKIMBO_ACCESSIBLE)
+			keyState->locSelInputState = LOC_SEL_INPUT_CONFIRM;
+		return;
+	}
+
+	const connstate_t clcState = uiGlobals->connectionState;
+	keyState->locSelInputState = LOC_SEL_INPUT_NONE;
+
+	if (key == K_ESCAPE && down)
+	{
+		if (uiGlobals->keyCatchers & KEYCATCH_MESSAGE)
+		{
+			Message_Key(localClientNum, K_ESCAPE);
+			return;
+		}
+		if (!(uiGlobals->keyCatchers & (KEYCATCH_UI | KEYCATCH_UNKNOWN_40)))
+		{
+			switch (clcState)
+			{
+			case CA_CINEMATIC:
+			case CA_LOGO:
+				CL_StopLogoOrCinematic(localClientNum);
+				return;
+			case CA_CONNECTING:
+			case CA_CHALLENGING:
+			case CA_CONNECTED:
+			case CA_SENDINGSTATS:
+			case CA_SYNCHRONIZING_DATA:
+			case CA_PRIMED:
+				return;
+			case CA_ACTIVE:
+				UI_SetActiveMenu(localClientNum, unk_14416A0F9[localClientNum] ? UIMENU_MAIN : UIMENU_INGAME);
+				return;
+			default:
+				if (cls.uiStarted)
+					UI_SetActiveMenu(localClientNum, sub_140527D90(localClientNum));
+				return;
+			}
+		}
+		if (cls.uiStarted && sub_140222E90())
+		{
+			const int keyCatchers = uiGlobals->keyCatchers;
+			const int controllerIndex = CL_ControllerIndexFromClientNum(localClientNum);
+			sub_140222ED0(localClientNum, controllerIndex, K_ESCAPE, down, keyCatchers);
+		}
+		UI_KeyEvent(localClientNum, K_ESCAPE, down);
+		return;
+	}
+
+	// LUI sees the key first; while it has the keys (KEYCATCH_UNKNOWN_40) a press goes no further, except +talk
+	int luiHasKey = 0;
+	if (cls.uiStarted && sub_140222E90())
+	{
+		const int keyCatchers = uiGlobals->keyCatchers;
+		if (!(keyCatchers & KEYCATCH_CONSOLE))
+		{
+			luiHasKey = (keyCatchers >> 6) & 1;
+			const int controllerIndex = CL_ControllerIndexFromClientNum(localClientNum);
+			sub_140222ED0(localClientNum, controllerIndex, key, down, keyCatchers);
+			if (keys->binding == BIND_TALK || keys->binding == BIND_TALK + 1)
+				luiHasKey = 0;
+		}
+	}
+
+	if (!down)
+	{
+		// a release runs the "-" half of a held binding, whoever has the keys
+		const int binding = keys->binding;
+		if (binding <= BIND_LAST_HELD && (binding & 1))
+			CL_ExecBinding(localClientNum, binding + 1, key, prevDown);
+		if ((uiGlobals->keyCatchers & KEYCATCH_UI) && cls.uiStarted)
+			UI_KeyEvent(localClientNum, key, 0);
+		return;
+	}
+
+	if (luiHasKey)
+		return;
+	if (uiGlobals->keyCatchers & KEYCATCH_CONSOLE)
+		return;  // nothing handles the console's keys here in the Store build
+
+	if (uiGlobals->keyCatchers & KEYCATCH_UI)
+	{
+		if (UI_GetActiveMenu(localClientNum) != UIMENU_SCOREBOARD)
+		{
+			// cl_bypassMouseInput: the first three mouse buttons, and keys the menu doesn't want, reach the bindings
+			bool toMenu = true;
+			if (cl_bypassMouseInput && cl_bypassMouseInput->current.enabled)
+			{
+				if ((unsigned int)(key - K_MOUSE1) <= K_MOUSE3 - K_MOUSE1)
+					toMenu = false;
+				else if (!cls.uiStarted)
+					return;
+				else if (!sub_140503AD0(localClientNum, key))
+					toMenu = false;
+			}
+			if (toMenu)
+			{
+				if (cls.uiStarted)
+					UI_KeyEvent(localClientNum, key, down);
+				return;
+			}
+		}
+	}
+
+	if (uiGlobals->keyCatchers & KEYCATCH_MESSAGE)
+	{
+		Message_Key(localClientNum, key);
+		return;
+	}
+
+	const int binding = keys->binding;
+	if ((unsigned int)(binding - BIND_TALK) > 1)
+	{
+		if (clcState == CA_DISCONNECTED)
+			return;
+		if (!binding)
+			return;
+		// with the gamepad on, keyboard bindings other than the chat keys are ignored
+		const bool gamepad = CL_IsGamepadEnabled(localClientNum);
+		if (gamepad && binding != BIND_CHATMODETEAM && binding != BIND_CHATMODEPUBLIC)
+			return;
+	}
+	else if (!binding)
+	{
+		return;
+	}
+	CL_ExecBinding(localClientNum, binding, key, 0);
+}
+
+// Store 14030F4B0 (Black Ops' CL_CharEvent, client/cl_keys.cpp:2759: lineage). A character (WM_CHAR, Com_EventLoop's
+// SE_CHAR) for the chat line, a menu or LUI; without one of their catchers it is dropped.
+void CL_CharEvent(LocalClientNum_t localClientNum, int key)
+{
+	if (key == '`' || key == '~')
+		return;
+	const int keyCatchers = CL_GetLocalClientUIGlobals(localClientNum)->keyCatchers;
+	if (keyCatchers & KEYCATCH_CONSOLE)
+		return;
+	if (keyCatchers & KEYCATCH_MESSAGE)
+	{
+		Field_CharEvent(localClientNum, sub_140344A20(localClientNum), &playerKeys[localClientNum].chatField, key);
+		return;
+	}
+	if (keyCatchers & KEYCATCH_UI)
+	{
+		UI_KeyEvent(localClientNum, key | K_CHAR_FLAG, 1);
+		return;
+	}
+	if (keyCatchers & KEYCATCH_UNKNOWN_40)
+		sub_140221EC0(localClientNum, key);
 }
 
 // 1400ACE30  client/cl_keys.cpp:2356

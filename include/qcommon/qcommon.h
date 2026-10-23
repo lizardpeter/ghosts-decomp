@@ -85,6 +85,33 @@ int MSG_WriteBitsCompress(bool trainHuffman, const unsigned char *from, unsigned
 void MSG_SetDefaultUserCmd(const playerState_s *ps, usercmd_s *cmd);
 void MSG_WriteDeltaUsercmdKey(msg_t *msg, int key, const usercmd_s *from, const usercmd_s *to);  // qcommon/msg_mp.cpp
 
+enum netsrc_t
+{
+	NS_CLIENT1 = 0x0,
+	NS_MAXCLIENTS = 0x1,
+	NS_SERVER = 0x2,
+	NS_PACKET = 0x3,
+	NS_INVALID_NETSRC = 0x4,
+};
+
+// qcommon/net_chan_mp.cpp
+int NET_GetLoopPacket(netsrc_t sock, netadr_s *net_from, msg_t *net_message);
+bool NET_GetDeferredClientPacket(netadr_s *net_from, msg_t *net_message);
+int NET_GetClientPacket(netadr_s *net_from, msg_t *net_message);
+
+// universal/com_memory.cpp: a large buffer borrowed from the stack-like LargeLocal region for one scope
+class LargeLocal
+{
+public:
+	LargeLocal(unsigned long long sizeParam);
+	~LargeLocal();
+	void *GetBuf();
+
+private:
+	unsigned long long startPos;
+	unsigned long long size;
+};
+
 int SEH_GetCurrentLanguage();
 #define LANGUAGE_FRENCH 1
 

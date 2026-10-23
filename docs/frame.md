@@ -290,7 +290,7 @@ So pair by counting, not by call:
   2. dispatch only the key and character events from `Sys_GetEvent` (`CL_KeyEvent` → `CL_ExecBinding` → the button handlers set the button state directly);
   3. leave packets and console text for the next `Com_EventLoop`.
 
-  *Unverified:* that no key binding has an effect that is unsafe in the middle of the cgame frame. Bindings that run console commands only queue them (`Cbuf_AddText`), which is safe. Menu keys (`UI_KeyEvent`) are the case to check.
+  The path is mapped in docs/input.md, "The key path", which also gives the rule: where (the end of the enhanced `R_SyncGpu`), how to pump (`Sys_LoadingKeepAlive`, then drain the event queue), which events (in game with no key catcher, key and character events whose binding only sets input state) and the stop rule (stop at the first other event, leave it and everything after it to `Com_EventLoop`). Not every binding is safe: weapnext/weapprev, the action slots and the offhands call the cgame, and togglemenu/pause open an LUI menu at once.
 - **The alternative, rejected:** waiting at the top of `Com_Frame` before its first `Com_EventLoop` would make keys fresh without moving anything. But then the com_maxfps sleep and the back-end wait in `R_SyncGpu` would come after the input, adding up to a frame of latency whenever com_maxfps limits, and the listen server's frame would run in between.
 
 ### As implemented (P0004)
@@ -321,7 +321,7 @@ So pair by counting, not by call:
   test's inputs (tests/enhanced/test_frame_wait.py).
 - **Fallbacks:** without `IDXGISwapChain2` there is no object and no wait. If the system refuses the flag, a flip-model
   swap chain is made without it, then the original swap chain.
-- **Keys are not moved yet** (the re-pump described above). The mouse is read right after the wait.
+- **Keys and mouse buttons** that arrive during the waits are applied at the end of `R_SyncGpu` (P0006; the rule is in docs/input.md, "Dispatching keys after the frame wait"). The mouse is read right after the wait.
 - **Unverified on hardware:** that the waitable object behaves as documented on this game's swap chain (signal rate
   when minimized or occluded, a `DXGI_STATUS_OCCLUDED` present). Check with PresentMon: one frame queued, and the
   latency between the mouse and the photon.

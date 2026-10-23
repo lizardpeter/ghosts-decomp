@@ -22,6 +22,7 @@ struct cmd_function_s
 extern CmdArgs cmd_args;
 
 void Cmd_AddCommandInternal(const char *cmdName, void (*function)(), cmd_function_s *allocedCmd);
+void Cbuf_AddText(LocalClientNum_t localClientNum, const char *text);
 
 // Inlines from this header (qcommon/cmd.h:220 for Cmd_Argv, which the linker also kept out of line).
 inline int Cmd_Argc()

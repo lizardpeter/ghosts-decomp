@@ -231,7 +231,12 @@ struct clientUIActive_t
 #define KEYCATCH_CONSOLE 0x1
 #define KEYCATCH_LOCATION_SELECTION 0x8
 #define KEYCATCH_UI 0x10
-#define KEYCATCH_UNKNOWN_40 0x40  // also stops menu-scroll repeat (CL_CheckForIgnoreDueToRepeat); name unknown
+#define KEYCATCH_MESSAGE 0x20     // the chat line (Message_Key, Field_CharEvent on playerKeys.chatField)
+#define KEYCATCH_UNKNOWN_40 0x40  // also stops menu-scroll repeat (CL_CheckForIgnoreDueToRepeat); name unknown. Store
+                                  // build: an LUI menu takes the keys (CL_KeyEvent skips the bindings)
+
+// UI_KeyEvent's key for a character (WM_CHAR) rather than a key (Quake 3's K_CHAR_FLAG)
+#define K_CHAR_FLAG 0x400
 
 struct vidConfig_t
 {
@@ -437,6 +442,8 @@ void Key_Shutdown();
 bool Key_IsCatcherActive(LocalClientNum_t localClientNum, int mask);
 void Key_RemoveCatcher(LocalClientNum_t localClientNum, int andMask);
 void Key_SetCatcher(LocalClientNum_t localClientNum, int catcher);
+void CL_KeyEvent(LocalClientNum_t localClientNum, int key, int down, unsigned int time);
+void CL_CharEvent(LocalClientNum_t localClientNum, int key);
 
 // client/cl_gamepad.cpp
 void CL_InitGamepadCommands();
