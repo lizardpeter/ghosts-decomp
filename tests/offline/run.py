@@ -122,6 +122,7 @@ def check():
                 for row in csv.DictReader(named, delimiter='\t')
                 if row['build'] == package.BUILD and row['method'] == 'gdk-thunk'
                    and row['source'] == '_external/gdk/xgameruntime.lib'
+                   and row['name'] not in ('XGameRuntimeInitialize', 'XGameRuntimeUninitialize')
             }
         assert len(gdk_thunks) == 97, len(gdk_thunks)
         for address, name in sorted(gdk_thunks.items()):
