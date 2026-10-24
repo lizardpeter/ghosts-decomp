@@ -544,7 +544,7 @@ def _cg_buffer(r, size, frametime=None):
 def _dobj_input(r):
     frametime = r.choice([0, 1, 16, 17, -5, 0x7FFFFFFF, -0x80000000, r.getrandbits(32)])
     return {"args": [_cg_buffer(r, 0x71890, frametime), r.choice([0, 0x123456, r.getrandbits(48)]),
-                     r.choice([0, 1, 0x100, 0xFF])],
+                     r.choice([0, 1])],  # a bool: 0 or 1
             "setup": _bind_machine,
             "fakes": {"?DObjUpdateClientInfo@@YAXPEAUDObj@@M_N@Z": _logged("DObjUpdateClientInfo", "qfb")}}
 
