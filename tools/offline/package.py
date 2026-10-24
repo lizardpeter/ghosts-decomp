@@ -213,6 +213,12 @@ def transform(original, dll_bytes, mode='offline'):
                 'native_launch_verified': False, 'whole_process_egress_verified': False,
                 'game_join_verified': False,
                 'wire_protocol': {'tag':'IW6D','version':1} if mode == 'direct' else None}
+    # Verify the final PE, not only the transformation plan. A missed IAT
+    # redirect or lost GDK guard must fail before a package is published.
+    from offline.detachment_audit import audit_package
+    errors = audit_package(bytes(data), manifest)
+    if errors:
+        raise ValueError('Known vendor boundary regression:\n' + '\n'.join(errors))
     return bytes(data), manifest
 
 
