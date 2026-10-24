@@ -5,6 +5,7 @@ This deliberately enters original EXE code/IAT slots, not enhanced exports.
 It models import resolution; it is not a Windows loader or game launch test.
 """
 import csv
+import hashlib
 import json
 import struct
 import sys
@@ -39,6 +40,15 @@ def check():
         altered = dict(manifest, imports=wrong_imports)
         assert any('not wired to recon.dll' in e for e in
                    detachment_audit.audit_package(image_bytes, altered))
+        # A matching manifest hash cannot conceal a reverted machine-code
+        # jump. Validate the actual bytes at the pinned GDK QueryApi entry.
+        tampered = bytearray(image_bytes)
+        query_va = 0x1406AEE74
+        query_offset = exe.pe.get_offset_from_rva(query_va - exe.base)
+        tampered[query_offset] = 0x90  # NOP instead of E9 branch
+        altered = dict(manifest, exe_sha256=hashlib.sha256(tampered).hexdigest())
+        assert any('Incorrect or missing original entry jump' in e for e in
+                   detachment_audit.audit_package(bytes(tampered), altered))
         ok, detail = detachment_audit.audit_runtime({
             'events': [{'event': 3, 'path': r'C:\test\iw6mp64_offline.exe'},
                        {'event': 6, 'path': r'C:\Windows\System32\D3D11.dll'}]})
