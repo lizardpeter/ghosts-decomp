@@ -142,6 +142,18 @@ jobs:
                 if ($LASTEXITCODE -ne 0) { throw 'Game observation failed' }
                 python tools/offline/detachment_audit.py --exe package/iw6mp64_offline.exe --manifest package/manifest.json --runtime diagnostics/game.json --output diagnostics/vendor-audit.json
                 if ($LASTEXITCODE -ne 0) { throw 'Custom executable loaded a forbidden GDK/Xbox provider or its package audit failed' }
+                # Diagnostic evidence, not a synthetic gameplay-success flag.
+                # These strings come only from inside the custom game DLL.
+                $gameReport = Get-Content diagnostics/game.json -Raw | ConvertFrom-Json
+                $directMessages = @($gameReport.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6D:*' } | ForEach-Object { $_.text })
+                [pscustomobject]@{
+                  commands_registered = ($directMessages -contains 'IW6D:DIRECT_COMMANDS_REGISTERED')
+                  local_profile_configured = ($directMessages -contains 'IW6D:LOCAL_PROFILE_CONFIGURED')
+                  join_challenge_ready = ($directMessages -contains 'IW6D:DIRECT_JOIN_CHALLENGE_READY')
+                  map_start_requested = ($directMessages -contains 'IW6D:DIRECT_MAP_START_REQUESTED')
+                  observed_events = $directMessages
+                  game_join_verified = $false
+                } | ConvertTo-Json -Depth 8 | Set-Content diagnostics/direct-milestones.json
               }
             } finally { Remove-NetFirewallRule -Name $rule }
           }
