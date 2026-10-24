@@ -109,7 +109,7 @@ def check():
         with (ROOT / 'records/names.tsv').open(newline='') as named:
             gdk_thunks = {
                 int(row['va'], 16): row['name']
-                for row in csv.DictReader(named, delimiter='\\t')
+                for row in csv.DictReader(named, delimiter='\t')
                 if row['build'] == package.BUILD and row['method'] == 'gdk-thunk'
                    and row['source'] == '_external/gdk/xgameruntime.lib'
             }
