@@ -48,6 +48,22 @@ bool LocalNetworkMode()
 extern "C" int Iw6DirectProfile() { return 1; }
 extern "C" int Iw6DirectResult() { return lastResult; }
 
+// P0024: Game-local multiplayer gate for the custom direct profile only.
+// The Store entries 14054B1B0 and 14054B290 normally require an XUser, an
+// XStore licence and Xbox privileges. Those vendor checks cannot describe a
+// self-hosted local session. Never turn this into Xbox/retail eligibility.
+// Require the configured local player and the engine's existing LAN branch.
+// 0xC is the original not-signed-in/not-licensed reason for refusal.
+extern "C" int Iw6DirectLocalPlayReady(int controller, unsigned int *reason)
+{
+    if (reason) *reason = 0xC;
+    if (!reason || controller != 0 || !Iw6DirectPlayerId(0)) return 0;
+    const dvar_t *online = State<const dvar_t *>(0x1442B98C8);
+    if (!online || online->type != 0 || online->current.enabled) return 0;
+    *reason = 0;
+    return 1;
+}
+
 // Only called on the engine command thread, after normal local-client init.
 // Result: 1 started, -1 bad endpoint, -2 inactive client, -3 disconnect first,
 // -4 socket failure, -5 onlinegame dvar not initialized. This does not claim account authentication or map loading.
