@@ -161,7 +161,8 @@ def check():
         for fn in ('LoadLibraryA','LoadLibraryW','LoadLibraryExA','LoadLibraryExW'):
             calls = []
             m.on_import('kernel32.dll!'+fn, lambda mu: calls.append(1))
-            for path in ('WINHTTP.dll','C:\\Windows\\System32\\XGameRuntime.DLL','xcurl','ws2_32.dll','urlmon.dll','wininet'):
+            for path in ('WINHTTP.dll','C:\\Windows\\System32\\XGameRuntime.DLL','xcurl','ws2_32.dll','urlmon.dll','wininet',
+                         'XboxLiveApi.dll','C:\\Windows\\System32\\GamingServices.dll','xboxservices'):
                 encoded = path.encode('utf-16le')+b'\0\0' if fn.endswith('W') else path.encode()+b'\0'
                 assert m.call(dll.exports['Iw6Offline'+fn],[encoded,0,0])[0] == 0
                 assert not calls
