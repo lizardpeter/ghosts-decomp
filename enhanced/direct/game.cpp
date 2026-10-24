@@ -48,6 +48,12 @@ bool LocalNetworkMode()
 extern "C" int Iw6DirectProfile() { return 1; }
 extern "C" int Iw6DirectResult() { return lastResult; }
 
+// The Store LUI CheckGameLicense callback at 140245440 only calls the GDK
+// XStore license refresh and returns zero. Direct mode has no XStore context:
+// keep the callback ABI and no-op rather than attempting a vendor query or
+// reporting a fabricated successful license.
+extern "C" int Iw6DirectNoXboxLicenseRefresh() { return 0; }
+
 // P0024: Game-local multiplayer gate for the custom direct profile only.
 // The Store entries 14054B1B0 and 14054B290 normally require an XUser, an
 // XStore licence and Xbox privileges. Those vendor checks cannot describe a
