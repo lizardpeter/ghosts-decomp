@@ -7,6 +7,7 @@ the whole process (including Windows brokers, IPC and child processes) is offlin
 import argparse
 import hashlib
 import json
+import struct
 from pathlib import Path
 
 import pefile
@@ -89,6 +90,30 @@ def audit_package(image, manifest):
         guards = {}
     if len(guards) != len(guard_list):
         errors.append("Duplicate original function guard")
+    # Verify every *actual original entry*, independent of the manifest's
+    # after bytes and of the packaging function that constructed the image.
+    # This also checks non-GDK vendor and direct-mode entries.
+    try:
+        patched_pe = pefile.PE(data=image)
+        base = patched_pe.OPTIONAL_HEADER.ImageBase
+        for item in guard_list:
+            try:
+                va = int(item["va"], 16)
+                destination = int(item["export_va"], 16)
+                patch = bytes.fromhex(item["after"])
+                rva = va - base
+                section = patched_pe.get_section_by_rva(rva)
+                if not section or not (section.Characteristics & 0x20000000):
+                    errors.append("Guard outside executable section at %09X" % va)
+                    continue
+                offset = patched_pe.get_offset_from_rva(rva)
+                expected = b"\\xe9" + struct.pack("<i", destination - va - 5)
+                if len(patch) != 5 or patch != expected or image[offset:offset+5] != expected:
+                    errors.append("Incorrect or missing original entry jump at %09X" % va)
+            except (KeyError, ValueError, TypeError, OverflowError, struct.error):
+                errors.append("Invalid guard entry metadata")
+    except (pefile.PEFormatError, AttributeError) as error:
+        errors.append("Cannot inspect packaged function guards: %s" % error)
     for va in sorted(GDK_ENTRIES - guards.keys()):
         errors.append("Missing GDK guard at %09X" % va)
     if mode == "direct":
