@@ -5,6 +5,7 @@
 #include "qcommon/cmd.h"
 #include "qcommon/dvar.h"
 void Dvar_SetBool(const dvar_t *, bool);
+extern "C" __declspec(dllimport) void OutputDebugStringA(const char *);
 void Dvar_SetStringByName(const char *, const char *);
 
 namespace
@@ -99,6 +100,7 @@ extern "C" int Iw6DirectBeginJoin(const char *endpoint)
     for (; endpoint[i] && i < 255; ++i) name[i] = endpoint[i];
     name[i] = 0;
     State<int>(0x143E96890) = 3;      // CA_CONNECTING, published last
+    OutputDebugStringA("IW6D:DIRECT_JOIN_CHALLENGE_READY");
     return lastResult = 1;
 }
 
@@ -118,6 +120,7 @@ extern "C" int Iw6DirectHost(const char *bind, const char *map, const char *game
     Dvar_SetStringByName("ui_gametype", gametype);
     // Map startup may reject missing/unavailable content or fail before spawn.
     // Result 3 means only that the request was made, not that a game is ready.
+    OutputDebugStringA("IW6D:DIRECT_MAP_START_REQUESTED");
     ((void (*)(LocalClientNum_t, const char *, bool, bool))0x1404BADC0)(LOCAL_CLIENT_0, map, true, false);
     return lastResult = 3;
 }
@@ -136,6 +139,7 @@ void ConfigurePlayer()
     cache[i] = 0;
     State<unsigned long long>(0x149D59D58) = Iw6DirectPlayerId(0);
     Dvar_SetStringByName("name", name);
+    OutputDebugStringA("IW6D:LOCAL_PROFILE_CONFIGURED");
     lastResult = 4;
 }
 void Host()
@@ -174,6 +178,7 @@ extern "C" void Iw6DirectInit()
     Cmd_AddCommandInternal("direct_player", ConfigurePlayer, &playerCommand);
     Cmd_AddCommandInternal("direct_host", Host, &hostCommand);
     commandsRegistered = true;
+    OutputDebugStringA("IW6D:DIRECT_COMMANDS_REGISTERED");
 }
 extern "C" bool Iw6DirectSendPacket(int length, const void *data, netadr_s to)
 {
