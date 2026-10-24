@@ -7,6 +7,7 @@ It models import resolution; it is not a Windows loader or game launch test.
 import csv
 import hashlib
 import json
+import pefile
 import struct
 import sys
 import tempfile
@@ -44,6 +45,18 @@ def check():
         bad_target["guards"][0]["export_va"] = "180000000"
         assert any("Wrong replacement DLL target" in e for e in
                    detachment_audit.audit_package(image_bytes, bad_target, dll_image))
+        # Mutate a genuine replacement import descriptor without changing
+        # the export table. Even with its new hash reflected in the manifest,
+        # a vendor SDK import in the DLL is still forbidden.
+        dll_pe = pefile.PE(data=dll_image)
+        provider = next(d for d in dll_pe.DIRECTORY_ENTRY_IMPORT
+                        if len(d.dll) >= len(b"XCurl.dll"))
+        dll_tampered = bytearray(dll_image)
+        dll_name_offset = dll_pe.get_offset_from_rva(provider.struct.Name)
+        dll_tampered[dll_name_offset:dll_name_offset+len(b"XCurl.dll")+1] = b"XCurl.dll\0"
+        tampered_manifest = dict(manifest, dll_sha256=hashlib.sha256(dll_tampered).hexdigest())
+        assert any("Replacement DLL imports forbidden provider" in e for e in
+                   detachment_audit.audit_package(image_bytes, tampered_manifest, bytes(dll_tampered)))
         altered = dict(manifest, guards=[
             g for g in manifest['guards'] if int(g['va'], 16) != 0x1406AEE74])
         assert any('Missing GDK guard' in e for e in
