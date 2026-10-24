@@ -26,6 +26,22 @@ original behavior; detachment applies only to the opt-in offline/direct package.
   \`xcurl.dll\` and \`xboxliveapi.dll\`. The result is uploaded to
   \`native-launch-diagnostics/vendor-audit.json\`.
 
+## Direct-only local platform replacements
+
+P0024 replaces the original multiplayer availability queries at `14054B1B0`
+and `14054B290` with a local-only provider. The caller sees ready only after
+`direct_player` configured a local ID and the engine is in its existing
+`onlinegame=false` LAN mode. Xbox-enabled/retail modes still fail; no vendor
+account, entitlement or privilege state is made up. The LUI callback
+`140245440`, which only queues an XStore licence refresh, also becomes an
+inert zero-return callback in direct mode. The original GDK runtime and
+its 97 xgameruntime.lib interface thunks stay unavailable.
+
+The original Store `Live_Frame` (14054B4B0) includes other checks on Xbox
+signed-in state. P0024 does not fake that global state: doing so would activate
+original vendor-dependent branches, and identifying independent local consumers
+must remain function-by-function work.
+
 ## Precise scope of a pass
 
 A pass demonstrates that the audited entry points are redirected, known
