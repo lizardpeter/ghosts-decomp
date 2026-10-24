@@ -596,6 +596,12 @@ void Key_RemoveCatcher(LocalClientNum_t localClientNum, int andMask)
 	CL_GetLocalClientUIGlobals(localClientNum)->keyCatchers &= andMask;
 }
 
+// Store 1403106C0 (Black Ops' Key_AddCatcher, client/cl_keys.cpp; not in the PS4 server)
+void Key_AddCatcher(LocalClientNum_t localClientNum, int orMask)
+{
+	CL_GetLocalClientUIGlobals(localClientNum)->keyCatchers |= orMask;
+}
+
 // 1400AD490  client/cl_keys.cpp:3301
 void Key_SetCatcher(LocalClientNum_t localClientNum, int catcher)
 {

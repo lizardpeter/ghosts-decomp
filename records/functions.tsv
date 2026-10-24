@@ -561,3 +561,12 @@ iw6mp64_MSStore_ship	140307110	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_dra
 iw6mp64_MSStore_ship	140306E70	matches	src/client_mp/cl_cgame_mp.cpp	test_cg_draw.py: 50 cases; mutation-checked
 iw6mp64_MSStore_ship	1405F0A80	matches	src/online/live_anticheat.cpp	Differential original-vs-DLL startup order/arguments and command registration; reset/controller/command dependencies modeled. Skipped-initializer mutant detected in a fresh emulator. No native integration claim.
 iw6_ds_ps4	1402C1F80	compiles	src/online/live_anticheat.cpp	Store-only startup reconstruction: the server clears s_featureBanInfo inline and uses a different command node; the Store controller-reset helper and command node are unresolved here. Store differential test passes; no reference-build match or integration is claimed.
+iw6mp64_MSStore_ship	1402E7860	matches	src/cgame_mp/cg_view_mp.cpp	test_cg_view.py: 1,500 cases, every callee a logged fake (call order and arguments compared); mutation-checked
+iw6mp64_MSStore_ship	1402EF9E0	matches	src/cgame_mp/cg_view_mp.cpp	test_cg_view.py: 400 cases; mutation-checked
+iw6mp64_MSStore_ship	1402DAC10	matches	src/cgame/cg_shellshock.cpp	test_cg_view.py: 30 cases; mutation-checked
+iw6mp64_MSStore_ship	140266F40	matches	src/bgame/bg_misc.cpp	test_cg_view.py: 60 cases; mutation-checked
+iw6_ds_ps4	140076150	matches	src/bgame/bg_misc.cpp	test_cg_view.py: 60 cases
+iw6mp64_MSStore_ship	140314FE0	matches	src/client_mp/cl_main_mp.cpp	test_cg_view.py: 30 cases (bool values 0 and 1); mutation-checked
+iw6mp64_MSStore_ship	1403165A0	matches	src/client_mp/cl_main_mp.cpp	test_cg_view.py: 40 cases (bool values 0 and 1); mutation-checked
+iw6mp64_MSStore_ship	1402B3140	matches	src/cgame_mp/cg_ents_mp.cpp	test_cg_view.py: 60 cases; mutation-checked
+iw6mp64_MSStore_ship	1403106C0	matches	src/client/cl_keys.cpp	test_cg_view.py: 40 cases; mutation-checked

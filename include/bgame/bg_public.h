@@ -45,6 +45,12 @@ struct trace_t
 
 struct Bounds;
 
+// A shell shock's parameters (bgame/bg_misc.cpp): 0x368 bytes in both builds; nothing spelled out yet
+struct shellshock_parms_t
+{
+	unsigned char unknown0[0x368];
+};
+
 struct pmove_t
 {
 	playerState_s *ps;

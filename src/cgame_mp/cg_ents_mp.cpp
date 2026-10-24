@@ -7,6 +7,9 @@
 
 #define IW6_SOURCE "cgame_mp/cg_ents_mp.cpp"
 
+struct DObj;
+void DObjUpdateClientInfo(DObj *obj, float dtime, bool notify);  // xanim (Black Ops' name; Store 140558FB0)
+
 static_assert(__builtin_offsetof(cg_s, snap) == 0x3388, "cg_s layout");
 static_assert(__builtin_offsetof(cg_s, nextSnap) == 0x3390, "cg_s layout");
 static_assert(__builtin_offsetof(cg_s, frameInterpolation) == 0x71888, "cg_s layout");
@@ -31,4 +34,11 @@ void CG_SetFrameInterpolation(LocalClientNum_t localClientNum)
 	cgameGlob->frameInterpolation = (float)(cgameGlob->time - snapTime) / (float)delta;
 	if (cgameGlob->frameInterpolation < 0.0f)
 		cgameGlob->frameInterpolation = 0.0f;
+}
+
+// Store 1402B3140 (Black Ops' CG_DObjUpdateInfo, cgame_mp/cg_ents_mp.cpp): advances an entity's animation by the
+// frame's time, cg.frametime in seconds; with notify, its notetracks are collected for the caller
+void CG_DObjUpdateInfo(const cg_s *cgameGlob, DObj *obj, bool notify)
+{
+	DObjUpdateClientInfo(obj, (float)cgameGlob->frametime * 0.001f, notify);
 }

@@ -56,10 +56,21 @@ struct ClipAmmo
 
 struct WeaponDef
 {
-	unsigned char unknown0[0x640];
+	unsigned char unknown0[0x138];
+	const void *turretZoomSound;  // 0x138: played while a turret scope zooms (PS4 PDB: fireStopSoundPlayer; the Store
+	                              // build's name unknown)
+	unsigned char unknown140[0x5E8 - 0x140];
+	int overlayInterface;    // 0x5E8: WeapOverlayInteface_t, 2 a turret scope (PS4 PDB)
+	unsigned char unknown5EC[0x640 - 0x5EC];
 	float fGunMaxPitch;  // 0x640: degrees the viewmodel's recoil may reach
 	float fGunMaxYaw;
-	unsigned char unknown648[0xA56 - 0x648];
+	unsigned char unknown648[0x950 - 0x648];
+	float turretFov;               // 0x950..0x960 as in the PS4 PDB
+	float turretFovADS;
+	float turretScopeZoomRate;     // degrees of FOV per second while the forward/back keys zoom the scope
+	float turretScopeZoomMin;
+	float turretScopeZoomMax;
+	unsigned char unknown964[0xA56 - 0x964];
 	bool meleeOnly;  // 0xA56, as in the PS4 PDB
 	unsigned char unknownA57[0xA88 - 0xA57];
 	bool oldWeapon;  // 0xA88
@@ -133,9 +144,17 @@ struct EntityEvent
 	int eventParm;
 };
 
-struct PlayerEquippedWeaponState
+struct PlayerEquippedWeaponState  // the PS4 server PDB's layout
 {
-	unsigned char unknown0[0x10];
+	bool usedBefore;
+	bool dualWielding;
+	bool inAltMode;
+	bool needsRechamber[2];
+	unsigned char unknown5[0x8 - 0x5];
+	int zoomLevelIndex;
+	bool thermalEnabled;
+	bool hybridScope;
+	unsigned char unknownE[0x10 - 0xE];
 };
 
 // playerState_s: only the fields reconstructed code uses are spelled out, at the Store build's offsets, with the PS4
@@ -185,11 +204,17 @@ struct playerState_s
 	int viewHeightLerpDown;
 	unsigned char unknown1A4[0x1B4 - 0x1A4];
 	int damageEvent;
-	unsigned char unknown1B8[0x210 - 0x1B8];
+	unsigned char unknown1B8[0x1E8 - 0x1B8];
+	int viewlocked_entNum;  // the entity a locked view (a turret, a vehicle) follows, ENTITYNUM_NONE for none
+	unsigned char unknown1EC[0x210 - 0x1EC];
 	int cursorHint;
 	unsigned int cursorHintString;
 	int cursorHintEntIndex;
-	unsigned char unknown21C[0x23C - 0x21C];
+	unsigned char unknown21C[0x228 - 0x21C];
+	int radarBlocked;
+	int radarMode;
+	int radarStrength;  // -3 or less, -2, -1, 0 or more: the radar jamming level's floor (1, 0.5, 0.3, 0)
+	unsigned char unknown234[0x23C - 0x234];
 	int locationSelectionInfo;
 	int sprintState_sprintButtonUpRequired;  // sprintState.sprintButtonUpRequired
 	unsigned char unknown244[0x278 - 0x244];
@@ -217,6 +242,8 @@ static_assert(__builtin_offsetof(playerState_s, pe_timeADSCameUp) == 0x150, "pla
 static_assert(__builtin_offsetof(playerState_s, clientNum) == 0x17C, "playerState_s layout");
 static_assert(__builtin_offsetof(playerState_s, viewangles) == 0x184, "playerState_s layout");
 static_assert(__builtin_offsetof(playerState_s, cursorHint) == 0x210, "playerState_s layout");
+static_assert(__builtin_offsetof(playerState_s, viewlocked_entNum) == 0x1E8, "playerState_s layout");
+static_assert(__builtin_offsetof(playerState_s, radarStrength) == 0x230, "playerState_s layout");
 static_assert(__builtin_offsetof(playerState_s, locationSelectionInfo) == 0x23C, "playerState_s layout");
 static_assert(__builtin_offsetof(playerState_s, weaponsEquipped) == 0x2E4, "playerState_s layout");
 static_assert(__builtin_offsetof(playerState_s, weapEquippedData) == 0x320, "playerState_s layout");

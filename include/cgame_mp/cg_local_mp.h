@@ -10,6 +10,26 @@
 #include "bgame/bg_weapons.h"
 #include "client/client.h"
 
+// The PS4 server PDB's enums for CG_DrawActiveFrame's arguments
+enum DemoType
+{
+	DEMO_TYPE_NONE = 0x0,
+	DEMO_TYPE_CLIENT = 0x1,
+	DEMO_TYPE_SERVER = 0x2,
+};
+
+enum CubemapShot
+{
+	CUBEMAPSHOT_NONE = 0x0,
+	CUBEMAPSHOT_RIGHT = 0x1,
+	CUBEMAPSHOT_LEFT = 0x2,
+	CUBEMAPSHOT_BACK = 0x3,
+	CUBEMAPSHOT_FRONT = 0x4,
+	CUBEMAPSHOT_UP = 0x5,
+	CUBEMAPSHOT_DOWN = 0x6,
+	CUBEMAPSHOT_COUNT = 0x7,
+};
+
 // One spawn point the client checks for being in view (name unknown): 0x14 bytes. The cgame fills the array; the
 // client sends its sight states in usercmd_s::sightedSpawnsMask and partialSightedSpawnsMask.
 struct SpawnSightPoint
@@ -35,8 +55,56 @@ struct SpawnSightGlob
 struct snapshot_s
 {
 	playerState_s ps;
-	unsigned char unknown3328[0x3C7C - 0x3328];
+	unsigned char unknown3328[0x3C74 - 0x3328];
+	int snapFlags;                 // bit 1: the server is changing the map (CG_DrawActiveFrame draws nothing)
+	unsigned char unknown3C78[0x3C7C - 0x3C78];
 	int serverTime;
+	int numEntities;
+	unsigned char unknown3C84[0x3C88 - 0x3C84];
+	unsigned char entities[1][0x108];  // entityState_s, 0x108 bytes each: the entity number first
+};
+
+// The bgame's per-local-client animation state (bgs_t): the PS4 server PDB's layout with 0x40 more bytes before
+// time (Store build: time at +0x45990, characterinfo at +0x459F0, clientinfo at +0x54F60). The thread-local `bgs`
+// points at it while the cgame runs bgame code.
+struct characterInfo_t
+{
+	unsigned char unknown0[0x4];
+	int infoValid;
+	unsigned char unknown8[0x5D8 - 0x8];
+};
+
+struct clientInfo_t
+{
+	unsigned char unknown0[0x34];
+	unsigned short patchIndex;       // a row of mp/cac/patches.csv: the player card's patch (name unknown)
+	unsigned char unknown36[0x38 - 0x36];
+	unsigned short backgroundIndex;  // a row of mp/cac/backgrounds.csv: the player card's background (name unknown)
+	unsigned char unknown3A[0x70 - 0x3A];
+};
+
+struct bgs_t
+{
+	unsigned char unknown0[0x45990];  // animScriptData, generic_human, animClassTrees and 0x40 more than the PS4's
+	int time;
+	int deltaTime;
+	int latestSnapshotTime;
+	int frametime;
+	unsigned char unknown459A0[0x459F0 - 0x459A0];
+	characterInfo_t characterinfo[42];
+	clientInfo_t clientinfo[18];
+};
+static_assert(__builtin_offsetof(bgs_t, characterinfo) == 0x459F0, "bgs_t layout (Store build)");
+static_assert(sizeof(bgs_t) == 0x55740, "bgs_t size (Store build)");
+
+extern __declspec(thread) bgs_t *bgs;  // bgame/bg_animation_mp.cpp (PS4 PDB: TLS offset 0x10, as in the Store build)
+
+// The player-card materials the cgame keeps loaded for one client (name unknown): 0x18 bytes
+struct ClientCardCache
+{
+	unsigned short ids[2];         // the patch and background indices the materials were looked up for
+	unsigned char unknown4[0x8 - 0x4];
+	const void *materials[2];
 };
 
 // A client entity (centity_s, 0x238 bytes in the Store build): its pose (cpose_t, Black Ops' layout up to the
@@ -101,9 +169,14 @@ struct cg_s
 	unsigned char unknown3330[0x3350 - 0x3330];
 	int predictedErrorTime;            // cg.oldTime when the last prediction error was found
 	float predictedError[3];           // decayed over cg_errordecay ms by CG_CalcViewValues
-	unsigned char unknown3360[0x3368 - 0x3360];
+	int clientNum;                     // the local player's client number (Black Ops' cg.clientNum)
+	LocalClientNum_t localClientNum;
 	int demoType;                      // DemoType: CG_DrawActiveFrame's argument
-	unsigned char unknown336C[0x3388 - 0x336C];
+	int cubemapShot;                   // CubemapShot: CG_DrawActiveFrame's argument
+	int cubemapSize;                   // CG_DrawActiveFrame's argument
+	unsigned char unknown3374[0x3378 - 0x3374];
+	int renderScreen;                  // CG_DrawActiveFrame's argument: 0 draws nothing (a full-screen menu is up)
+	unsigned char unknown337C[0x3388 - 0x337C];
 	snapshot_s *snap;              // the snapshot cg.time has passed
 	snapshot_s *nextSnap;          // the one after it, or NULL; entities are interpolated between the two
 	unsigned char unknown3398[0x71888 - 0x3398];
@@ -114,15 +187,36 @@ struct cg_s
 	int predictFromTime;           // nextSnap->serverTime, set before prediction: where a platform move starts (name unknown)
 	int lastOnEntityTime;          // cg.time when the player last stood on an entity or a platform (name unknown)
 	unsigned int groundSurfaceType;  // the predicting pmove_t's groundSurfaceType (name unknown)
-	unsigned char unknown718A4[0x718C8 - 0x718A4];
+	unsigned char unknown718A4[0x718A8 - 0x718A4];
+	int followThirdPerson;         // what renderingThirdPerson is while following another player (name unknown)
+	int renderingThirdPerson;      // set every frame by CG_UpdateThirdPerson (1402EF9E0)
+	unsigned char unknown718B0[0x718B8 - 0x718B0];
+	int lastMantleFlags;           // predictedPlayerState.mantleState.flags when the last frame ended (name unknown)
+	unsigned char unknown718BC[0x718C0 - 0x718BC];
+	float heightToCeiling;         // from the view up to what a 1024-unit box trace hits, FLT_MAX for nothing
+	unsigned char unknown718C4[0x718C8 - 0x718C4];
 	// refdef (refdef_t): only these fields
 	int refdef_displayViewport[4];
 	float refdef_tanHalfFovX;      // tan(horizontal FOV / 2): what the renderer's projection uses
 	float refdef_tanHalfFovY;
 	float refdef_vieworg[3];
-	unsigned char unknown718EC[0xA9A90 - 0x718EC];
+	unsigned char unknown718EC[0x71914 - 0x718EC];
+	float refdef_baseVieworg[3];   // what refdef_vieworg starts the frame from (name unknown)
+	unsigned char unknown71920[0x7192C - 0x71920];
+	int refdef_time;               // cg.time: the renderer's scene time (R_SetLodOrigin's caller copies it)
+	int refdef_frametime;          // cg.frametime (name unknown)
+	unsigned char unknown71934[0x71A48 - 0x71934];
+	int timedFlagStart;            // a flag that clears itself timedFlagDuration ms after timedFlagStart (name unknown)
+	int timedFlagLastTime;
+	int timedFlagDuration;
+	bool timedFlagActive;
+	unsigned char unknown71A55[0xA9760 - 0x71A55];
+	unsigned char clearedEachFrame[0x100];  // zeroed at the start of every CG_DrawActiveFrame (name unknown)
+	unsigned char unknownA9860[0xA9A90 - 0xA9860];
 	float refdefViewAngles[3];     // the view angles the frame is drawn with (shake, kick and bob added)
-	unsigned char unknownA9A9C[0xB1B18 - 0xA9A9C];
+	unsigned char unknownA9A9C[0xA9AA8 - 0xA9A9C];
+	float aimAssistView[3][3];     // the three vectors AimAssist_UpdateScreenTargets (140178CC0) gets (names unknown)
+	unsigned char unknownA9ACC[0xB1B18 - 0xA9ACC];
 	float zoomSensitivity;         // tan(fov / 2) / tan(65 / 2): the mouse sensitivity scale while zoomed
 	unsigned char unknownB1B1C[0xB2750 - 0xB1B1C];
 	int platformContactEntity;      // a moving platform Pmove reported contact with, kept once set (name unknown)
@@ -130,23 +224,45 @@ struct cg_s
 	unsigned char unknownB2760[0xB2768 - 0xB2760];
 	unsigned int weaponSelect;      // Weapon: the weapon the player selected, for the usercmd
 	int weaponSelectAlternate;      // nonzero: its alternate mode (name unknown)
-	unsigned char unknownB2770[0xB4EF8 - 0xB2770];
+	unsigned char unknownB2770[0xB4EEC - 0xB2770];
+	int lastWeapFlags;              // predictedPlayerState.weapCommon.weapFlags when the last frame ended (name unknown)
+	unsigned char unknownB4EF0[0xB4EF8 - 0xB4EF0];
 	unsigned int hybridScopeState;  // 2 or 3: one of a hybrid scope's two FOVs; 4 or 5: switching (name unknown)
 	float hybridScopeFrac;          // how far a switch has gone (name unknown)
 	unsigned char unknownB4F00[0xB4F0C - 0xB4F00];
 	unsigned int equippedOffHand;   // Weapon
-	unsigned char unknownB4F10[0xB5274 - 0xB4F10];
+	unsigned char unknownB4F10[0xB5268 - 0xB4F10];
+	float kickAVel[3];              // the view kick's angular velocity (BG_KickAngles)
 	float kickAngles[3];            // the view kick from firing (BG_KickAngles)
 	float offsetAngles[3];          // the ADS view error offset
 	unsigned char unknownB528C[0xB52F0 - 0xB528C];
 	float compassMapWorldSize[2];
-	unsigned char unknownB52F8[0xB5320 - 0xB52F8];
+	unsigned char unknownB52F8[0xB5310 - 0xB52F8];
+	const shellshock_parms_t *shellshock_parms;  // shellshock (Black Ops' cg.shellshock)
+	int shellshock_startTime;
+	int shellshock_duration;
 	float shellshockSensitivity;    // shellshock.sensitivity: scales the mouse while shell-shocked, 0 = none
-	unsigned char unknownB5324[0xB5368 - 0xB5324];
+	unsigned char unknownB5324[0xB5340 - 0xB5324];
+	int testShock_time;             // testShock (Black Ops' cg.testShock): the shock without a snapshot index
+	int testShock_duration;
+	unsigned char unknownB5348[0xB5368 - 0xB5348];
 	float selectedLocation[2];
 	float selectedLocationAngle;
 	float selectedDirectionPoint[2];  // Store build only: where the direction cursor is (name unknown)
-	unsigned char unknownB537C[0x10E79F - 0xB537C];
+	int inKillCam;                  // the kill cam is playing (name unknown)
+	unsigned char unknownB5380[0xB5394 - 0xB5380];
+	int killCamType;                // 1, 3 and 7 hide the first-person scene (name unknown)
+	int killCamEntity;              // the entity the kill cam follows, ENTITYNUM_NONE for none (name unknown)
+	float killCamEntityOrigin[3];   // its pose, copied every frame (Black Ops' UpdateKillCamEntityCache role)
+	float killCamEntityAngles[3];
+	unsigned char unknownB53B4[0xB53B8 - 0xB53B4];
+	int killCamLookAtEntity;        // the entity the kill cam looks at (name unknown)
+	float killCamLookAtOrigin[3];   // its pose origin, 50 units up
+	unsigned char unknownB53C8[0xB54C8 - 0xB53C8];
+	bgs_t bgs;
+	unsigned char unknown10AC08[0x10AD28 - 0x10AC08];
+	unsigned char unknown10AD28[0x10E79E - 0x10AD28];  // a state 1402F11D0 updates (name unknown)
+	bool drawFirstPersonScene;      // set every frame from the EMP, kill cam and weapon state (name unknown, *unverified*)
 	bool remoteMissileCam;          // the view is a remote missile's camera: missileRemoteFOV (name unknown)
 	unsigned char unknown10E7A0[0x10E82C - 0x10E7A0];
 	int extraButtons;               // usercmd buttons the cgame adds to the next command (name unknown)
@@ -159,15 +275,28 @@ struct cg_s
 	int stepViewStart;              // the command time of the last step up or down the view smooths
 	float stepViewChange;           // its height, at most cg_viewZSmoothingMax
 	float lastAimSpreadScale;       // predictedPlayerState's aimSpreadScale before this frame's prediction (name unknown)
-	unsigned char unknown10E840[0x10E84C - 0x10E840];
+	float lastVieworg[3];           // refdef_vieworg after CG_CalcViewValues (the next frame's volume checks read it)
 	int savedCommandTime;           // CG_SavePlayerState: the predicted state the previous frame ended with
 	float savedOrigin[3];
 	float savedViewangles[3];
 	transPlayerState_t savedTrans;
 	unsigned char savedPe[0x2C];    // its playerEvents_t pe, restored after the early prediction
-	unsigned char unknown10E8C4[0x10EDC4 - 0x10E8C4];
+	unsigned char unknown10E8C4[0x10ED48 - 0x10E8C4];
+	int hudGrenadeCount;            // cleared every frame (Black Ops' CG_ClearHudGrenades role, name unknown)
+	unsigned char unknown10ED4C[0x10EDBC - 0x10ED4C];
+	float radarJamLevel;            // 0..1, moved 1/15 of the way to its target every frame (name unknown)
+	float radarJamDistance;         // the nearest jammer's distance, -1 for none (set by the entity pass; name unknown)
 	float scriptedViewFov;          // the FOV while eFlags 0x3800 or otherFlags 0x200000 (name unknown)
-	unsigned char unknown10EDC8[0x10F05C - 0x10EDC8];
+	unsigned char unknown10EDC8[0x10EDF0 - 0x10EDC8];
+	const void *sceneUnknown;       // handed to the renderer every frame (140657FC0; name unknown)
+	unsigned char unknown10EDF8[0x10EE58 - 0x10EDF8];
+	float remoteViewOrigin[3];      // handed to 14604CD48 while remoteViewOriginValid (name unknown)
+	bool remoteViewOriginValid;
+	unsigned char unknown10EE65[0x10EE68 - 0x10EE65];
+	ClientCardCache cardCache[18];
+	unsigned char unknown10F018[0x10F058 - 0x10F018];
+	bool vehicleViewActive;         // 1402EA200 turned the third-person vehicle view on (name unknown)
+	unsigned char unknown10F059[0x10F05C - 0x10F059];
 	unsigned int sightedClientsMask;  // copied to usercmd_s::sightedClientsMask (name unknown)
 	unsigned char unknown10F060[0x10F880 - 0x10F060];
 	SpawnSightGlob spawnSight;        // name unknown

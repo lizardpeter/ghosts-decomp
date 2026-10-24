@@ -24,6 +24,22 @@ void sub_140223CE0();                     // name unknown
 void sub_140191F80();                     // name unknown
 void sub_14018F6C0();                     // name unknown
 
+extern bool unk_14416A0F8;                 // the server is loading a map (name unknown)
+extern bool unk_14416A0F9[1];              // per local client: waiting for the server to load the map (name unknown)
+
+// Store 140314FE0 (Black Ops' CL_IsServerLoadingMap, client_mp/cl_main_mp.cpp)
+bool CL_IsServerLoadingMap()
+{
+	return unk_14416A0F8;
+}
+
+// Store 1403165A0 (Black Ops' CL_SetWaitingOnServerToLoadMap, client_mp/cl_main_mp.cpp): cleared by every
+// CG_DrawActiveFrame that draws
+void CL_SetWaitingOnServerToLoadMap(LocalClientNum_t localClientNum, bool waiting)
+{
+	unk_14416A0F9[localClientNum] = waiting;
+}
+
 // Store 140316AA0 (Black Ops' CL_SyncGpu, client_mp/cl_main_mp.cpp:8303)
 void CL_SyncGpu(int (*WorkCallback)(unsigned long long))
 {
