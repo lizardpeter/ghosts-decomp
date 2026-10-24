@@ -220,7 +220,7 @@ def transform(original, dll_bytes, mode='offline'):
     # Verify the final PE, not only the transformation plan. A missed IAT
     # redirect or lost GDK guard must fail before a package is published.
     from offline.detachment_audit import audit_package
-    errors = audit_package(bytes(data), manifest)
+    errors = audit_package(bytes(data), manifest, dll_bytes)
     if errors:
         raise ValueError('Known vendor boundary regression:\n' + '\n'.join(errors))
     return bytes(data), manifest
