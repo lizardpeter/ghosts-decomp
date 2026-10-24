@@ -27,7 +27,8 @@ DIRECT_ENTRIES = {
 # error. Windows itself may load other providers for unrelated local features.
 FORBIDDEN_IMPORT_DLLS = {
     "xgameruntime.dll", "xcurl.dll", "winhttp.dll", "wininet.dll",
-    "urlmon.dll", "xboxliveapi.dll",
+    "urlmon.dll", "xboxliveapi.dll", "xboxservices.dll",
+    "gamingservices.dll",
 }
 # The original executable can retain non-egress Winsock utilities, but not a
 # way to create/send/connect through its unguarded original import table.
@@ -41,6 +42,7 @@ ORIGINAL_WINSOCK_EGRESS = {
 # or licence/DRM assertion.
 UNEXPECTED_RUNTIME_DLLS = {
     "xgameruntime.dll", "xcurl.dll", "xboxliveapi.dll",
+    "xboxservices.dll", "gamingservices.dll",
 }
 # The pinned original may statically import only a subset of LoadLibrary*
 # functions. GetProcAddress is required, and its returned loader pointers are
