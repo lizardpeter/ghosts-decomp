@@ -41,6 +41,9 @@ VENDOR_TASKS = {
 LOCAL_FILES = {0x140548F90: 'Iw6LocalGameDirectory'}
 # C exports adapt the reviewed Win64 ABI without claiming original source names.
 DIRECT = {
+    # P0024: local-session eligibility, not Xbox account/licence eligibility.
+    0x14054B1B0: 'Iw6DirectLocalPlayReady',
+    0x14054B290: 'Iw6DirectLocalPlayReady',
     0x1401A7DB0: 'Iw6DirectPlayerName',
     0x1401A7E10: 'Iw6DirectPlayerId',
     0x14054C360: 'Iw6DirectPlayerId',
