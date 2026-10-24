@@ -12,5 +12,6 @@ GetCurrentDirectoryA
 SetLastError
 GetCurrentProcess
 TerminateProcess
+OutputDebugStringA
 AcquireSRWLockExclusive
 ReleaseSRWLockExclusive
