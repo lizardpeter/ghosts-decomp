@@ -42,11 +42,10 @@ ORIGINAL_WINSOCK_EGRESS = {
 UNEXPECTED_RUNTIME_DLLS = {
     "xgameruntime.dll", "xcurl.dll", "xboxliveapi.dll",
 }
-REQUIRED_LOADER_WRAPPERS = {
-    "Iw6OfflineLoadLibraryA", "Iw6OfflineLoadLibraryW",
-    "Iw6OfflineLoadLibraryExA", "Iw6OfflineLoadLibraryExW",
-    "Iw6OfflineGetProcAddress",
-}
+# The pinned original may statically import only a subset of LoadLibrary*
+# functions. GetProcAddress is required, and its returned loader pointers are
+# separately wrapped/tested even when they are not static imports.
+REQUIRED_LOADER_WRAPPERS = {"Iw6OfflineGetProcAddress"}
 
 
 def _name(value):
