@@ -74,6 +74,7 @@ jobs:
         with:
           sparse-checkout: |
             tools/direct
+            tools/offline
             records
       - uses: actions/download-artifact@v4
         with:
@@ -103,6 +104,8 @@ jobs:
           Copy-Item game/*.dll package/
           python tools/direct/fetch_startup.py --output game --report diagnostics/sources.json
           if ($LASTEXITCODE -ne 0) { throw 'Original startup asset staging failed' }
+      - name: Install PE audit dependency
+        run: python -m pip install --quiet pefile
       - name: Observe fixture and custom game with outbound firewall blocks
         shell: pwsh
         run: |
@@ -130,6 +133,8 @@ jobs:
               } else {
                 python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 90 --output diagnostics/game.json --imports package/imports.json --pending-zones --screenshot diagnostics/game.png -- +set fs_basepath $game +set fs_homepath $profile +set logfile 2 +set r_fullscreen 0 +direct_player 0000000000000001 LocalProbe
                 if ($LASTEXITCODE -ne 0) { throw 'Game observation failed' }
+                python tools/offline/detachment_audit.py --exe package/iw6mp64_offline.exe --manifest package/manifest.json --runtime diagnostics/game.json --output diagnostics/vendor-audit.json
+                if ($LASTEXITCODE -ne 0) { throw 'Custom executable loaded a forbidden GDK/Xbox provider or its package audit failed' }
               }
             } finally { Remove-NetFirewallRule -Name $rule }
           }
