@@ -107,7 +107,7 @@ def audit_package(image, manifest):
                     errors.append("Guard outside executable section at %09X" % va)
                     continue
                 offset = patched_pe.get_offset_from_rva(rva)
-                expected = b"\\xe9" + struct.pack("<i", destination - va - 5)
+                expected = b"\xe9" + struct.pack("<i", destination - va - 5)
                 if len(patch) != 5 or patch != expected or image[offset:offset+5] != expected:
                     errors.append("Incorrect or missing original entry jump at %09X" % va)
             except (KeyError, ValueError, TypeError, OverflowError, struct.error):
