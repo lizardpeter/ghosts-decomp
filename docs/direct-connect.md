@@ -49,8 +49,8 @@ Actual Windows startup attempts use the native debug observer and authentic star
 ## What is connected
 
 The direct profile retains all 31 P0011 vendor guards, the ten P0018 vendor integrity/reporting guards,
-the P0022 local asset-root replacement and all 58 original import redirects. Its total is 56 entry
-replacements, including the 14 direct identity/transport entries. See [vendor-disconnection.md](vendor-disconnection.md). Original WinHTTP,
+the P0022 local asset-root replacement and all 58 original import redirects. Its total is 59 entry
+replacements, including 14 direct identity/transport entries and three P0024 local-platform entries. See [vendor-disconnection.md](vendor-disconnection.md). Original WinHTTP,
 XCurl, GDK runtime loading, DNS, socket creation/sends and the selected account/reporting/process/broker paths
 remain unavailable. The replacement transport has private Winsock imports in the DLL; they do not go through
 the original IAT. Only this explicit opt-in profile opens game sockets. It is not run inside the network-disabled
