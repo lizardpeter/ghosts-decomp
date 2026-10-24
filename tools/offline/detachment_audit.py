@@ -74,7 +74,60 @@ def _imports(image):
     return entries
 
 
-def audit_package(image, manifest):
+def audit_replacement_dll(dll_image, manifest):
+    """Check that the *actual* recon.dll owns every promised guard/IAT target.
+
+    A manifest and patched EXE can agree with each other while referencing
+    a different or incomplete DLL. Do not trust those two sources alone.
+    """
+    errors = []
+    if hashlib.sha256(dll_image).hexdigest() != manifest.get("dll_sha256"):
+        errors.append("Replacement recon.dll hash does not match manifest")
+    try:
+        dll = pefile.PE(data=dll_image)
+        if dll.OPTIONAL_HEADER.ImageBase != 0x180000000:
+            errors.append("Replacement recon.dll has unexpected image base")
+        if getattr(dll, "DIRECTORY_ENTRY_DELAY_IMPORT", None):
+            errors.append("Unreviewed replacement DLL delay imports")
+        if not hasattr(dll, "DIRECTORY_ENTRY_EXPORT"):
+            return errors + ["Replacement DLL has no export directory"]
+        exports = {}
+        for symbol in dll.DIRECTORY_ENTRY_EXPORT.symbols:
+            if symbol.name:
+                name = symbol.name.decode("ascii", errors="replace")
+                exports[name] = dll.OPTIONAL_HEADER.ImageBase + symbol.address
+        # Import adapters and entry guards must resolve to executable exports
+        # at the exact VA encoded in the original patched game executable.
+        for item in manifest.get("guards", []):
+            try:
+                name = item["symbol"]
+                target = int(item["export_va"], 16)
+                if exports.get(name) != target:
+                    errors.append("Wrong replacement DLL target for %s" % name)
+            except (KeyError, TypeError, ValueError, AttributeError):
+                errors.append("Invalid guard/export record for replacement DLL")
+        for item in manifest.get("imports", []):
+            try:
+                name = item["export"]
+                if name not in exports:
+                    errors.append("Missing replacement import adapter: " + name)
+            except (KeyError, TypeError):
+                errors.append("Invalid import/export record for replacement DLL")
+        if "Iw6OfflineBootstrap" not in exports or "Iw6OfflineDllMain" not in exports:
+            errors.append("Replacement DLL lacks required offline bootstrap")
+        if ("Iw6DirectProfile" in exports) != (manifest.get("mode") == "direct"):
+            errors.append("Replacement DLL profile does not match manifest")
+        # These are DLL dependencies, not just game EXE dependencies.
+        for entry in dll.DIRECTORY_ENTRY_IMPORT:
+            provider = _name(entry.dll)
+            if provider in FORBIDDEN_IMPORT_DLLS:
+                errors.append("Replacement DLL imports forbidden provider: " + provider)
+    except (pefile.PEFormatError, AttributeError, ValueError) as error:
+        errors.append("Cannot inspect replacement DLL: %s" % error)
+    return errors
+
+
+def audit_package(image, manifest, dll_image=None):
     """Return actionable errors; never claim whole-process isolation."""
     errors = []
     mode = manifest.get("mode")
@@ -151,6 +204,10 @@ def audit_package(image, manifest):
         errors.append("XCurl imports were not redirected")
     if not any(_name(item.get("provider", "")) == "winhttp.dll" for item in redirected):
         errors.append("WinHTTP imports were not redirected")
+    if dll_image is None:
+        errors.append("Replacement recon.dll was not supplied for verification")
+    else:
+        errors.extend(audit_replacement_dll(dll_image, manifest))
     # Manifest status flags are deliberately not promoted by this static test.
     return errors
 
@@ -178,12 +235,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exe", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--dll", type=Path, help="replacement recon.dll (defaults to EXE directory)")
     parser.add_argument("--runtime", type=Path, help="optional native_smoke.py JSON trace")
     parser.add_argument("--output", type=Path, help="optional machine-readable audit")
     args = parser.parse_args()
     image = args.exe.read_bytes()
     manifest = json.loads(args.manifest.read_text())
-    errors = audit_package(image, manifest)
+    dll_path = args.dll or args.exe.with_name("recon.dll")
+    errors = audit_package(image, manifest, dll_path.read_bytes() if dll_path.exists() else None)
     runtime = None
     if args.runtime:
         more, runtime = audit_runtime(json.loads(args.runtime.read_text()))
