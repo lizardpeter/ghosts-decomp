@@ -7,6 +7,7 @@ It models import resolution; it is not a Windows loader or game launch test.
 import csv
 import hashlib
 import json
+import pefile
 import struct
 import sys
 import tempfile
@@ -30,16 +31,41 @@ def check():
         exe, dll = Image(output / 'iw6mp64_offline.exe'), Image(output / 'recon.dll')
         # Independently audit final PE imports and original entry guards.
         image_bytes = (output / 'iw6mp64_offline.exe').read_bytes()
-        assert not detachment_audit.audit_package(image_bytes, manifest)
+        dll_image = (output / 'recon.dll').read_bytes()
+        assert not detachment_audit.audit_package(image_bytes, manifest, dll_image)
+        # A valid game image with a wrong/missing DLL must never pass. The
+        # package manifest's DLL hash and every guard target are independently
+        # cross-checked against the actual replacement export directory.
+        assert any("not supplied" in e for e in
+                   detachment_audit.audit_package(image_bytes, manifest))
+        bad_dll = dict(manifest, dll_sha256="0" * 64)
+        assert any("hash does not match" in e for e in
+                   detachment_audit.audit_package(image_bytes, bad_dll, dll_image))
+        bad_target = dict(manifest, guards=[dict(g) for g in manifest["guards"]])
+        bad_target["guards"][0]["export_va"] = "180000000"
+        assert any("Wrong replacement DLL target" in e for e in
+                   detachment_audit.audit_package(image_bytes, bad_target, dll_image))
+        # Mutate a genuine replacement import descriptor without changing
+        # the export table. Even with its new hash reflected in the manifest,
+        # a vendor SDK import in the DLL is still forbidden.
+        dll_pe = pefile.PE(data=dll_image)
+        provider = next(d for d in dll_pe.DIRECTORY_ENTRY_IMPORT
+                        if len(d.dll) >= len(b"XCurl.dll"))
+        dll_tampered = bytearray(dll_image)
+        dll_name_offset = dll_pe.get_offset_from_rva(provider.struct.Name)
+        dll_tampered[dll_name_offset:dll_name_offset+len(b"XCurl.dll")+1] = b"XCurl.dll\0"
+        tampered_manifest = dict(manifest, dll_sha256=hashlib.sha256(dll_tampered).hexdigest())
+        assert any("Replacement DLL imports forbidden provider" in e for e in
+                   detachment_audit.audit_package(image_bytes, tampered_manifest, bytes(dll_tampered)))
         altered = dict(manifest, guards=[
             g for g in manifest['guards'] if int(g['va'], 16) != 0x1406AEE74])
         assert any('Missing GDK guard' in e for e in
-                   detachment_audit.audit_package(image_bytes, altered))
+                   detachment_audit.audit_package(image_bytes, altered, dll_image))
         wrong_imports = [dict(i) for i in manifest['imports']]
         wrong_imports[0]['export'] = 'MissingExport'
         altered = dict(manifest, imports=wrong_imports)
         assert any('not wired to recon.dll' in e for e in
-                   detachment_audit.audit_package(image_bytes, altered))
+                   detachment_audit.audit_package(image_bytes, altered, dll_image))
         # A matching manifest hash cannot conceal a reverted machine-code
         # jump. Validate the actual bytes at the pinned GDK QueryApi entry.
         tampered = bytearray(image_bytes)
@@ -48,7 +74,7 @@ def check():
         tampered[query_offset] = 0x90  # NOP instead of E9 branch
         altered = dict(manifest, exe_sha256=hashlib.sha256(tampered).hexdigest())
         assert any('Incorrect or missing original entry jump' in e for e in
-                   detachment_audit.audit_package(bytes(tampered), altered))
+                   detachment_audit.audit_package(bytes(tampered), altered, dll_image))
         ok, detail = detachment_audit.audit_runtime({
             'events': [{'event': 3, 'path': r'C:\test\iw6mp64_offline.exe'},
                        {'event': 6, 'path': r'C:\Windows\System32\D3D11.dll'}]})

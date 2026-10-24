@@ -97,15 +97,19 @@ int cg_renderTimeView = 1;
 
 #define CHARACTER_INFO_SIZE 0x5D8  // characterInfo_t, the per-client animation state BG_AnimUpdatePlayerStateConditions writes
 
-// The local client's characterInfo_t: the bgame's per-thread client info array (a pointer at +0x10 of the thread's TLS
-// block, as the Store build's BG_AnimUpdatePlayerStateConditions reads it) indexed by clientNum
+#define BGS_CHARACTER_INFO 0x459F0  // bgs_t: clientinfo[] (characterInfo_t, CHARACTER_INFO_SIZE each)
+
+// The local client's characterInfo_t: in the bgame's thread-local state (bgs, a pointer at +0x10 of the thread's TLS
+// block; the cgame points it at cg.bgs), at +0x459F0, indexed by clientNum, as the Store build's bgame reads it
+// (140255FB2..140255FCD: *(TLS+0x10) + 0x459F0 + clientNum * 0x5D8; BG_AnimUpdatePlayerStateConditions writes the
+// entry's +0x508, i.e. bgs + 0x45EF8 + clientNum * 0x5D8, 140258500..140258535)
 static unsigned char *CG_CharacterInfo(int clientNum)
 {
 	unsigned char **tlsArray;
 	__asm__ volatile("movq %%gs:0x58, %0" : "=r"(tlsArray));
 	unsigned char *block = tlsArray[_tls_index];
-	unsigned char *infos = *(unsigned char **)(block + 0x10);
-	return infos ? infos + (long long)clientNum * CHARACTER_INFO_SIZE : nullptr;
+	unsigned char *bgs = *(unsigned char **)(block + 0x10);
+	return bgs ? bgs + BGS_CHARACTER_INFO + (long long)clientNum * CHARACTER_INFO_SIZE : nullptr;
 }
 
 struct CanonicalView

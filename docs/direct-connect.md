@@ -49,8 +49,8 @@ Actual Windows startup attempts use the native debug observer and authentic star
 ## What is connected
 
 The direct profile retains all 31 P0011 vendor guards, the ten P0018 vendor integrity/reporting guards,
-the P0022 local asset-root replacement and all 58 original import redirects. Its total is 56 entry
-replacements, including the 14 direct identity/transport entries. See [vendor-disconnection.md](vendor-disconnection.md). Original WinHTTP,
+the P0022 local asset-root replacement and all 58 original import redirects. Its total is 59 entry
+replacements, including 14 direct identity/transport entries and three P0024 local-platform entries. See [vendor-disconnection.md](vendor-disconnection.md). Original WinHTTP,
 XCurl, GDK runtime loading, DNS, socket creation/sends and the selected account/reporting/process/broker paths
 remain unavailable. The replacement transport has private Winsock imports in the DLL; they do not go through
 the original IAT. Only this explicit opt-in profile opens game sockets. It is not run inside the network-disabled
@@ -123,6 +123,33 @@ and only when the old connection state is below 3. It does not manufacture SDK a
 login status. The original retry function at 140311310 then emits `getchallenge`; its DW readiness lookup is
 replaced by the selected transport's readiness. Full local profile setup and other join initialization work
 remain to be reconstructed.
+
+## Local multiplayer readiness (P0024)
+
+The two Store multiplayer eligibility queries at **14054B1B0** and
+**14054B290** normally report reason 0xC when Xbox sign-in or Store
+licensing has not completed. The generated Store pseudocode shows that they
+otherwise continue through privilege checks and vendor state. In the custom
+**direct** profile only, both original entries now redirect to
+`Iw6DirectLocalPlayReady`. That replacement:
+
+- Requires controller 0, an explicitly configured nonzero custom player ID,
+  a valid boolean `onlinegame` dvar, and `onlinegame == false`.
+- Returns reason 0xC and false for missing/invalid profile, other controllers,
+  missing/online dvar state or null output pointers.
+- Returns reason 0 and true **only for custom local-session eligibility**. It
+  never requests Xbox sign-in or returns a forged vendor licence/token.
+
+The original LUI `CheckGameLicense` callback at **140245440** only attempts an
+`XStoreQueryGameLicenseAsync` refresh and returns zero. P0024 makes this callback
+inert in **direct mode only**, preserving the zero return without manufacturing
+a valid Microsoft licence or starting an unavailable GDK Store task. The
+faithful and ordinary enhanced/offline profiles retain the original behavior.
+
+These gates do not establish native menu availability, map loading, access to
+retail servers, or authenticated network identity. Other original LUI licence
+and profile paths remain to be disentangled, and no vendor capability/permission
+check is bypassed for retail or Xbox-network mode.
 
 ## Remaining path to a playable game
 

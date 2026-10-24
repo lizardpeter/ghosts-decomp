@@ -35,6 +35,9 @@ def main():
             assert 'ws2_32.dll!'+name not in exe.iat.values()
         network=Winsock()
         network.install(m)
+        native_markers=[]
+        m.on_import('kernel32.dll!OutputDebugStringA',
+                    lambda mu:native_markers.append(m.read_cstr(mu.reg_read(UC_X86_REG_RCX))))
         def ret(mu,value):mu.reg_write(UC_X86_REG_RAX,value&0xFFFFFFFFFFFFFFFF)
         def getsockname(mu):
             m._emulated_write(mu.reg_read(UC_X86_REG_RDX),sockaddr_in(b'\0'*4,30001))
@@ -63,6 +66,7 @@ def main():
         call(0x14054F200,[],ret_type='void',fakes={0x1404448D0:register})
         call(0x14054F200,[],ret_type='void',fakes={0x1404448D0:register})
         assert set(commands)=={'connect','direct_listen','direct_stop','direct_player','direct_host'}
+        assert native_markers==[b'IW6D:DIRECT_COMMANDS_REGISTERED'],native_markers
         assert not any(n.startswith('ws2_32.dll!') for n in m.imports_called)
         endpoint=b'127.0.0.1:27016\0'
         # No inactive-client fabrication or mutation on rejected input.
@@ -77,6 +81,15 @@ def main():
         m.mu.mem_write(online_dvar+0x10,b'\1')
         m.mu.mem_write(0x1442B98C8,struct.pack('<Q',online_dvar))
         assert call(dll.exports['Iw6DirectBeginJoin'],[endpoint])[0]==-9
+        # Xbox-independent eligibility must fail closed without a local ID.
+        # Exercise both patched original game entries, not only our export.
+        def readiness(address, controller=0, expected=0, why=12):
+            result=call(address,[controller,b'POIS'],ret_type='int')
+            assert result[0]==expected, (address,controller,result)
+            assert result[1]==[struct.pack('<I',why)],(address,result[1])
+            assert not m.imports_called,m.imports_called
+        for entry in (0x14054B1B0,0x14054B290):
+            readiness(entry)
         def player_arguments(w):
             argv=w.alloc(struct.pack('<QQQ',w.cstr(b'direct_player'),w.cstr(b'123456789abcdef0'),w.cstr(b'Local Player')))
             w.u32(0x1469CECF0,0);w.u32(0x1469CED34,3);w.u64(0x1469CED58,argv)
@@ -85,6 +98,14 @@ def main():
         assert call(0x14054C0F0,[0],ret_type='cstr')[0]==b'123456789abcdef0'
         assert call(0x1401A7DB0,[0],ret_type='cstr')[0]==b'Local Player'
         assert settings==[(b'name',b'Local Player')]
+        assert native_markers[-1]==b'IW6D:LOCAL_PROFILE_CONFIGURED',native_markers
+        # An Xbox-connected onlinegame branch is never made eligible by a
+        # locally configured identity. A NULL reason and other controllers are
+        # also denied without touching vendor account state.
+        for entry in (0x14054B1B0,0x14054B290):
+            readiness(entry)
+            readiness(entry,controller=1)
+            assert call(entry,[0,0])[0]==0
         def arguments(w):
             argv=w.alloc(struct.pack('<QQ',w.cstr(b'connect'),w.cstr(endpoint[:-1])))
             w.u32(0x1469CECF0,0)
@@ -92,9 +113,15 @@ def main():
             w.u64(0x1469CED58,argv)
         call(commands['connect'],[],ret_type='void',setup=arguments)
         assert bytes(m.mu.mem_read(online_dvar+0x10,1))==b'\0'
+        # After joining the custom LAN branch, both original UI/game gates
+        # have a local-only success; GDK and XUser providers remain unavailable.
+        for entry in (0x14054B1B0,0x14054B290):
+            readiness(entry,expected=1,why=0)
+            readiness(entry,controller=1)
         assert struct.unpack('<i',m.mu.mem_read(0x143E96890,4))[0]==3
         assert bytes(m.mu.mem_read(0x14416A10C,16))==struct.pack('<I4sH2xI',4,b'\x7f\0\0\1',socket_port(27016),0xFFFFFFFF)
         assert call(dll.exports['Iw6DirectResult'],[])[0]==1
+        assert native_markers[-1]==b'IW6D:DIRECT_JOIN_CHALLENGE_READY',native_markers
         assert call(dll.exports['Iw6DirectBeginJoin'],[endpoint])[0]==-3
         # Run the actual unmodified original challenge retry routine. Only local
         # formatting and its scratch allocator are modeled, not identity/SDK work.
@@ -166,7 +193,16 @@ def main():
         settings.clear()
         result=call(dll.exports['Iw6DirectHost'],[b'0.0.0.0:27016\0',b'mp_prison\0',b'war\0'],fakes={0x1404BADC0:start_map})
         assert result[0]==3 and map_calls==[(0,b'mp_prison',1,0)]
+        assert native_markers[-1]==b'IW6D:DIRECT_MAP_START_REQUESTED',native_markers
         assert settings==[(b'g_gametype',b'war'),(b'ui_gametype',b'war')]
+        # Original LUI CheckGameLicense had unconditionally attempted an
+        # XStore refresh. In the custom profile it is inert and returns the
+        # original callback value without touching vendor tasks/state.
+        vendor_refresh=[]
+        assert call(0x140245440,[],fakes={
+            0x1401A5930:lambda mu:vendor_refresh.append((mu.reg_read(UC_X86_REG_RCX),mu.reg_read(UC_X86_REG_RDX)))
+        })[0]==0
+        assert not vendor_refresh and not m.imports_called, (vendor_refresh,m.imports_called)
         # The original account query remains unavailable, never synthetic success.
         assert call(0x1406AF4BC,[])[0]==-0x76DBFF00
         call(commands['direct_stop'],[],ret_type='void')

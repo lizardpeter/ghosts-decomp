@@ -41,6 +41,10 @@ VENDOR_TASKS = {
 LOCAL_FILES = {0x140548F90: 'Iw6LocalGameDirectory'}
 # C exports adapt the reviewed Win64 ABI without claiming original source names.
 DIRECT = {
+    0x140245440: 'Iw6DirectNoXboxLicenseRefresh',  # Store LUI callback
+    # P0024: local-session eligibility, not Xbox account/licence eligibility.
+    0x14054B1B0: 'Iw6DirectLocalPlayReady',
+    0x14054B290: 'Iw6DirectLocalPlayReady',
     0x1401A7DB0: 'Iw6DirectPlayerName',
     0x1401A7E10: 'Iw6DirectPlayerId',
     0x14054C360: 'Iw6DirectPlayerId',
@@ -216,7 +220,7 @@ def transform(original, dll_bytes, mode='offline'):
     # Verify the final PE, not only the transformation plan. A missed IAT
     # redirect or lost GDK guard must fail before a package is published.
     from offline.detachment_audit import audit_package
-    errors = audit_package(bytes(data), manifest)
+    errors = audit_package(bytes(data), manifest, dll_bytes)
     if errors:
         raise ValueError('Known vendor boundary regression:\n' + '\n'.join(errors))
     return bytes(data), manifest

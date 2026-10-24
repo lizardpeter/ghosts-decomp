@@ -21,7 +21,8 @@ SETTINGS = SCRATCH + 0x70000      # GamerSettingState
 DVARS = SCRATCH + 0x80000         # dvar_t's, 0x40 apart
 WEAPDEF = SCRATCH + 0x90000       # an empty weapon definition for the real Pmove
 SNAP = SCRATCH + 0xA0000          # snapshot_s
-CHARINFO = SCRATCH + 0xB0000      # the bgame's character info array (0x5D8 per client)
+BGS = SCRATCH + 0xB0000           # the bgame's thread-local state (bgs_t; TLS block +0x10 points at it)
+CHARINFO = BGS + 0x459F0          # its characterInfo_t array (0x5D8 per client; Store 140255FC7, 140258535)
 
 S = {
     "create": "?CL_CreateNewCommands@@YAXW4LocalClientNum_t@@@Z",
@@ -132,7 +133,7 @@ def scratch_setup(w):
         w.u64(va(name), dvar(w, slot, value))
     mu.mem_write(SETTINGS + 0x2BC, b"\0")
     mu.mem_write(SNAP + 0x3C7C, struct.pack("<i", 0))
-    w.write(TLS_BLOCK + 0x10, struct.pack("<Q", CHARINFO))
+    w.write(TLS_BLOCK + 0x10, struct.pack("<Q", BGS))
     w.u64(va("bg_weaponDefs"), WEAPDEF)
     w.u64(va("bg_weaponCompleteDefs"), WEAPDEF)
 

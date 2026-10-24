@@ -5,6 +5,7 @@
 #include "qcommon/cmd.h"
 #include "qcommon/dvar.h"
 void Dvar_SetBool(const dvar_t *, bool);
+extern "C" __declspec(dllimport) void OutputDebugStringA(const char *);
 void Dvar_SetStringByName(const char *, const char *);
 
 namespace
@@ -48,6 +49,28 @@ bool LocalNetworkMode()
 extern "C" int Iw6DirectProfile() { return 1; }
 extern "C" int Iw6DirectResult() { return lastResult; }
 
+// The Store LUI CheckGameLicense callback at 140245440 only calls the GDK
+// XStore license refresh and returns zero. Direct mode has no XStore context:
+// keep the callback ABI and no-op rather than attempting a vendor query or
+// reporting a fabricated successful license.
+extern "C" int Iw6DirectNoXboxLicenseRefresh() { return 0; }
+
+// P0024: Game-local multiplayer gate for the custom direct profile only.
+// The Store entries 14054B1B0 and 14054B290 normally require an XUser, an
+// XStore licence and Xbox privileges. Those vendor checks cannot describe a
+// self-hosted local session. Never turn this into Xbox/retail eligibility.
+// Require the configured local player and the engine's existing LAN branch.
+// 0xC is the original not-signed-in/not-licensed reason for refusal.
+extern "C" int Iw6DirectLocalPlayReady(int controller, unsigned int *reason)
+{
+    if (reason) *reason = 0xC;
+    if (!reason || controller != 0 || !Iw6DirectPlayerId(0)) return 0;
+    const dvar_t *online = State<const dvar_t *>(0x1442B98C8);
+    if (!online || online->type != 0 || online->current.enabled) return 0;
+    *reason = 0;
+    return 1;
+}
+
 // Only called on the engine command thread, after normal local-client init.
 // Result: 1 started, -1 bad endpoint, -2 inactive client, -3 disconnect first,
 // -4 socket failure, -5 onlinegame dvar not initialized. This does not claim account authentication or map loading.
@@ -77,6 +100,7 @@ extern "C" int Iw6DirectBeginJoin(const char *endpoint)
     for (; endpoint[i] && i < 255; ++i) name[i] = endpoint[i];
     name[i] = 0;
     State<int>(0x143E96890) = 3;      // CA_CONNECTING, published last
+    OutputDebugStringA("IW6D:DIRECT_JOIN_CHALLENGE_READY");
     return lastResult = 1;
 }
 
@@ -96,6 +120,7 @@ extern "C" int Iw6DirectHost(const char *bind, const char *map, const char *game
     Dvar_SetStringByName("ui_gametype", gametype);
     // Map startup may reject missing/unavailable content or fail before spawn.
     // Result 3 means only that the request was made, not that a game is ready.
+    OutputDebugStringA("IW6D:DIRECT_MAP_START_REQUESTED");
     ((void (*)(LocalClientNum_t, const char *, bool, bool))0x1404BADC0)(LOCAL_CLIENT_0, map, true, false);
     return lastResult = 3;
 }
@@ -114,6 +139,7 @@ void ConfigurePlayer()
     cache[i] = 0;
     State<unsigned long long>(0x149D59D58) = Iw6DirectPlayerId(0);
     Dvar_SetStringByName("name", name);
+    OutputDebugStringA("IW6D:LOCAL_PROFILE_CONFIGURED");
     lastResult = 4;
 }
 void Host()
@@ -152,6 +178,7 @@ extern "C" void Iw6DirectInit()
     Cmd_AddCommandInternal("direct_player", ConfigurePlayer, &playerCommand);
     Cmd_AddCommandInternal("direct_host", Host, &hostCommand);
     commandsRegistered = true;
+    OutputDebugStringA("IW6D:DIRECT_COMMANDS_REGISTERED");
 }
 extern "C" bool Iw6DirectSendPacket(int length, const void *data, netadr_s to)
 {
