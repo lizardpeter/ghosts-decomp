@@ -140,6 +140,12 @@ otherwise continue through privilege checks and vendor state. In the custom
 - Returns reason 0 and true **only for custom local-session eligibility**. It
   never requests Xbox sign-in or returns a forged vendor licence/token.
 
+The original LUI `CheckGameLicense` callback at **140245440** only attempts an
+`XStoreQueryGameLicenseAsync` refresh and returns zero. P0024 makes this callback
+inert in **direct mode only**, preserving the zero return without manufacturing
+a valid Microsoft licence or starting an unavailable GDK Store task. The
+faithful and ordinary enhanced/offline profiles retain the original behavior.
+
 These gates do not establish native menu availability, map loading, access to
 retail servers, or authenticated network identity. Other original LUI licence
 and profile paths remain to be disentangled, and no vendor capability/permission
