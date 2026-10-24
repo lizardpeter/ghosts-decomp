@@ -188,6 +188,11 @@ def main():
         result=call(dll.exports['Iw6DirectHost'],[b'0.0.0.0:27016\0',b'mp_prison\0',b'war\0'],fakes={0x1404BADC0:start_map})
         assert result[0]==3 and map_calls==[(0,b'mp_prison',1,0)]
         assert settings==[(b'g_gametype',b'war'),(b'ui_gametype',b'war')]
+        # Original LUI CheckGameLicense had unconditionally attempted an
+        # XStore refresh. In the custom profile it is inert and returns the
+        # original callback value without touching vendor tasks/state.
+        assert call(0x140245440,[])[0]==0
+        assert not m.imports_called, m.imports_called
         # The original account query remains unavailable, never synthetic success.
         assert call(0x1406AF4BC,[])[0]==-0x76DBFF00
         call(commands['direct_stop'],[],ret_type='void')
