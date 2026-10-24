@@ -7,6 +7,13 @@ on:
       - .github/workflows/launch-smoke.yml
       - tools/direct/native_smoke.py
       - tools/offline/package.py
+      - tools/offline/detachment_audit.py
+      - enhanced/offline/egress.cpp
+      - enhanced/_external/gdk/xgameruntime.cpp
+      - enhanced/win32/gdk.cpp
+      - enhanced/direct/transport.cpp
+      - enhanced/direct/game.cpp
+      - enhanced/direct/profile.cpp
       - enhanced/offline/controller.cpp
       - enhanced/offline/files.cpp
       - tools/direct/fetch_startup.py
