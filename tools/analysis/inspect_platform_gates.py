@@ -16,6 +16,9 @@ DEFAULT = (
     "1401A7EA0",  # GDK signed-in check
     "1401A5740",  # Store query completion state
     "1401A61A0",  # Store license status
+    "1401A7E80",  # per-controller eligibility prerequisite
+    "140245440",  # LUI CheckGameLicense callback
+    "14054B4B0",  # Live_Frame / game online pump
     "14054B1B0",  # multiplayer readiness
     "14054B290",  # multiplayer readiness
     "140311570",  # client join identity / stats
