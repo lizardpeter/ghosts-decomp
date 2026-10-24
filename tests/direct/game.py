@@ -191,8 +191,11 @@ def main():
         # Original LUI CheckGameLicense had unconditionally attempted an
         # XStore refresh. In the custom profile it is inert and returns the
         # original callback value without touching vendor tasks/state.
-        assert call(0x140245440,[])[0]==0
-        assert not m.imports_called, m.imports_called
+        vendor_refresh=[]
+        assert call(0x140245440,[],fakes={
+            0x1401A5930:lambda mu:vendor_refresh.append((mu.reg_read(UC_X86_REG_RCX),mu.reg_read(UC_X86_REG_RDX)))
+        })[0]==0
+        assert not vendor_refresh and not m.imports_called, (vendor_refresh,m.imports_called)
         # The original account query remains unavailable, never synthetic success.
         assert call(0x1406AF4BC,[])[0]==-0x76DBFF00
         call(commands['direct_stop'],[],ret_type='void')
