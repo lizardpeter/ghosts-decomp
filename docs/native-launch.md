@@ -109,6 +109,18 @@ socket denial and inheritance across exec. This deliberately prevents custom
 UDP too. Host IPC brokers are outside that policy's isolation claim. Use the
 Windows workflow when a host does not support Wine's required Unix sockets.
 
+P0025 adds precise, non-sensitive `OutputDebugStringA` milestones to the **direct
+profile only**: `IW6D:DIRECT_COMMANDS_REGISTERED`,
+`IW6D:LOCAL_PROFILE_CONFIGURED`, `IW6D:DIRECT_JOIN_CHALLENGE_READY`
+and `IW6D:DIRECT_MAP_START_REQUESTED`. The Windows workflow records which
+events the actual game process emitted in
+`native-launch-diagnostics/direct-milestones.json`. Missing events do not
+make the structural smoke test fail: they pinpoint the first unexecuted game
+boundary, rather than falsely claiming a menu or map was reached. In
+particular, `DIRECT_MAP_START_REQUESTED` is emitted **before** invoking
+the original map-start function and is not evidence that a map loaded.
+No player names, IDs, tokens or endpoints appear in the markers.
+
 The complete game installation is not yet staged in the diagnostic. Later asset,
 graphics, profile/statistics and connection failures must be addressed from
 their own observed evidence. Native map loading, a completed join and full
