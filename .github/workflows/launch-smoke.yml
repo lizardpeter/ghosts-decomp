@@ -14,6 +14,10 @@ on:
       - enhanced/direct/transport.cpp
       - enhanced/direct/game.cpp
       - enhanced/direct/profile.cpp
+      - tests/direct/game.py
+      - tests/direct/admission.py
+      - tests/direct/host.py
+      - tests/differential/harness.py
       - enhanced/offline/controller.cpp
       - enhanced/offline/files.cpp
       - tools/direct/fetch_startup.py
@@ -38,6 +42,8 @@ jobs:
             /enhanced/
             /records/
             /tools/
+            /tests/direct/
+            /tests/differential/
             /analysis/iw6_ds_ps4/map/publics.tsv
             /analysis/iw6_ds_ps4/pdb/statics.tsv
             /analysis/iw6_ds_ps4/pdb/sections.tsv
@@ -45,10 +51,13 @@ jobs:
             /analysis/iw6mp64_MSStore_ship/match/functions.tsv
       - run: |
           sudo apt-get install -y -q clang lld llvm >/dev/null
-          pip install -q pefile
+          pip install -q pefile unicorn==2.1.4
           python3 tools/fetch_originals.py iw6mp64_MSStore_ship .work/originals --only exe
           IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct
           python3 tools/offline/package.py --original .work/originals/iw6mp64_MSStore_ship.exe --mode direct --output .work/package
+          IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
+          IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
+          IW6_ORIGINALS=.work/originals python3 tests/direct/host.py
       - name: Record packaged EXE import requirements
         run: |
           python3 - <<'PYTHON'
