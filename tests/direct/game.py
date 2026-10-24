@@ -77,6 +77,15 @@ def main():
         m.mu.mem_write(online_dvar+0x10,b'\1')
         m.mu.mem_write(0x1442B98C8,struct.pack('<Q',online_dvar))
         assert call(dll.exports['Iw6DirectBeginJoin'],[endpoint])[0]==-9
+        # Xbox-independent eligibility must fail closed without a local ID.
+        # Exercise both patched original game entries, not only our export.
+        def readiness(address, controller=0, expected=0, why=12):
+            result=call(address,[controller,b'POIS'],ret_type='int')
+            assert result[0]==expected, (address,controller,result)
+            assert result[1]==[struct.pack('<I',why)],(address,result[1])
+            assert not m.imports_called,m.imports_called
+        for entry in (0x14054B1B0,0x14054B290):
+            readiness(entry)
         def player_arguments(w):
             argv=w.alloc(struct.pack('<QQQ',w.cstr(b'direct_player'),w.cstr(b'123456789abcdef0'),w.cstr(b'Local Player')))
             w.u32(0x1469CECF0,0);w.u32(0x1469CED34,3);w.u64(0x1469CED58,argv)
@@ -85,6 +94,13 @@ def main():
         assert call(0x14054C0F0,[0],ret_type='cstr')[0]==b'123456789abcdef0'
         assert call(0x1401A7DB0,[0],ret_type='cstr')[0]==b'Local Player'
         assert settings==[(b'name',b'Local Player')]
+        # An Xbox-connected onlinegame branch is never made eligible by a
+        # locally configured identity. A NULL reason and other controllers are
+        # also denied without touching vendor account state.
+        for entry in (0x14054B1B0,0x14054B290):
+            readiness(entry)
+            readiness(entry,controller=1)
+            assert call(entry,[0,0])[0]==0
         def arguments(w):
             argv=w.alloc(struct.pack('<QQ',w.cstr(b'connect'),w.cstr(endpoint[:-1])))
             w.u32(0x1469CECF0,0)
@@ -92,6 +108,11 @@ def main():
             w.u64(0x1469CED58,argv)
         call(commands['connect'],[],ret_type='void',setup=arguments)
         assert bytes(m.mu.mem_read(online_dvar+0x10,1))==b'\0'
+        # After joining the custom LAN branch, both original UI/game gates
+        # have a local-only success; GDK and XUser providers remain unavailable.
+        for entry in (0x14054B1B0,0x14054B290):
+            readiness(entry,expected=1,why=0)
+            readiness(entry,controller=1)
         assert struct.unpack('<i',m.mu.mem_read(0x143E96890,4))[0]==3
         assert bytes(m.mu.mem_read(0x14416A10C,16))==struct.pack('<I4sH2xI',4,b'\x7f\0\0\1',socket_port(27016),0xFFFFFFFF)
         assert call(dll.exports['Iw6DirectResult'],[])[0]==1
