@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / 'tools/offline'), str(ROOT / 'tests/differential')]
 import package
+import detachment_audit
 from harness import Image, Machine, original_exe
 from unicorn import UC_HOOK_CODE
 from unicorn.x86_const import UC_X86_REG_RCX, UC_X86_REG_RDX, UC_X86_REG_R8, UC_X86_REG_RAX
@@ -25,6 +26,25 @@ def check():
         output = Path(temp) / 'package'
         manifest = package.package(original, dll_path, output)
         exe, dll = Image(output / 'iw6mp64_offline.exe'), Image(output / 'recon.dll')
+        # Independently audit final PE imports and original entry guards.
+        image_bytes = (output / 'iw6mp64_offline.exe').read_bytes()
+        assert not detachment_audit.audit_package(image_bytes, manifest)
+        altered = dict(manifest, guards=[
+            g for g in manifest['guards'] if int(g['va'], 16) != 0x1406AEE74])
+        assert any('Missing GDK guard' in e for e in
+                   detachment_audit.audit_package(image_bytes, altered))
+        wrong_imports = [dict(i) for i in manifest['imports']]
+        wrong_imports[0]['export'] = 'MissingExport'
+        altered = dict(manifest, imports=wrong_imports)
+        assert any('not wired to recon.dll' in e for e in
+                   detachment_audit.audit_package(image_bytes, altered))
+        ok, detail = detachment_audit.audit_runtime({
+            'events': [{'event': 3, 'path': r'C:\test\iw6mp64_offline.exe'},
+                       {'event': 6, 'path': r'C:\Windows\System32\D3D11.dll'}]})
+        assert not ok and detail['observed_modules'] == 2
+        problems, detail = detachment_audit.audit_runtime({
+            'events': [{'event': 6, 'path': r'C:\Windows\System32\xgameruntime.dll'}]})
+        assert problems and detail['unexpected_vendor_modules'] == ['xgameruntime.dll']
         m = Machine(exe, dll)
         # Resolve actual recon exports into original IAT slots, like the loader.
         for slot, name in exe.iat.items():
