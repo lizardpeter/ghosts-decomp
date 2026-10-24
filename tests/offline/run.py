@@ -4,6 +4,7 @@
 This deliberately enters original EXE code/IAT slots, not enhanced exports.
 It models import resolution; it is not a Windows loader or game launch test.
 """
+import csv
 import json
 import struct
 import sys
@@ -101,6 +102,22 @@ def check():
         result = m.call(va, [1,0,0,1,0])[0]
         assert result == -0x76DBFF00, result
         assert not m.imports_called, m.imports_called
+        # Exercise every named original GDK thunk in the *packaged EXE*. These
+        # do not all have reconstructed source yet; most still enter original
+        # machine code and rely on the patched QueryApiImpl boundary.
+        # No SDK import or OS API is permitted along any of these failed paths.
+        with (ROOT / 'records/names.tsv').open(newline='') as named:
+            gdk_thunks = {
+                int(row['va'], 16): row['name']
+                for row in csv.DictReader(named, delimiter='\\t')
+                if row['build'] == package.BUILD and row['method'] == 'gdk-thunk'
+                   and row['source'] == '_external/gdk/xgameruntime.lib'
+            }
+        assert len(gdk_thunks) == 97, len(gdk_thunks)
+        for address, name in sorted(gdk_thunks.items()):
+            value, _, _, observed = m.call(address, [0] * 12)
+            assert not (isinstance(value, str) and value.startswith('fault:')), (name, address, value)
+            assert not m.imports_called and not observed, (name, address, m.imports_called, observed)
         # Calls through original network/process/event IATs execute actual failure code.
         results = {'Iw6DenyNull':0, 'Iw6DenyMinusOne':-1, 'Iw6DenyStatus':5,
                    'Iw6DenyCurl':2, 'Iw6DenyCurlMulti':4, 'Iw6DenySocket':-1,
