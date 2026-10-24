@@ -1,0 +1,32 @@
+name: Inspect Store platform gates
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/analysis/inspect_platform_gates.py
+      - .github/workflows/platform-gates.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /tools/analysis/inspect_platform_gates.py
+            /analysis/iw6mp64_MSStore_ship/pseudocode/_unattributed/
+      - name: Extract Store local-platform and multiplayer readiness functions
+        run: |
+          python3 tools/analysis/inspect_platform_gates.py --preview-lines 90 \
+            --output platform-gates.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: store-platform-gates
+          path: platform-gates.json
+          retention-days: 7
