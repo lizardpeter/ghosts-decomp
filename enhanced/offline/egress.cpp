@@ -22,7 +22,8 @@ template<class C> bool Blocked(const C *path)
     if (!path) return false;
     const C *base = path;
     for (const C *p = path; *p; ++p) if (*p == '/' || *p == '\\') base = p + 1;
-    const char *names[] = {"xgameruntime", "xcurl", "winhttp", "wininet", "urlmon", "ws2_32"};
+    const char *names[] = {"xgameruntime", "xcurl", "winhttp", "wininet", "urlmon", "ws2_32",
+                           "xboxliveapi", "xboxservices", "gamingservices"};
     for (const char *name : names)
     {
         const C *p = base; const char *q = name;
