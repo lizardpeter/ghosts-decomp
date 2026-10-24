@@ -124,6 +124,27 @@ login status. The original retry function at 140311310 then emits `getchallenge`
 replaced by the selected transport's readiness. Full local profile setup and other join initialization work
 remain to be reconstructed.
 
+## Local multiplayer readiness (P0024)
+
+The two Store multiplayer eligibility queries at **14054B1B0** and
+**14054B290** normally report reason 0xC when Xbox sign-in or Store
+licensing has not completed. The generated Store pseudocode shows that they
+otherwise continue through privilege checks and vendor state. In the custom
+**direct** profile only, both original entries now redirect to
+`Iw6DirectLocalPlayReady`. That replacement:
+
+- Requires controller 0, an explicitly configured nonzero custom player ID,
+  a valid boolean `onlinegame` dvar, and `onlinegame == false`.
+- Returns reason 0xC and false for missing/invalid profile, other controllers,
+  missing/online dvar state or null output pointers.
+- Returns reason 0 and true **only for custom local-session eligibility**. It
+  never requests Xbox sign-in or returns a forged vendor licence/token.
+
+These gates do not establish native menu availability, map loading, access to
+retail servers, or authenticated network identity. Other original LUI licence
+and profile paths remain to be disentangled, and no vendor capability/permission
+check is bypassed for retail or Xbox-network mode.
+
 ## Remaining path to a playable game
 
 - **Local identity and session ownership:** 140311570 still fills xuid/xnaddr, stats versions and related fields.
