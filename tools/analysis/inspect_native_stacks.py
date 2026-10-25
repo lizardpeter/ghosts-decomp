@@ -37,10 +37,48 @@ def extract_function(va, limit):
             else:
                 if line.startswith("// 140") and not line.startswith(needle):
                     break
-                if len(lines) < limit:
-                    lines.append(line.rstrip())
+                lines.append(line.rstrip())
     return {"source": str(path.relative_to(ROOT)), "line": first,
-            "excerpt": "\n".join(lines), "found": first is not None}
+            "excerpt": "\n".join(lines[:limit]),
+            "tail_excerpt": "\n".join(lines[-limit:]),
+            "line_count": len(lines), "found": first is not None}
+
+
+def disasm_near_return(va, limit):
+    # The observer records words from a suspended thread's stack, not every
+    # stack's unwind record. Such values are *candidate return addresses*.
+    # The CALL immediately before the return address often identifies the
+    # callee actually awaiting completion. Inspect both sides, not merely
+    # the beginning of the containing function.
+    path = ANALYSIS / "disasm" / "_unattributed" / (
+        f"{(va >> 4) & ~0xFFFF:08X}.asm")
+    if not path.is_file():
+        return {"source": str(path.relative_to(ROOT)), "error": "chunk missing"}
+    import collections
+    preceding = collections.deque(maxlen=limit)
+    following = []
+    found = False
+    found_line = None
+    with path.open(encoding="utf-8", errors="replace") as source:
+        for index, line in enumerate(source, 1):
+            body = line.strip()
+            if not found:
+                if body.startswith(f"{va:09X}  "):
+                    found = True
+                    found_line = index
+                    following.append(body)
+                else:
+                    preceding.append(body)
+            elif len(following) < limit:
+                following.append(body)
+            else:
+                break
+    return {"source": str(path.relative_to(ROOT)), "line": found_line,
+            "found": found,
+            "before": "\n".join(preceding),
+            "after": "\n".join(following)}
+
+
 
 
 def map_stacks(addresses, limit):
@@ -72,6 +110,7 @@ def map_stacks(addresses, limit):
             "size": size,
             "source_metadata": row,
             "pseudocode": extract_function(start, limit),
+            "disasm_at_return": disasm_near_return(va, limit),
         }
     return output
 
@@ -102,6 +141,13 @@ def main():
             print("function metadata", json.dumps(entry["source_metadata"]))
         if "pseudocode" in entry:
             print(entry["pseudocode"].get("excerpt", ""))
+            print("=== FUNCTION TAIL ===")
+            print(entry["pseudocode"].get("tail_excerpt", ""))
+        if "disasm_at_return" in entry:
+            print("=== INSTRUCTIONS BEFORE STACK CANDIDATE RETURN ADDRESS ===")
+            print(entry["disasm_at_return"].get("before", ""))
+            print("=== AFTER ===")
+            print(entry["disasm_at_return"].get("after", ""))
 
 
 if __name__ == "__main__":
