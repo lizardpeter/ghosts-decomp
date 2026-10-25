@@ -21,11 +21,19 @@ extern int cg_renderTimeView;
 // Puts the canonical predicted state back if the view's fields are swapped in; a no-op otherwise.
 void CG_RestoreCanonicalView();
 
-// Explicit copies: the build uses -fno-builtin, and memcpy is a CRT import the test harness only stubs.
+// Explicit copies: the build uses -fno-builtin, and memcpy is a CRT import the test harness only stubs. Eight bytes at
+// a time, then the rest (the copies are of whole structures that don't overlap).
 static inline void Enh_Copy(void *dst, const void *src, unsigned long long size)
 {
 	unsigned char *d = (unsigned char *)dst;
 	const unsigned char *s = (const unsigned char *)src;
-	for (unsigned long long i = 0; i < size; ++i)
+	unsigned long long i = 0;
+	for (; i + 8 <= size; i += 8)
+	{
+		unsigned long long q;
+		__builtin_memcpy(&q, s + i, 8);
+		__builtin_memcpy(d + i, &q, 8);
+	}
+	for (; i < size; ++i)
 		d[i] = s[i];
 }

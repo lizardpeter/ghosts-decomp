@@ -268,6 +268,9 @@ it exists; nothing here changes the protocol, the meaning of `cg.time` or what t
 - **Verify in the emulator:** call the enhanced function with the frame patterns of section 2's table and compare
   `kickAngles` and `kickAVel` at every multiple of 5 ms with the faithful function run in 5 ms frames: they must be
   bit-identical. Then check that a 50 ms call (the bots) matches the faithful function exactly.
+- **Since the tick loop** (docs/cgame-frame.md 4.10): implemented as P0014's grid first, now folded: the cgame calls
+  the unchanged `BG_KickAngles` with 5 in every 5 ms tick, and the view command carries a copy stepped forward to the
+  render time; the grid and its carry are gone.
 
 ### 4.3 The viewmodel recoil on a fixed 5 ms grid
 
@@ -278,6 +281,9 @@ it exists; nothing here changes the protocol, the meaning of `cg.time` or what t
 - **Effect:** the gun's recoil animation and its settle time stop depending on the frame rate.
 - **Verify:** as 4.2, with `BG_CalculateWeaponMovement_Recoil_Internal_SingleAngle` (R) unchanged and the frame
   patterns of the recoil table; identical angles and speeds at multiples of 5 ms.
+- **Since the tick loop** (docs/cgame-frame.md 4.10): implemented as P0015's grid first, now folded: `CG_AddViewWeapon`
+  (R) is split, its movement half (the whole `BG_CalculateWeaponMovement`: sway, recoil, bob, base) runs in every
+  5 ms tick with frametime 0.005, and the presentation steps a copy forward to the render time; the grid is gone.
 
 ### 4.4 Exact first-order filters in the viewmodel
 

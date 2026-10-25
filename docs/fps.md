@@ -372,6 +372,14 @@ The enhanced `CL_CreateNewCommands` (overrides Store 14030BB00) does 6.2:
   frame; the grid restarts afterwards.
 - Every frame it also builds the temporary view command `cl_viewCmd` (7.9), never stored or sent.
 
+Since docs/cgame-frame.md 4.10 (the tick loop), the function is split: `CL_PrepareFrameInput` (everything above
+that runs every frame, plus the buttons and moves into the frame's unfinished command when commands are due),
+`CL_EmitTickCommand` (one command: `CL_FinishMove`, `serverTime = lastCmdTime += 5`) and `CL_BuildViewCmd` (the view
+command with the aim angles the caller passes). The enhanced `CG_DrawActiveFrame` calls the first once a frame,
+the second once in each of its 5 ms ticks (with that tick's kick handed over first: the kick at the previous tick,
+not the previous frame's), and the third in the presentation with the kick stepped forward to the render time. The
+enhanced `CL_CreateNewCommands` is the three in a row, for its other callers (`CL_CreateCmdsDuringConnection`).
+
 Known simplifications, on frames that make no command: the mouse's movement in strafe mode or without mouse look
 (which the original turns into that frame's `rightmove`/`forwardmove`) and aim assist's melee target are dropped; a
 sprint tap the gamepad path sees is kept for the next command-making frame; `CG_HandleSpecialStateInput` runs on the
@@ -731,6 +739,14 @@ swapping the whole state, the zero-leftover angles, the command, its time, the s
 
 Not done: the viewmodel, sound and the local player's shadow at the swapped position on hardware, and the normal
 (trace-using) movement's own global writes, *unverified* (7.6).
+
+Since docs/cgame-frame.md 4.10 (the tick loop), the step is the presentation's own-view step (`CG_PresentOwnView`,
+called by the enhanced `CG_DrawActiveFrame` after its ticks): the ticks predict the canonical state with the faithful
+`CG_PredictPlayerState`, `CG_TransitionPlayerState` and the events run in the ticks on the canonical state, the view
+command's angles carry the kick stepped forward to the render time, and the one restore point is the end of
+`CG_DrawActiveFrame` (`CG_DrawActive` is no longer overridden; `CG_SavePlayerState`, the early prediction, every tick
+and `CG_PresentOwnView` restore first as safety nets). The tests above now run through the tick loop
+(frame_sim.TickGame).
 
 Since docs/cgame-frame.md 4.9 (stage 1), the step's time is the own view's presentation time, not
 `cl.serverTime`. The partial Pmove runs to `floor(T_r)`, where T_r is the fractional, slewed render time, and the

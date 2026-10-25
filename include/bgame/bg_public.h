@@ -48,7 +48,9 @@ struct Bounds;
 // A shell shock's parameters (bgame/bg_misc.cpp): 0x368 bytes in both builds; nothing spelled out yet
 struct shellshock_parms_t
 {
-	unsigned char unknown0[0x368];
+	unsigned char unknown0[0x14];
+	int view_fadeTime;  // 0x14: view.fadeTime, the viewmodel's shell shock fade (weaponState_t::shellShockFadeTime)
+	unsigned char unknown18[0x368 - 0x18];
 };
 
 struct pmove_t

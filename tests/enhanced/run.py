@@ -54,6 +54,9 @@ class Env:
     def call(self, symbol, args, ret="void", setup=None, fakes=None, observe=None):
         hooks = {}
         for s, fn in (fakes or {}).items():
+            if isinstance(s, int):  # an address: a function with no name yet
+                hooks[s] = fn
+                continue
             for va in (self.dll.exports.get(s), self.table.get(s)):
                 if va:
                     hooks[va] = fn

@@ -16,8 +16,9 @@ What must hold:
   snapshot interval each frame (the original's alternates), and an entity's position (the original
   CG_InterpolateEntityPosition) by speed * delta T_r, within float rounding; with no fraction it is the original bit
   for bit;
-- (b) the own view: the drawn origin is the partial Pmove to floor(T_r) plus velocity * (T_r - floor(T_r)), the drawn
-  angles this frame's; with T_r on a command time and no fraction, the original angle rule;
+- (b) the own view (whole frames through the enhanced CG_DrawActiveFrame's tick loop): the drawn origin is the partial
+  Pmove to floor(T_r) plus velocity * (T_r - floor(T_r)), the drawn angles this frame's; with T_r on a command time
+  and no fraction, the original angle rule;
 - (d) one switch per category: flipping the other entities' mode changes cg.frameInterpolation and nothing of the
   own view; flipping the own view's changes the drawn view and not cg.frameInterpolation; INTERPOLATE for the own view
   draws the canonical prediction.
@@ -28,7 +29,7 @@ import struct
 
 from harness import TLS_BLOCK
 from syms import va
-from frame_sim import (CL_SERVERTIME, CLS_REALTIME, CG_NEXTSNAP, CG_SNAP, CG_TIME, Game, World, rd, wmem)
+from frame_sim import (CL_SERVERTIME, CLS_REALTIME, CG_NEXTSNAP, CG_SNAP, CG_TIME, TickGame, World, rd, wmem)
 from win32_display import arg
 
 MS = "?Sys_Milliseconds@@YAHXZ"
@@ -328,31 +329,21 @@ def _f(ps, off, n=3):
     return struct.unpack_from(f"<{n}f", ps, off)
 
 
-def _own_view_run(env, fraction_us, mode=0, frames=(1, 1, 3, 2, 2, 3, 1)):
-    g = Game(env)
-    g.world.poke(env.data("cg_presentMode"), _i(mode))
-    g.frame(1)
+def _own_view_run(env, fraction_us, mode=0, frames=(1, 1, 3, 2, 2, 3, 1), entities_mode=None):
+    """Frames through the enhanced CG_DrawActiveFrame with a fraction in the client's clock: (cl.serverTime, the drawn
+    state (what CG_CalcViewValues sees), the canonical state after the frame)."""
     from frame_sim import KB_FORWARD
+    g = TickGame(env)
+    g.world.poke(env.data("cg_presentMode"), _i(mode))
+    if entities_mode is not None:
+        g.world.poke(env.data("cg_presentMode") + 8, _i(entities_mode))
+        g.world.poke(env.data("cg_presentExtrapolateMsec"), struct.pack("<d", 7.0))
+    g.frame(1)
     g.client.key(KB_FORWARD, True)
     out = []
     for msec in frames:
-        def frame():
-            g.frame(msec)
-        # the client's clock with a fraction: cls_realtimeUs set before the cgame runs
-        c = g.client
-        c.clock(msec)
-        g.world.poke(env.data("cls_realtimeUs"), struct.pack("<q", c.realtime * 1000 + fraction_us))
-        cg = va("cgArray")
-        old = struct.unpack("<i", g.world.read(cg + CG_TIME, 4))[0]
-        g.world.poke(cg + 0x71894, _i(old))
-        g.world.poke(cg + CG_TIME, _i(c.server_time))
-        g.call("save", [0])
-        c.create()
-        g.call("predict", [0])
-        drawn = g.world.read(cg, 0x620)
-        g.call("draw", [0, 0])
-        canonical = g.world.read(cg, 0x620)
-        out.append((c.server_time, drawn, canonical))
+        g.frame(msec, fraction_us=fraction_us)
+        out.append((g.times[-1], g.drawn[-1], g.after[-1][:0x620]))
     return out
 
 
@@ -394,17 +385,7 @@ def test_switching_one_category_changes_only_it(env):
 
 
 def _own_view_run_with_entities_mode(env, fraction_us, entities_mode):
-    orig = Game.__init__
-
-    def init(self, *a, **k):
-        orig(self, *a, **k)
-        self.world.poke(env.data("cg_presentMode") + 8, _i(entities_mode))
-        self.world.poke(env.data("cg_presentExtrapolateMsec"), struct.pack("<d", 7.0))
-    Game.__init__ = init
-    try:
-        return _own_view_run(env, fraction_us)
-    finally:
-        Game.__init__ = orig
+    return _own_view_run(env, fraction_us, entities_mode=entities_mode)
 
 
 def _interp_frames_with_view_mode(env, period_us, view_mode):

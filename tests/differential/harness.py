@@ -218,6 +218,34 @@ class Writer:
         return self.alloc((s.encode("latin1") if isinstance(s, str) else s) + b"\0")  # one byte per char
 
 
+def _runs(journal):
+    """A journal {address: one byte} as (start, bytes) runs of consecutive addresses."""
+    start, run = None, bytearray()
+    for a in sorted(journal):
+        if start is not None and a == start + len(run):
+            run += journal[a]
+            continue
+        if start is not None:
+            yield start, bytes(run)
+        start, run = a, bytearray(journal[a])
+    if start is not None:
+        yield start, bytes(run)
+
+
+def _spans(starts, size):
+    """Sorted block starts of `size` bytes as (start, length) spans of adjacent blocks."""
+    begin = end = None
+    for a in starts:
+        if begin is not None and a == end:
+            end += size
+            continue
+        if begin is not None:
+            yield begin, end - begin
+        begin, end = a, a + size
+    if begin is not None:
+        yield begin, end - begin
+
+
 class Machine:
     def __init__(self, *images: Image):
         self.mu = Uc(UC_ARCH_X86, UC_MODE_64)
@@ -284,9 +312,12 @@ class Machine:
     def _on_write(self, mu, access, address, size, value, user):
         for lo, hi in self._ranges:
             if lo <= address < hi:
+                old = None
                 for a in range(address, address + size):
                     if a not in self._journal:
-                        self._journal[a] = bytes(mu.mem_read(a, 1))
+                        if old is None:
+                            old = bytes(mu.mem_read(address, size))
+                        self._journal[a] = old[a - address:a - address + 1]
                 return
 
     def _emulated_write(self, va, data):
@@ -312,9 +343,9 @@ class Machine:
         mu.reg_write(UC_X86_REG_RAX, dst)
 
     def _setup_write(self, va, data):
+        old = bytes(self.mu.mem_read(va, len(data)))
         for i in range(len(data)):
-            if va + i not in self._setup_journal:
-                self._setup_journal[va + i] = bytes(self.mu.mem_read(va + i, 1))
+            self._setup_journal.setdefault(va + i, old[i:i + 1])
         self.mu.mem_write(va, data)
 
     def read_cstr(self, va, limit=512):
@@ -430,16 +461,22 @@ class Machine:
             fault = f"fault: {e} at {mu.reg_read(UC_X86_REG_RIP):#x}"
         # Net changes only (storing the value a byte already had is not a behavioural difference), reported as
         # whole aligned qwords, so a stored pointer can be recognised (run.py normalize_writes).
-        changed = {a & ~7 for a in self._journal if bytes(mu.mem_read(a, 1)) != self._journal[a]}
-        globals_written = {a + i: bytes(mu.mem_read(a + i, 1)) for a in sorted(changed) for i in range(8)}
+        changed = set()
+        for start, old in _runs(self._journal):
+            now = bytes(mu.mem_read(start, len(old)))
+            changed.update((start + i) & ~7 for i in range(len(old)) if now[i] != old[i])
+        globals_written = {}
+        for start, n in _spans(sorted(changed), 8):
+            now = bytes(mu.mem_read(start, n))
+            globals_written.update((start + i, now[i:i + 1]) for i in range(n))
         returned_str = None
         if ret == "cstr" and not fault:
             ptr = mu.reg_read(UC_X86_REG_RAX)
             returned_str = self.read_cstr(ptr) if ptr else None  # before rollback: it may point at a written global
-        for a, old in self._journal.items():
-            mu.mem_write(a, old)
-        for a, old in self._setup_journal.items():
-            mu.mem_write(a, old)
+        for start, old in _runs(self._journal):
+            mu.mem_write(start, old)
+        for start, old in _runs(self._setup_journal):
+            mu.mem_write(start, old)
         self._journal = {}
         self._setup_journal = {}
         observed, self._fakes, self._observe = self.observed, {}, {}

@@ -54,12 +54,20 @@ struct ClipAmmo
 #define MAX_AMMO_SLOTS 15
 #define PWF_ALT_MODE 0x4000  // weapFlags bit: the weapon is in its alternate mode (name unknown)
 
+struct XModel;
+
 struct WeaponDef
 {
-	unsigned char unknown0[0x138];
+	unsigned char unknown0[0x8];
+	XModel **gunXModel;           // 0x8: the viewmodel per variation (Weapon bits 8..13)
+	unsigned char unknown10[0x38 - 0x10];
+	const void **unknownModels38; // 0x38: the variation falls back to 0 when its gunXModel is missing and this is set
+	unsigned char unknown40[0x138 - 0x40];
 	const void *turretZoomSound;  // 0x138: played while a turret scope zooms (PS4 PDB: fireStopSoundPlayer; the Store
 	                              // build's name unknown)
-	unsigned char unknown140[0x5E8 - 0x140];
+	unsigned char unknown140[0x358 - 0x140];
+	const XModel *viewModelExtra[2];  // 0x358, 0x360: two more models kept loaded with the viewmodel (names unknown)
+	unsigned char unknown368[0x5E8 - 0x368];
 	int overlayInterface;    // 0x5E8: WeapOverlayInteface_t, 2 a turret scope (PS4 PDB)
 	unsigned char unknown5EC[0x640 - 0x5EC];
 	float fGunMaxPitch;  // 0x640: degrees the viewmodel's recoil may reach
@@ -89,7 +97,9 @@ struct AttViewKick
 
 struct WeaponAttachment
 {
-	unsigned char unknown0[0xB8];
+	unsigned char unknown0[0x28];
+	XModel **viewModels;  // 0x28: the attachment's viewmodel per variation (name unknown)
+	unsigned char unknown30[0xB8 - 0x30];
 	const AttViewKick *viewKick;
 	unsigned char unknownC0[0x10C - 0xC0];
 	float viewCenterScale;  // 0: no change
@@ -97,7 +107,11 @@ struct WeaponAttachment
 
 struct WeaponCompleteDef
 {
-	unsigned char unknown0[0xB4];
+	unsigned char unknown0[0x20];
+	WeaponAttachment **scopes;        // 0x20, 0x28, 0x30: by Weapon bits 14..16 (1-based), 17..18 (1-based) and the
+	WeaponAttachment **underBarrels;  // seven bits 19..25 (the IW6 asset layout's names; *unverified*)
+	WeaponAttachment **others;
+	unsigned char unknown38[0xB4 - 0x38];
 	float fAdsViewKickCenterSpeed;
 	float fHipViewKickCenterSpeed;
 	unsigned char unknownBC[0xC8 - 0xBC];
@@ -229,11 +243,15 @@ struct playerState_s
 	int weapCommon_weapFlags;         // PWF_ALT_MODE
 	float weapCommon_fWeaponPosFrac;  // 0 hip .. 1 fully aimed down the sight (Pmove's ADS transition)
 	float weapCommon_aimSpreadScale;  // weapCommon.aimSpreadScale
-	unsigned char unknown42C[0xE08 - 0x42C];
+	unsigned char unknown42C[0x634 - 0x42C];
+	float hipViewValue;               // cg.hipViewValue, copied by CG_AddViewWeapon at the hip (name unknown)
+	unsigned char unknown638[0xE08 - 0x638];
 	int meleeChargeEnt;
 	unsigned char unknownE0C[0xE14 - 0xE0C];
 	unsigned int perks[2];  // the code of both builds reads them here (the PS4 PDB's type dump says 0xD5C)
-	unsigned char unknownE1C[0x3328 - 0xE1C];
+	unsigned char unknownE1C[0x13CC - 0xE1C];
+	int weaponTimeBase;               // weaponState_t::time and damageTime are cg's times minus this (name unknown)
+	unsigned char unknown13D0[0x3328 - 0x13D0];
 };
 static_assert(__builtin_offsetof(playerState_s, movingPlatformEntity) == 0x44, "playerState_s layout");
 static_assert(__builtin_offsetof(playerState_s, vehicleState) == 0xBC, "playerState_s layout");

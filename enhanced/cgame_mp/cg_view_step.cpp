@@ -1,20 +1,24 @@
-// enhanced/cgame_mp/cg_view_step.cpp: the view drawn at the render time (records/patches.tsv P0017; docs/fps.md 6.3, 7.6).
+// enhanced/cgame_mp/cg_view_step.cpp: the own view drawn at the render time (records/patches.tsv P0017, folded into the
+// tick loop's presentation: docs/fps.md 7.6, docs/cgame-frame.md 4.5, 4.10).
 //
-// With fixed 5 ms usercmds (enhanced/client_mp/cl_fixed_cmds.cpp) the predicted state ends at the newest command's time,
-// 0 to 4 ms before the render time cl->serverTime, and most frames at high frame rates make no command, so the
-// original would draw the same origin and angles for several frames (docs/fps.md 7.5). Here, after the faithful
-// prediction, one more Pmove runs on copies of the predicted state and of cg_pmove with the temporary command
-// cl_viewCmd (the newest command's input, this frame's angles, serverTime = cl->serverTime). Only its movement fields
-// (origin, velocity, view angles, bob cycle, view height, lean) are put into cg.predictedPlayerState, from the end of
-// CG_PredictPlayerState to the end of CG_DrawActive: what CG_TransitionPlayerState, the view, the viewmodel and the
-// scene read in between. The canonical values are put back at the end of CG_DrawActive, and (a no-op unless still
-// swapped) at the start of CG_SavePlayerState, the early prediction and CG_PredictPlayerState. Nothing of the
-// temporary step reaches the game: its events stay in the copy's pe, the weapon state, delta_angles and every
-// cg_pmove field are not swapped, the prediction error, step smoothing, platform cache and item pickups are computed
-// only by the faithful code, and the per-client character info the animation conditions are written to is saved and
-// restored around the step.
+// The tick loop (enhanced/cgame_mp/cg_tick.cpp) predicts the canonical state up to the latest 5 ms tick, 0 to 5 ms
+// before the render time, and most frames at high frame rates have no tick, so the canonical view alone would stand
+// still for several frames (docs/fps.md 7.5). The presentation's own-view step (CG_PresentOwnView, when the own
+// view's mode is PM_STEP_FORWARD) runs one more Pmove on copies of the predicted state and of cg_pmove with the
+// temporary command cl_viewCmd (the newest command's input, this frame's angles with the kick stepped forward,
+// serverTime = floor of the own view's presentation time), then moves the copy on by velocity * the rest of the
+// millisecond. Only its movement fields (origin, velocity, view angles, bob cycle, view height, lean) are put into
+// cg.predictedPlayerState, from the presentation's start to the end of CG_DrawActiveFrame: what the view, the
+// viewmodel and the scene read. The canonical values are put back at the end of CG_DrawActiveFrame, and (a no-op unless
+// still swapped) at the start of every tick, of CG_SavePlayerState, of the early prediction and of
+// CG_PredictPlayerState. Nothing of the temporary step reaches the game: CG_TransitionPlayerState runs in the ticks, on
+// the canonical state; the step's events stay in the copy's pe; the weapon state, delta_angles and every cg_pmove field
+// are not swapped; the prediction error, step smoothing, platform cache and item pickups are computed only by the
+// faithful code; and the per-client character info the animation conditions are written to is saved and restored
+// around the step.
 //
-// The faithful functions are copied here unchanged (src/cgame_mp/cg_predict_mp.cpp, cg_draw_mp.cpp) and wrapped.
+// The faithful functions are copied here unchanged (src/cgame_mp/cg_predict_mp.cpp) and wrapped: the tick loop calls
+// them once per tick (CG_PredictTick, CG_EarlyPredictTick, CG_SaveTickState).
 
 #include <math.h>
 
@@ -23,6 +27,7 @@
 #include "bgame/bg_public.h"
 #include "cgame_mp/cg_local_mp.h"
 #include "enhanced/render_time.h"
+#include "enhanced/tick.h"
 #include "enhanced/view_step.h"
 #include "qcommon/dvar.h"
 
@@ -80,13 +85,6 @@ void sub_1402EF5D0(LocalClientNum_t localClientNum, const playerState_s *ps, cg_
 void sub_1405BAAA0(LocalClientNum_t localClientNum);  // remote camera transitions; may move cl->clViewangles
 void sub_1402D0AC0(LocalClientNum_t localClientNum);  // omnvar-driven state (name unknown)
 
-void CL_SetFOVSensitivityScale(LocalClientNum_t localClientNum, float scale);       // client_mp/cl_cgame_mp.cpp
-void CL_SetUserCmdAimValues(LocalClientNum_t localClientNum, const float *kickAngles);
-void CL_SetUserCmdWeapons(LocalClientNum_t localClientNum, unsigned int weapon, unsigned int offHand,
-                          int alternate);
-void CL_SetExtraButtons(LocalClientNum_t localClientNum, int buttons);
-void CL_RenderScene(LocalClientNum_t localClientNum, const void *refdef, int renderScreen);
-void sub_1402891D0(unsigned int offHand);  // empty in this build (Black Ops' BG_AssertOffhandIndexOrNone)
 
 
 
@@ -351,51 +349,56 @@ static int CG_PredictPlayerStateFaithful(LocalClientNum_t localClientNum)
 }
 
 
-static void CG_DrawActiveFaithful(LocalClientNum_t localClientNum, int renderScreen)
+// The tick loop's pieces (enhanced/include/enhanced/tick.h): the faithful functions, run once per tick on the
+// canonical state (the tick restores any presentation copy before it starts)
+int CG_PredictTick(LocalClientNum_t localClientNum)
 {
-	cg_s *cgameGlob = CG_GetLocalClientGlobals(localClientNum);
-	float fovSensitivityScale = cgameGlob->zoomSensitivity;
-	if (cgameGlob->shellshockSensitivity != 0.0f)
-		fovSensitivityScale = fovSensitivityScale * cgameGlob->shellshockSensitivity;
-	CL_SetFOVSensitivityScale(localClientNum, fovSensitivityScale);
-	float angles[3];
-	angles[0] = cgameGlob->kickAngles[0] + cgameGlob->offsetAngles[0];
-	angles[1] = cgameGlob->offsetAngles[1] + cgameGlob->kickAngles[1];
-	angles[2] = cgameGlob->offsetAngles[2] + cgameGlob->kickAngles[2];
-	CL_SetUserCmdAimValues(localClientNum, angles);
-	sub_1402891D0(cgameGlob->equippedOffHand);
-	CL_SetUserCmdWeapons(localClientNum, cgameGlob->weaponSelect, cgameGlob->equippedOffHand,
-	                     cgameGlob->weaponSelectAlternate);
-	CL_SetExtraButtons(localClientNum, cgameGlob->extraButtons);
-	cgameGlob->extraButtons = 0;
-	CL_RenderScene(localClientNum, cgameGlob->refdef_displayViewport, renderScreen);
+	return CG_PredictPlayerStateFaithful(localClientNum);
+}
+
+void CG_EarlyPredictTick()
+{
+	sub_1402D2410Faithful();
+}
+
+void CG_SaveTickState(LocalClientNum_t localClientNum)
+{
+	CG_SavePlayerStateFaithful(localClientNum);
+}
+
+// The presentation of the own view: the step-forward to its presentation time (a no-op in PM_INTERPOLATE, for a
+// demo, a followed player, an interpolated state or without a view command). It steps from the canonical state, so a
+// second call first puts that back.
+void CG_PresentOwnView(LocalClientNum_t localClientNum)
+{
+	CG_RestoreCanonicalView();
+	CG_ViewAtRenderTime(localClientNum, 1);
+}
+
+// The one restore point (the end of CG_DrawActiveFrame), and the safety nets below and at the start of every tick
+void CG_RestorePresentation()
+{
+	CG_RestoreCanonicalView();
 }
 
 // Store 1402D3170, enhanced: the saved state is the canonical one
 void CG_SavePlayerState(LocalClientNum_t localClientNum)
 {
-	CG_RestoreCanonicalView();
+	CG_RestorePresentation();
 	CG_SavePlayerStateFaithful(localClientNum);
 }
 
-// Store 1402D2410, enhanced
+// Store 1402D2410, enhanced (for callers outside the tick loop)
 void sub_1402D2410()
 {
-	CG_RestoreCanonicalView();
+	CG_RestorePresentation();
 	sub_1402D2410Faithful();
 }
 
-// Store 1402D2480, enhanced: the faithful prediction, then the view at the render time
+// Store 1402D2480, enhanced: the faithful prediction of the canonical state (for the frame without the tick loop;
+// the own view's step is the presentation's, CG_PresentOwnView, called by the enhanced CG_DrawActiveFrame)
 void CG_PredictPlayerState(LocalClientNum_t localClientNum)
 {
-	CG_RestoreCanonicalView();
-	const int predicted = CG_PredictPlayerStateFaithful(localClientNum);
-	CG_ViewAtRenderTime(localClientNum, predicted);
-}
-
-// Store 1402AB060, enhanced: the end of the cgame frame puts the canonical state back
-void CG_DrawActive(LocalClientNum_t localClientNum, int renderScreen)
-{
-	CG_DrawActiveFaithful(localClientNum, renderScreen);
-	CG_RestoreCanonicalView();
+	CG_RestorePresentation();
+	CG_PredictPlayerStateFaithful(localClientNum);
 }

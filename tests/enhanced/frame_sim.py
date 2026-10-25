@@ -1,5 +1,7 @@
-"""Frame-by-frame driving of the enhanced client and cgame frame in the emulator, for the fixed-command and
-render-time-view tests (test_fixed_cmds.py, test_view_step.py). Not a test module itself.
+"""Frame-by-frame driving of the enhanced client and cgame frame in the emulator, for the fixed-command, tick-loop,
+kick, render-time and own-view tests (test_fixed_cmds.py, test_tick.py, test_kick.py, test_render_time.py,
+test_view_step.py): Client (the client's clock and CL_CreateNewCommands) and TickGame (whole frames through the
+enhanced CG_DrawActiveFrame). Not a test module itself.
 
 Every env.call rolls its writes back, so a World keeps everything the calls wrote (globals of both images and the TLS
 block) and writes it back before the next call: the sequence of calls then behaves like consecutive frames.
@@ -196,8 +198,12 @@ class Client:
         w.poke(cl + CL_SERVERTIME, struct.pack("<i", self.server_time))
 
     def create(self):
-        cl = va("clients")
         self.world.call(S["create"], [0], scratch_setup, generator_fakes(self.mouse))
+        return self.collect()
+
+    def collect(self):
+        """The commands stored since the last collect."""
+        cl = va("clients")
         number = struct.unpack("<i", self.world.read(cl + CL_CMDNUMBER, 4))[0]
         new = []
         for n in range(self.cmd_number + 1, number + 1):
@@ -248,52 +254,189 @@ def cgame_fakes(anim=noop):
     return fakes
 
 
-class Game:
-    """A whole client frame: CG_SavePlayerState (the frame's start), CL_CreateNewCommands, CG_PredictPlayerState,
-    CG_DrawActive, with the faithful prediction running the Store build's Pmove (noclip by default)."""
+# --- whole cgame frames through the enhanced CG_DrawActiveFrame (the tick loop, docs/cgame-frame.md 4.2, 4.10) ------
 
-    def __init__(self, env, enabled=True, pm_type=2, kick=(0.25, -0.5, 0.0), pmove=None, anim=noop):
+DAF = "?CG_DrawActiveFrame@@YAHW4LocalClientNum_t@@HW4DemoType@@W4CubemapShot@@HHH@Z"
+CG_KICK_AVEL, CG_FRAMETIME, CG_BGS_TIME, CG_BGS_FRAMETIME = 0xB5268, 0x7188C, 0xFAE58, 0xFAE64
+CG_RECOIL = 0xA9AFC                         # cg_s: the viewmodel's recoilAngles, recoilSpeed
+PE_SEQ, PE_EVENTS = 0x128, 0x12C            # playerState_s: pe.eventSequence, pe.events[4] (8 bytes each)
+TRANS_SEQ = 8                               # transPlayerState_t: eventSequence
+SHOCK_PARMS = SCRATCH + 0xC0000
+OVERLAY = SCRATCH + 0xC1000
+REAL_IN_TICK_LOOP = {"?CG_DrawActive@@YAXW4LocalClientNum_t@@H@Z", "?sub_1402D2410@@YAXXZ",
+                     "?CG_PredictPlayerState@@YAXW4LocalClientNum_t@@@Z"}
+
+
+def _ret0(mu):
+    return 0
+
+
+class Ticks:
+    """What the frame's ticks did, from the fakes: CG_TransitionPlayerState runs once per tick right after the
+    tick's prediction, so it records the tick's time, the predicted state, cg_pmove, the kick before the tick's step,
+    and the events it would fire (the pe sequence numbers between the saved trans state and the new state)."""
+
+    def __init__(self, ps_size=PS_SIZE, shots=None):
+        self.ps_size = ps_size
+        self.rows = []       # (frame, cg.time, cg.oldTime, cg.frametime, bgs.time, bgs.frametime, ps, pm, kick,
+                             #  the viewmodel's recoil) before the tick's integrators
+        self.events = []     # (cg.time, sequence, type, parm)
+        self.entity_events = []
+        self.frame = 0
+        self.shots = dict(shots or {})   # tick time -> kick velocity added (a shot fired in that tick's events)
+        self.counts = {}     # tick time -> events 0x3A to count
+        self.writes = {}     # tick time -> [(cg offset, bytes)] the tick's events write (a weapon change, buttons)
+
+    def transition(self, mu):
+        from win32_display import arg
+        cg = va("cgArray")
+        ps, trans = arg(mu, 1), arg(mu, 2)
+        msec, time, old = struct.unpack("<iii", rd(mu, cg + CG_FRAMETIME, 12))
+        bgs_time, bgs_msec = struct.unpack("<i", rd(mu, cg + CG_BGS_TIME, 4))[0], struct.unpack("<i", rd(mu, cg + CG_BGS_FRAMETIME, 4))[0]
+        state = rd(mu, ps, self.ps_size)
+        pm = rd(mu, static(PREDICT, "cg_pmove"), PM_SIZE)
+        kick = rd(mu, cg + CG_KICK_AVEL, 24)
+        recoil = struct.unpack("<6f", rd(mu, cg + CG_RECOIL, 24))
+        self.rows.append((self.frame, time, old, msec, bgs_time, bgs_msec, state, pm, kick, recoil))
+        seq, saved = struct.unpack("<i", state[PE_SEQ:PE_SEQ + 4])[0], struct.unpack("<i", rd(mu, trans + TRANS_SEQ, 4))[0]
+        for s in range(saved, seq):
+            etype, parm = struct.unpack_from("<ii", state, PE_EVENTS + 8 * (s & 3))
+            self.events.append((time, s, etype, parm))
+        if time in self.shots:
+            vel = struct.unpack("<3f", rd(mu, cg + CG_KICK_AVEL, 12))
+            wmem(mu, cg + CG_KICK_AVEL, struct.pack("<3f", *(v + d for v, d in zip(vel, self.shots[time]))))
+        for off, data in self.writes.get(time, ()):
+            wmem(mu, cg + off, data)
+        n = self.counts.get(time, 0)
+        if n:
+            a = va("unk_143C23F68")
+            wmem(mu, a, struct.pack("<i", struct.unpack("<i", rd(mu, a, 4))[0] + n))
+        return None
+
+    def entity_event(self, mu):
+        from win32_display import arg
+        cg = va("cgArray")
+        self.entity_events.append((struct.unpack("<i", rd(mu, cg + CG_TIME, 4))[0], arg(mu, 1), arg(mu, 2) & 0xFFFFFFFF))
+        return None
+
+
+def frame_fakes(ticks, drawn, sent):
+    """Every callee of CG_DrawActiveFrame that isn't part of the tick loop or the presentation's own view, faked: the
+    network, effects, scene, sound, HUD and weapon-view functions do nothing; the queries answer "no"."""
+    from test_cg_view import CALLEES
+    f = {sym: noop for sym, _, _ in CALLEES if sym not in REAL_IN_TICK_LOOP}
+
+    def memset(mu):
+        from win32_display import arg
+        wmem(mu, arg(mu, 0), bytes([arg(mu, 1) & 0xFF]) * arg(mu, 2))
+    f["?sub_140536260@@YAXPEAXH_K@Z"] = memset
+    f["?CG_GetPredictedPlayerState@@YAPEBUplayerState_s@@W4LocalClientNum_t@@@Z"] = lambda mu: va("cgArray")
+    f["?CG_ProcessSnapshots@@YAXW4LocalClientNum_t@@@Z"] = noop
+    f["?BG_GetShellshockParms@@YAPEAUshellshock_parms_t@@H@Z"] = lambda mu: SHOCK_PARMS
+    f["?CG_AddPacketEntities@@YAHW4LocalClientNum_t@@PEAH@Z"] = _ret0
+    for sym in ("?CL_IsServerLoadingMap@@YA_NXZ", "?sub_140187D70@@YAHW4LocalClientNum_t@@@Z",
+                "?Com_GetClientDObj@@YAPEAUDObj@@HW4LocalClientNum_t@@@Z", "?sub_14017F630@@YA_NW4LocalClientNum_t@@@Z",
+                "?sub_1402CF440@@YAHW4LocalClientNum_t@@@Z", "?sub_1402DF740@@YA_NW4LocalClientNum_t@@@Z",
+                "?sub_1402DF750@@YA_NW4LocalClientNum_t@@@Z", "?BG_IsEMPJammed@@YAHPEBUplayerState_s@@@Z",
+                "?sub_1402EF4D0@@YA_NW4LocalClientNum_t@@PEBUcg_s@@@Z", "?CL_IsGamepadEnabled@@YA_NW4LocalClientNum_t@@@Z",
+                "?sub_1402F8530@@YAIPEBUcg_s@@W4LocalClientNum_t@@@Z", "?sub_1402C5700@@YA_NW4LocalClientNum_t@@@Z",
+                "?BG_OffhandIsUnderbarrelWeapon@@YAHPEBUplayerState_s@@I@Z", "?IN_Frame@@YAXXZ",
+                "?BG_GetViewmodelWeapon@@YA?ATWeapon@@PEBUplayerState_s@@@Z", "?BG_UsingAlternate@@YA_NPEBUplayerState_s@@@Z"):
+        f[sym] = _ret0
+    for sym in ("?BG_IsThirdPersonMode@@YA_NPEBUplayerState_s@@@Z", "?BG_IsAimDownSight@@YA_NTWeapon@@_N@Z",
+                "?sub_140300960@@YAHW4LocalClientNum_t@@PEBUplayerState_s@@H@Z",
+                "?sub_140294C30@@YAHPEBUplayerState_s@@HH@Z"):
+        f[sym] = _ret0
+    for sym in ("?sub_14027B740@@YAXPEBUplayerState_s@@MPEAM@Z", "?sub_14026A870@@YAMPEBUplayerState_s@@H@Z",
+                "?BG_CalculateWeaponMovement@@YAXPEAUweaponState_t@@QEAM1H@Z"):
+        f[sym] = noop                          # the viewmodel's movement half in the ticks: nothing to move
+    for sym in ("?sub_14028F230@@YA_NTWeapon@@_N@Z", "?sub_1402AF8A0@@YA_NPEBUplayerState_s@@H@Z",
+                "?sub_14028F050@@YA_NPEBUplayerState_s@@@Z",
+                "?sub_1402F7640@@YAPEBUXModel@@TWeapon@@PEBUWeaponAttachment@@@Z"):
+        f[sym] = _ret0
+    for sym in ("?sub_14037AEA0@@YAXPEAUXModel@@@Z", "?sub_14037AEF0@@YAXPEBUXModel@@@Z",
+                "?sub_1402F51A0@@YAXPEAUcg_s@@PEAUGfxScaledPlacement@@PEAM@Z",
+                "?sub_1402F30A0@@YAXW4LocalClientNum_t@@PEBUGfxScaledPlacement@@PEBUplayerState_s@@PEAUcentity_s@@H@Z"):
+        f[sym] = noop                          # the viewmodel's placement and scene (CG_AddViewWeapon's own callees)
+    f["?BG_GetNumWeapons@@YAIXZ"] = lambda mu: 256
+    f["?sub_14060DC10@@YAMXZ"] = noop          # the far plane: whatever xmm0 holds goes to the faked FX camera
+    f["?BG_GetOverlay@@YAPEBUADSOverlay@@TWeapon@@_N@Z"] = lambda mu: OVERLAY
+    f["?CG_TransitionPlayerState@@YAXW4LocalClientNum_t@@PEAUplayerState_s@@PEBUtransPlayerState_t@@@Z"] = ticks.transition
+    f["?CG_EntityEvent@@YAXW4LocalClientNum_t@@PEAUcentity_s@@HH_N@Z"] = ticks.entity_event
+
+    def calc_view(mu):
+        drawn.append(rd(mu, va("cgArray"), 0x620))
+        return None
+    f["?CG_CalcViewValues@@YAXW4LocalClientNum_t@@@Z"] = calc_view
+
+    def send(mu):
+        cl = va("clients")
+        sent.append(struct.unpack("<i", rd(mu, cl + CL_CMDNUMBER, 4))[0])
+        return None
+    f["?CL_SendCmd@@YAXW4LocalClientNum_t@@@Z"] = send
+    return f
+
+
+class TickGame:
+    """Whole client frames as the client runs them: the clock (cls.realtime, cls_realtimeUs with a fraction,
+    cl.serverTime with the delta nudges), CG_SavePlayerState, then the enhanced CG_DrawActiveFrame with the tick loop,
+    the faithful prediction running the Store build's Pmove (noclip by default) or a fake, and every callee outside
+    the loop and the own view faked (frame_fakes).
+
+    Collected: per frame the drawn state (what CG_CalcViewValues sees), the state after the frame, the frame's new
+    commands, the command number at CL_SendCmd; per tick (Ticks) the tick's times, state, cg_pmove, kick and events."""
+
+    def __init__(self, env, pm_type=2, kick=(0.0, 0.0, 0.0), kick_avel=(0.0, 0.0, 0.0), pmove=None, anim=noop,
+                 mouse=None, other_flags=0x4000, tick_loop=True, render_time_view=True, shots=None, ps_size=PS_SIZE):
         self.env = env
         self.world = World(env)
-        self.client = Client(env, self.world)
+        self.client = Client(env, self.world, mouse=mouse)
+        self.ticks = Ticks(ps_size, shots)
+        self.drawn, self.sent = [], []
         self.fakes = dict(generator_fakes(self.client.mouse))
         self.fakes.update(cgame_fakes(anim))
+        self.fakes.update(frame_fakes(self.ticks, self.drawn, self.sent))
         if pmove:
             self.fakes[S["pmove"]] = pmove
         w, cg = self.world, va("cgArray")
-        w.poke(env.data("cg_renderTimeView"), struct.pack("<i", 1 if enabled else 0))
+        w.poke(env.data("cg_renderTimeView"), struct.pack("<i", 1 if render_time_view else 0))
+        w.poke(env.data("cg_tickLoop"), struct.pack("<i", 1 if tick_loop else 0))
         start = self.client.realtime + 1
         ps = bytearray(0x620)
-        struct.pack_into("<iiii", ps, 0, start - 5, pm_type, 0, 0)
+        struct.pack_into("<iiiiI", ps, 0, start - 5, pm_type, 0, 0, other_flags)
         struct.pack_into("<i", ps, 0x44, 0x7FF)
         struct.pack_into("<ii", ps, 0x5C, 800, 190)
         struct.pack_into("<i", ps, 0x70, 0x7FF)
         struct.pack_into("<i", ps, 0xBC, 0x7FF)
         struct.pack_into("<if", ps, 0x190, 60, 60.0)
+        struct.pack_into("<i", ps, 0x1E8, 0x7FF)      # viewlocked_entNum: none
         w.poke(cg, bytes(ps))
         w.poke(cg + 0xE08, struct.pack("<i", 0x7FF))
         w.poke(cg + CG_SNAP, struct.pack("<QQ", SNAP, SNAP))
         w.poke(cg + CG_PLATFORM_CONTACT, struct.pack("<i", 0x7FF))
-        w.poke(cg + CG_KICK, struct.pack("<3f", *kick))
-        w.poke(va("clients") + CL_KICK, struct.pack("<3f", *kick))
+        w.poke(cg + CG_KICK_AVEL, struct.pack("<3f3f", *kick_avel, *kick))
+        w.poke(cg + CG_TIME, struct.pack("<i", start - 5))
+        w.poke(cg + 0x3378, struct.pack("<i", 1))     # renderScreen
         w.poke(static(PREDICT, "cg_pmove") + 0x108, struct.pack("<6f", 0, 0, 35, 15, 15, 35))
         w.poke(cg + CG_SAVED, struct.pack("<i", start - 5))
-        self.views, self.after_draw, self.times = [], [], []
+        self.after, self.times, self.frame_commands, self.view_angles = [], [], [], []
+        self.fraction_us = 0
 
-    def call(self, name, args):
-        return self.world.call(S[name], args, scratch_setup, self.fakes)
+    def call(self, name, args, ret="void"):
+        return self.world.call(S[name] if name in S else name, args, scratch_setup, self.fakes, ret=ret)
 
-    def frame(self, msec, delta_change=0, draw=True):
-        c, cg = self.client, va("cgArray")
-        old = struct.unpack("<i", self.world.read(cg + CG_TIME, 4))[0]
+    def frame(self, msec, delta_change=0, fraction_us=None, save=True):
+        c = self.client
         c.clock(msec, delta_change)
-        self.world.poke(cg + CG_OLDTIME, struct.pack("<i", old))
-        self.world.poke(cg + CG_TIME, struct.pack("<i", c.server_time))
-        self.call("save", [0])
-        c.create()
-        self.call("predict", [0])
-        self.views.append(self.world.read(cg, 0x620))
-        if draw:
-            self.call("draw", [0, 0])
-            self.after_draw.append(self.world.read(cg, PS_SIZE))
+        if fraction_us is not None:
+            self.fraction_us = fraction_us
+        self.world.poke(self.env.data("cls_realtimeUs"), struct.pack("<q", c.realtime * 1000 + self.fraction_us))
+        self.ticks.frame = c.frame_index
+        if save:
+            self.call("save", [0])
+        value, _ = self.call(DAF, [0, c.server_time, 0, 0, 0, 1, 0], ret="int")
+        assert value == 1, value
+        self.frame_commands.append(c.collect())
+        self.after.append(self.world.read(va("cgArray"), PS_SIZE))
+        self.view_angles.append(self.world.read(va("clients") + CL_VIEWANGLES, 12))
         self.times.append(c.server_time)

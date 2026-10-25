@@ -46,7 +46,11 @@ Sources and conventions:
   to the unchanged original functions plus a step-forward copy; P0016's grid becomes the tick clock; P0017's partial
   Pmove becomes the own-view category's step-forward.
 - **Reconstructed:** `CG_DrawActiveFrame` (R) with `CG_UpdateThirdPerson` (R) and six small callees (R), tested
-  against the Store exe with every callee a logged fake (1,500 inputs) and mutation-checked (section 6).
+  against the Store exe with every callee a logged fake (1,500 inputs) and mutation-checked (section 6); and
+  `CG_AddViewWeapon` (R, 1,200 inputs) for the viewmodel's split.
+- **Implemented:** stage 1 (4.9: the µs clock, the render time, the mode table) and stage 2 (4.10: the tick loop with
+  commands, prediction, events, kick, the viewmodel's movement and animation, the presentation's own view and
+  viewmodel; P0014-P0017 folded). Left: the `CG_CalcViewValues` split and 4.6's items (stage 3).
 - **New findings** (section 5), not in records/bugs.tsv: P0017 saves and restores the wrong 0x5D8 bytes for the
   character info; a turret scope's zoom sound is started every frame while zooming; 64 hinged objects integrate
   with frame-length Euler steps; the HUD timers run on the wall clock with a one-frame delay in frames;
@@ -479,6 +483,135 @@ scale, the accessor's offset, lead, own-view case and mode clamp, the blend's of
 and the rest of the own view) all fail. Two first attempts survived and got tests: the monotonic hold (a slew put back
 in 1 ms) and the own view's `PM_INTERPOLATE` time (the accessor tested directly).
 
+### 4.10 Stage 2 as implemented (the tick loop)
+
+Stage 2 of the design: 4.2's loop with commands, prediction, events, the kick, the viewmodel's movement and
+animation, and the presentation's own view and viewmodel; P0014-P0017 folded in as 4.5 says. The `CG_CalcViewValues`
+split and 4.6's per-item fixes are left (see the end of this section and section 7).
+
+- **The enhanced `CG_DrawActiveFrame`** (enhanced/cgame_mp/cg_tick.cpp, overrides 1402E7860; the faithful body copied,
+  P0027). Frame start, network and #17 are the original's, once, at the frame's integer `cg.time = cl.serverTime`.
+  Then, when the frame makes grid commands (`cg_tickLoop` on, the connection active, the client's mode 0 or 3):
+  1. **Pacing and input, once.** #38's block without the early prediction, `CL_SyncGpu` (the wait and the late keys,
+     P0009), #43, #44, then CL_Input's device read (`IN_Frame`) and `CL_PrepareFrameInput` (the frame's half of
+     P0016: angles from the keyboard, mouse and gamepad into `clViewangles`, and when ticks are due the buttons and
+     moves into the unfinished command); then #46.
+  2. **0-20 ticks**, tick k at `t_k = lastCmdTime + 5` while `t_k <= cl.serverTime` (P0016's grid). Each: the
+     presentation copies put back; `cg.oldTime/time/frametime = t_{k-1}/t_k/5` and `bgs.time/frametime` alike; the
+     early prediction (#41, the platform's move; `predictFromTime = t_{k-1}` after the frame's first tick); the
+     hand-off `CG_DrawActive` makes (the canonical kick at t_{k-1} plus the offset, the weapons, the extra buttons)
+     and the tick's one command (`CL_EmitTickCommand`: `CL_FinishMove`, `serverTime = t_k`); the faithful
+     `CG_PredictPlayerState` (up to that command); `CG_TransitionPlayerState` and the 0x3A events (#51, #53) of
+     exactly that command; the original `BG_KickAngles` with `cg.frametime` (5); `CG_UpdateViewWeaponAnim` (#66, the
+     viewmodel's XAnim with 5 ms); the viewmodel's movement half (#72, below); `CG_SavePlayerState` (what the next
+     tick's transition, prediction error and early prediction compare with).
+  3. `sub_1402EF6B0` and **`CL_SendCmd` once** (every command of the frame in one packet, as before); the frame's
+     own `cg.time/oldTime/frametime` and `bgs`'s back.
+  4. **The presentation**: the view command `cl_viewCmd` (the newest command's input, `clViewangles` plus the kick
+     stepped forward from the latest tick to `CG_PresentTime(PC_OWN_VIEW)` on a copy, `BG_KickAnglesStep`), the own
+     view's step-forward (P0017, `CG_PresentOwnView`), then #48-#50, #52, #54-#61, #63, #65, #67-#91 as the original
+     (#72 is the presentation half below). `CG_DrawActive` is the faithful one: its hand-off is the canonical kick.
+  5. **The end**: `CG_RestorePresentation()`, the one restore point (the own view's fields today; the viewmodel's
+     presentation never writes the canonical state, so it needs none).
+  Without grid commands it is the original frame (one `CL_Input`, one `CG_PredictPlayerState`, the kick with the
+  frame's `cg.frametime`), plus the own view's step.
+- **P0014 folded** (enhanced/bgame/bg_kick.cpp): `BG_KickAngles` is not replaced any more; the tick calls the
+  original with 5. `BG_KickAnglesStep` is the original's step with a float msec (bit for bit the original for a whole
+  msec), used only for the view command. The carry and the change detection are gone.
+- **P0015 folded** (enhanced/cgame/cg_weapons.cpp, enhanced/bgame/bg_recoil.cpp deleted): `CG_AddViewWeapon` is
+  reconstructed (src/cgame/cg_weapons.cpp, R) and split. `CG_ViewWeaponTick` (every tick) is its movement half, the
+  faithful code from the guards to the copy-back: the ADS state, the `weaponState_t` from cg_s with frametime 0.005,
+  the hip integrator 14027B740, the bob flag, the original `BG_CalculateWeaponMovement` (so the recoil is
+  `BG_CalculateWeaponMovement_Recoil`'s own 5 ms step), and the integrated fields back into cg_s. The presentation
+  `CG_AddViewWeapon` keeps the models loaded, decides the gun flag, builds the same `weaponState_t` on a copy with
+  frametime = `CG_PresentTime(PC_VIEWMODEL)` minus the latest tick (0 in `PM_INTERPOLATE`), runs
+  `BG_CalculateWeaponMovement` on the copy for the origin and angles, places (1402F51A0) and adds the viewmodel
+  (1402F30A0), and copies nothing back. *Deviation:* the tick's `weaponState_t::xyspeed` is 14026A870 of the tick's
+  canonical state; the original reads `cg.xyspeed`, which `CG_CalcViewValues` sets in the presentation from the
+  drawn (stepped) state, so reading it in a tick would feed the presentation into the simulation.
+- **P0016 folded** (enhanced/client_mp/cl_fixed_cmds.cpp): `CL_CreateNewCommands` is split into
+  `CL_PrepareFrameInput` (the frame's half), `CL_EmitTickCommand` (one command) and `CL_BuildViewCmd` (the view
+  command, with the aim angles the caller gives). The enhanced `CL_CreateNewCommands` (for its other callers, the
+  connection phase) is those three in a row, as before.
+- **P0017 folded** (enhanced/cgame_mp/cg_view_step.cpp): the partial Pmove is the presentation's own-view step
+  (`CG_PresentOwnView`); `CG_PredictPlayerState`'s override is now only the faithful body after a restore, and
+  `CG_DrawActive` is not overridden. Restores: the end of the frame (the one point), and as no-op safety nets the
+  start of every tick, `CG_SavePlayerState`, the early prediction, `CG_PredictPlayerState` and `CG_PresentOwnView`
+  (which steps from the canonical state when called twice).
+- **The viewmodel's XAnim** (4.4's *unverified* size, settled): the tree's state is in the global `XAnimInfo` pool,
+  0x40 bytes a node (149D62DF0 + index · 0x40, linked by 16-bit child and sibling indices; the DObj's tree holds the
+  root index at +8), advanced by 14055E880/14055EAA0 from `DObjUpdateClientInfo` (140558FB0). An advance frees nodes
+  whose weight reaches 0 (14055A6F0, the pool's free list) and fires notetracks (14055D220), and the skeleton is
+  built from the tree after the frame (the scene's DObjs). A step-forward on a saved tree would have to save and put
+  back the pool's free list and every node of the tree and keep the notetracks from firing, and the restore would
+  have to wait for the skeleton: **not feasible here**. The viewmodel is drawn at **the latest tick's pose** (the
+  allowed fallback): `CG_UpdateViewWeaponAnim` runs in the ticks only. Its recoil, sway, bob and position are stepped
+  forward as above.
+- **Deviations from 4.2**: #17 (1402D3230: the interpolated or entity-reset state, `predictFromTime`) stays once per
+  frame at the frame's time; it interpolates by `cg.frameInterpolation` and sets the remote view origin, which belong
+  to the frame. A state reset to the snapshot while on an entity is then predicted tick by tick from the reset, the
+  platform moved from the snapshot's time in the first tick and from the previous tick after that. The delayed
+  entities (#52) run once in the presentation, after the ticks' transitions, instead of between the transition and
+  the 0x3A events. #48-#50 (the viewmodel's models) stay in the presentation, so a model change reaches
+  `CG_UpdateViewWeaponAnim` in the next frame's ticks.
+- **Not in this stage**: the `CG_CalcViewValues` split (#68): its DiffTrack filters are in the remote, killstreak and
+  turret camera functions (1405B7B30 through 1405B8880/1405B88C0/1405B8840, 1405B88F0, 1402EC620), which run only in
+  those camera modes; the normal first-person view in it is closed-form plus the stepped state. 4.6's items (#22, #28,
+  #33, #35, #36, #39, #46, #57, #65, #69) still run once a frame in the presentation with the frame's time.
+
+Tests (tests/enhanced/test_tick.py, test_kick.py, test_recoil.py, test_view_weapon.py, test_view_step.py,
+test_render_time.py; frame_sim.TickGame drives whole frames: the clock with a fraction and the delta nudges,
+`CG_SavePlayerState`, the enhanced `CG_DrawActiveFrame` with every callee outside the loop faked):
+
+- **(a)** 1 s at 60, 144, 165, 240, 360, 500 and 1000 fps (fractional periods on the integer clock) with nudges of +1,
+  -1 and -2 ms, forward held, three shots (kick velocity added in the events of fixed ticks), against 5 ms frames:
+  at every tick `cg.oldTime/time/frametime` and `bgs.time/frametime` are t_{k-1}/t_k/5, and the whole 0x3328-byte
+  predicted state (the Store build's Pmove, noclip), `cg_pmove`, the kick, the viewmodel's recoil and every usercmd
+  are bit-identical. With a Pmove that makes a predictable event every 25 ms of command time: every event fired once,
+  at the same tick; the 0x3A events of counted ticks too. With the mouse moving the commands carry each frame's
+  angles (input is read once a frame by design); a 5 ms run fed the same angles per tick gives bit-identical states.
+  A tick's weapon change and extra buttons reach the next tick's command at every frame rate. A presented state
+  left in place (no `CG_SavePlayerState` before the frame) is never simulated. The platform's move per tick.
+  `CG_UpdateViewWeaponAnim` once per tick with the tick's times, never in the presentation.
+- **(b)** The drawn angles at 1000 fps and 4.17 ms frames, the mouse turning every frame, are bit for bit the Store
+  build's own frame pipeline's (one command per frame at `cl.serverTime`): no tick boundary between this frame's input
+  and its view. The view command carries the kick stepped to the render time, every real command the canonical kick
+  of the tick before it. test_view_step.py and test_render_time.py's own-view tests, now through the tick loop: the
+  drawn origin moves every frame by its own time, it is the fraction-0 view plus velocity · fraction, the canonical
+  state after the frame is the step-off run's, the step's events never reach `pe` or the transition, the character
+  info, the step-up smoothing, the zero-leftover angles.
+- **(c)** test_render_time.py's other-entity tests, unchanged.
+- **(d)** Each other category switched to `PM_EXTRAPOLATE` leaves the own view (drawn state and view command) and the
+  canonical state identical; the own view's `PM_INTERPOLATE` draws the canonical state; the viewmodel follows only
+  its own mode (`PM_EXTRAPOLATE` +7 ms, `PM_INTERPOLATE` 0, the own view's mode nothing).
+- **The kick** (test_kick.py, P0014's properties): bit for bit the original's 5 ms run at every tick for eight frame
+  patterns and three weapons, after shots on and off the previous kick, cleared without otherFlags 0x4000,
+  an outside change integrated from, other callers the original; the view command's kick moves every frame.
+- **The recoil** (test_recoil.py, P0015's): the Store build's recoil in 5 ms steps at every tick for eight patterns,
+  aimed, at the hip and half way; a second shot from the canonical state; the drawn recoil the original step of the
+  rest; a non-ADS weapon left alone.
+- **The split** (test_view_weapon.py, the differential test's 1,200 inputs): outside the loop the enhanced
+  `CG_AddViewWeapon` makes the Store build's calls and writes; the tick half writes exactly the original's
+  integrated state with the original's `weaponState_t`; the presentation half writes none of it.
+- **The faithful frame**: with the loop and the step off, the enhanced `CG_DrawActiveFrame` makes the Store build's
+  calls and writes for 400 of test_cg_view.py's inputs.
+
+Mutation checks: 37 mutations of the enhanced code all fail: the tick's times (cg.frametime, cg.oldTime,
+bgs.time, bgs.frametime not set), the stepped kick written into cg_s, the tick's kick hand-off dropped or replaced by a
+stepped kick (the stepped kick in the usercmd), the end restore, the tick's restore, `CG_SavePlayerState`'s and
+`CG_PresentOwnView`'s restores, the own view's kick and the viewmodel reading another category's time or mode, the
+0x3A events, the tick's save, the transition only in a frame's first tick, the weapon and extra-button hand-offs,
+the platform chain, `CL_SendCmd` per tick, the frame's time not restored, one tick per frame at most, the viewmodel's
+tick half dropped, its animation dropped from the tick or run again in the presentation, the 0x3A events and the kick
+run again in the presentation, the presentation's recoil copied back, the tick's speed from cg.xyspeed, the drawn
+recoil not stepped, the faithful/loop switch, the command time, the view command's aim, the step's 5 ms cap, the own
+view's step, the loop flag. Two first attempts survived and got stronger tests: the kick hand-off (the test's frames
+now include several ticks) and a stepped hand-off made in the presentation (equivalent as written, since every tick
+and `CG_DrawActive` hand over the canonical kick again; replaced by a stepped kick in the tick's hand-off). 25
+mutations of the reconstructed `CG_AddViewWeapon` (every condition, mask, shift and constant, each copied-back field,
+the gun flag, the bob flag) all fail its differential test; the first attempt at `viewmodelIndex > 0` survived (no
+input had index 1; added).
+
 ## 5. Findings
 
 New, for the enhanced build (not in records/bugs.tsv; listed here and in the report):
@@ -519,6 +652,7 @@ New, for the enhanced build (not in records/bugs.tsv; listed here and in the rep
 | `CL_IsServerLoadingMap`, `CL_SetWaitingOnServerToLoadMap` | 140314FE0, 1403165A0 | src/client_mp/cl_main_mp.cpp | test_cg_view.py (bools 0/1: the original moves the raw byte) |
 | `CG_DObjUpdateInfo` | 1402B3140 | src/cgame_mp/cg_ents_mp.cpp | test_cg_view.py |
 | `Key_AddCatcher` | 1403106C0 | src/client/cl_keys.cpp | test_cg_view.py |
+| `CG_AddViewWeapon` | 1402F38B0 | src/cgame/cg_weapons.cpp | test_cg_weapons.py: 1,200 inputs, every callee a logged fake (the models, the gun and bob tests, the hip integrator, `BG_CalculateWeaponMovement` with the whole `weaponState_t` but the bob angles the original leaves uninitialised, the placement and the scene), writes compared |
 
 Mutation checks: 48 mutations (38 of `CG_DrawActiveFrame`: comparisons, constants, dropped statements, swapped
 arguments and call order, the early return's TLS clear; 4 of `CG_UpdateThirdPerson`; 1 to 2 of each small function).
@@ -536,9 +670,13 @@ static_assert in the file that uses it.
 ## 7. Not done
 
 - The big callees were followed only far enough to place them (section 2); those marked *unverified* were read, not
-  run. `CG_ProcessSnapshots`, `CG_CalcViewValues`, `CG_AddViewWeapon`, `CG_AddPacketEntities` and the effects
-  workers are not reconstructed; splitting #68 and #72 into tick and presentation halves needs them reconstructed
-  first.
+  run. `CG_ProcessSnapshots`, `CG_CalcViewValues`, `CG_AddPacketEntities` and the effects workers are not
+  reconstructed; splitting #68 into tick and presentation halves needs it and its camera callees (1405B7B30,
+  1405B88F0, 1402EC620) reconstructed first (4.10).
 - The six small unnamed callees (sub_1402D4820, sub_140178750, sub_1402DF740, sub_1402DF750, sub_140657FC0,
   sub_1401B3710) are fully read (names.tsv) but not reconstructed: none of them reads a clock.
-- The viewmodel XAnim save/restore for step-forward (4.4) is untested: its size and cost are *unverified*.
+- The viewmodel's XAnim is not stepped forward (4.10: not feasible with the pool's frees and notetracks); the
+  viewmodel is drawn at the latest tick's pose.
+- 1402F51A0 (the viewmodel's placement) keeps state of its own at cg+0xB52A0 (a vector it subtracts the new origin
+  from, scaled by the cg_gun_x/y/z dvars): read, not reconstructed; it runs in the presentation once a frame, so if
+  it integrates it is still frame-rate dependent (*unverified*, stage 3).

@@ -154,11 +154,16 @@ static int CL_CommandsDue(clientActive_t *cl)
 	return n;
 }
 
-// Store 14030BB00 (src/client_mp/cl_input.cpp), enhanced
-void CL_CreateNewCommands(LocalClientNum_t localClientNum)
+// The frame's half of CL_CreateNewCommands: the input of this frame (view angles, and when commands are due their
+// buttons and moves) into the unfinished command the frame's commands are made from. Returns how many commands are
+// due (0..20), or -1 when the frame makes no grid commands (not primed yet, or the default-command mode, whose one
+// command this makes as the original does).
+static usercmd_s s_unfinished;
+
+int CL_PrepareFrameInput(LocalClientNum_t localClientNum)
 {
 	if (CL_GetLocalClientUIGlobals(localClientNum)->connectionState < CA_PRIMED)
-		return;
+		return -1;
 
 	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
 	const int mode = unk_143E96824;
@@ -168,7 +173,7 @@ void CL_CreateNewCommands(LocalClientNum_t localClientNum)
 		MSG_SetDefaultUserCmd((const playerState_s *)&cl->snap, &cl->cmds[cl->cmdNumber & CMD_MASK]);
 		s_grid.valid = 0;
 		cl_viewCmdValid = 0;
-		return;
+		return -1;
 	}
 
 	sub_14017AB80(&unk_140CFC520, cl->clViewangles, 0, sizeof(cl->clViewangles), false);
@@ -230,28 +235,52 @@ void CL_CreateNewCommands(LocalClientNum_t localClientNum)
 	}
 
 	if (count)
-	{
 		s_grid.lastCmdFrameTime = com_frameTime;
-		usercmd_s unfinished;
-		Enh_Copy(&unfinished, &cmd, sizeof(cmd));
-		for (int i = 0; i < count; ++i)
-		{
-			usercmd_s out;
-			Enh_Copy(&out, &unfinished, sizeof(out));
-			CL_FinishMove(localClientNum, &out);  // the first takes cgameExtraButtons and clears them
-			s_grid.lastCmdTime += CMD_STEP_MSEC;
-			out.serverTime = s_grid.lastCmdTime;
-			++cl->cmdNumber;
-			Enh_Copy(&cl->cmds[cl->cmdNumber & CMD_MASK], &out, sizeof(out));
-		}
-	}
+	Enh_Copy(&s_unfinished, &cmd, sizeof(cmd));
+	sub_14017AAE0(&unk_140CFC520, cl->clViewangles, 0, sizeof(cl->clViewangles));
+	return count;
+}
 
-	// the temporary view command: the newest command's input with this frame's angles, at cl->serverTime
+// The tick's half: one command at the next grid time from the frame's unfinished command (CL_FinishMove adds the
+// weapons, the angles with cgameKickAngles and cgameExtraButtons, which it clears); returns its serverTime
+int CL_EmitTickCommand(LocalClientNum_t localClientNum)
+{
+	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+	usercmd_s out;
+	Enh_Copy(&out, &s_unfinished, sizeof(out));
+	CL_FinishMove(localClientNum, &out);
+	s_grid.lastCmdTime += CMD_STEP_MSEC;
+	out.serverTime = s_grid.lastCmdTime;
+	++cl->cmdNumber;
+	Enh_Copy(&cl->cmds[cl->cmdNumber & CMD_MASK], &out, sizeof(out));
+	return out.serverTime;
+}
+
+int CL_LastTickTime()
+{
+	return s_grid.lastCmdTime;
+}
+
+// The temporary view command: the newest command's input with this frame's angles plus aimAngles (the kick and the
+// offset, as CL_FinishMove adds cgameKickAngles), at cl->serverTime
+void CL_BuildViewCmd(LocalClientNum_t localClientNum, const float *aimAngles)
+{
+	clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
 	Enh_Copy(&cl_viewCmd, &cl->cmds[cl->cmdNumber & CMD_MASK], sizeof(cl_viewCmd));
 	cl_viewCmd.serverTime = cl->serverTime;
 	for (int i = 0; i < 3; i++)
-		cl_viewCmd.angles[i] = (unsigned short)(int)floor((double)((cl->clViewangles[i] + cl->cgameKickAngles[i]) * 182.04445f + 0.5f));
+		cl_viewCmd.angles[i] = (unsigned short)(int)floor((double)((cl->clViewangles[i] + aimAngles[i]) * 182.04445f + 0.5f));
 	cl_viewCmdValid = 1;
+}
 
-	sub_14017AAE0(&unk_140CFC520, cl->clViewangles, 0, sizeof(cl->clViewangles));
+// Store 14030BB00 (src/client_mp/cl_input.cpp), enhanced: for the callers outside the cgame's tick loop (the
+// connection phase): the frame's input, every due command, the view command
+void CL_CreateNewCommands(LocalClientNum_t localClientNum)
+{
+	const int count = CL_PrepareFrameInput(localClientNum);
+	if (count < 0)
+		return;
+	for (int i = 0; i < count; ++i)
+		CL_EmitTickCommand(localClientNum);
+	CL_BuildViewCmd(localClientNum, CL_GetLocalClientGlobals(localClientNum)->cgameKickAngles);
 }

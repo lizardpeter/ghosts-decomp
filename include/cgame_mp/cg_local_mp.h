@@ -166,7 +166,10 @@ struct cg_s
 		};
 	};
 	centity_s *predictedPlayerEntity;  // the player's own entry in cg_entitiesArray, set by CG_PredictPlayerState
-	unsigned char unknown3330[0x3350 - 0x3330];
+	int viewmodelAdsState;             // CG_AddViewWeapon: 0 once fully aimed down a sight, 1 back at the hip (name unknown)
+	float weapLastIdleFactor;          // the viewmodel's weaponState_t, kept between frames (CG_AddViewWeapon):
+	float weapBaseOrigin[3];           // fLastIdleFactor, baseOrigin, baseAngles
+	float weapBaseAngles[3];
 	int predictedErrorTime;            // cg.oldTime when the last prediction error was found
 	float predictedError[3];           // decayed over cg_errordecay ms by CG_CalcViewValues
 	int clientNum;                     // the local player's client number (Black Ops' cg.clientNum)
@@ -205,7 +208,9 @@ struct cg_s
 	unsigned char unknown71920[0x7192C - 0x71920];
 	int refdef_time;               // cg.time: the renderer's scene time (R_SetLodOrigin's caller copies it)
 	int refdef_frametime;          // cg.frametime (name unknown)
-	unsigned char unknown71934[0x71A48 - 0x71934];
+	unsigned char unknown71934[0x71944 - 0x71934];
+	unsigned int unknown71944[2];  // zeroed (one 8-byte store) by every CG_AddViewWeapon (name unknown)
+	unsigned char unknown7194C[0x71A48 - 0x7194C];
 	int timedFlagStart;            // a flag that clears itself timedFlagDuration ms after timedFlagStart (name unknown)
 	int timedFlagLastTime;
 	int timedFlagDuration;
@@ -216,7 +221,13 @@ struct cg_s
 	float refdefViewAngles[3];     // the view angles the frame is drawn with (shake, kick and bob added)
 	unsigned char unknownA9A9C[0xA9AA8 - 0xA9A9C];
 	float aimAssistView[3][3];     // the three vectors AimAssist_UpdateScreenTargets (140178CC0) gets (names unknown)
-	unsigned char unknownA9ACC[0xB1B18 - 0xA9ACC];
+	unsigned char unknownA9ACC[0xA9AD8 - 0xA9ACC];
+	float weapSwayViewAngles[3];   // the viewmodel's weaponState_t, kept between frames (CG_AddViewWeapon): swayViewAngles,
+	float weapSwayAngles[3];       // swayAngles, swayOrigin, recoilAngles, recoilSpeed
+	float weapSwayOrigin[3];
+	float weapRecoilAngles[3];
+	float weapRecoilSpeed[3];
+	unsigned char unknownA9B14[0xB1B18 - 0xA9B14];
 	float zoomSensitivity;         // tan(fov / 2) / tan(65 / 2): the mouse sensitivity scale while zoomed
 	unsigned char unknownB1B1C[0xB2750 - 0xB1B1C];
 	int platformContactEntity;      // a moving platform Pmove reported contact with, kept once set (name unknown)
@@ -231,11 +242,18 @@ struct cg_s
 	float hybridScopeFrac;          // how far a switch has gone (name unknown)
 	unsigned char unknownB4F00[0xB4F0C - 0xB4F00];
 	unsigned int equippedOffHand;   // Weapon
-	unsigned char unknownB4F10[0xB5268 - 0xB4F10];
+	unsigned char unknownB4F10[0xB5240 - 0xB4F10];
+	int damageTime;                 // cg.time of the last damage, 0 for none: the viewmodel's damage kick (name unknown)
+	unsigned char unknownB5244[0xB525C - 0xB5244];
+	float v_dmg_pitch;              // the viewmodel's damage kick (weaponState_t's v_dmg_pitch, v_dmg_roll)
+	float v_dmg_roll;
+	float xyspeed;                  // the player's horizontal speed, for the viewmodel's bob (CG_CalcViewValues sets it)
 	float kickAVel[3];              // the view kick's angular velocity (BG_KickAngles)
 	float kickAngles[3];            // the view kick from firing (BG_KickAngles)
 	float offsetAngles[3];          // the ADS view error offset
-	unsigned char unknownB528C[0xB52F0 - 0xB528C];
+	float gunAngles[2];             // the viewmodel's pitch and yaw as placed (1402F51A0; the view's without a weapon)
+	float gunAdsOffset[3];          // the viewmodel's offset from the view, scaled by fWeaponPosFrac (1402F51A0)
+	unsigned char unknownB52A0[0xB52F0 - 0xB52A0];
 	float compassMapWorldSize[2];
 	unsigned char unknownB52F8[0xB5310 - 0xB52F8];
 	const shellshock_parms_t *shellshock_parms;  // shellshock (Black Ops' cg.shellshock)
@@ -281,7 +299,8 @@ struct cg_s
 	float savedViewangles[3];
 	transPlayerState_t savedTrans;
 	unsigned char savedPe[0x2C];    // its playerEvents_t pe, restored after the early prediction
-	unsigned char unknown10E8C4[0x10ED48 - 0x10E8C4];
+	float hipViewValue;             // what 14027B740 computes from the frame's time at the hip (name unknown)
+	unsigned char unknown10E8C8[0x10ED48 - 0x10E8C8];
 	int hudGrenadeCount;            // cleared every frame (Black Ops' CG_ClearHudGrenades role, name unknown)
 	unsigned char unknown10ED4C[0x10EDBC - 0x10ED4C];
 	float radarJamLevel;            // 0..1, moved 1/15 of the way to its target every frame (name unknown)
