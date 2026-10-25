@@ -141,13 +141,27 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
             more=kernel.Thread32First(handle,C.byref(entry))
             while more:
                 if entry.pid==process.pid:
-                    thread=kernel.OpenThread(0xA,False,entry.tid)
+                    # Include THREAD_QUERY_INFORMATION to attribute the CPU
+                    # load to the sampled stack, instead of only seeing total
+                    # user CPU time. Fall back to the original rights if denied.
+                    thread=kernel.OpenThread(0x4A,False,entry.tid)
+                    queried=bool(thread)
+                    if not thread:
+                        thread=kernel.OpenThread(0xA,False,entry.tid)
                     if thread:
                         suspended=False
                         try:
                             suspended=kernel.SuspendThread(thread)!=0xFFFFFFFF
                             if suspended:
-                                threads.append({'tid':entry.tid,'registers':registers(entry.tid)})
+                                snapshot={'tid':entry.tid,'registers':registers(entry.tid)}
+                                if queried:
+                                    times=[W.FILETIME() for _ in range(4)]
+                                    kernel.GetThreadTimes.argtypes=[W.HANDLE,*([C.POINTER(W.FILETIME)]*4)]
+                                    if kernel.GetThreadTimes(thread,*(C.byref(t) for t in times)):
+                                        snapshot['cpu_seconds']={
+                                            name:round(((value.dwHighDateTime<<32)|value.dwLowDateTime)/1e7,3)
+                                            for name,value in zip(('kernel','user'),times[2:])}
+                                threads.append(snapshot)
                         finally:
                             if suspended: kernel.ResumeThread(thread)
                             kernel.CloseHandle(thread)
