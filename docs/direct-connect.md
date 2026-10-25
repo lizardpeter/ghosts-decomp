@@ -36,6 +36,19 @@ The Windows launch experiment, with the original complete game installation avai
 .\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -HostEndpoint '0.0.0.0:27016' -Map 'mp_prison' -GameType 'war'
 ```
 
+Before attempting a live join, a direct package can instead use its included
+`ProbeStartup.ps1` and `native_smoke.py` to investigate a black menu or
+asset-loader wait on a complete Windows game installation and actual GPU.
+The opt-in probe requires an elevated PowerShell and 64-bit Python,
+installs a temporary firewall block for the custom EXE, and records original
+loader-worker state without running a network game. The rule is removed after
+the bounded test, and any optional desktop capture requires `-Screenshot`.
+See [native-launch.md](native-launch.md) for exact invocation and privacy.
+
+Normal `+direct_player` execution remains deferred by the original engine;
+P0029 independently prepares a validated custom local identity during
+`NET_Init`, but does not start a map or bypass incomplete asset loading.
+
 The launcher verifies package hashes, prepares a persistent local profile, then queues `direct_player` and
 `connect` or `direct_host` after engine startup. Use `-Profile one` / `-Profile two` for independent local
 profiles and data folders on one Windows account. Numeric IPv4 and a nonzero explicit
