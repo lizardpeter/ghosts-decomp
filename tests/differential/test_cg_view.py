@@ -564,6 +564,24 @@ def _flag_input(r, args):
     return {"args": args, "setup": setup}
 
 
+def _own_body_input(r):
+    client = r.choice([0, 3, 17])
+    obj = r.choice([0, 0x5150000])
+    cent = r.choice([0, 0x5160000])
+
+    def setup(w):
+        CURRENT["m"] = w.m
+        cg = va("cgArray")
+        w.write(cg + 0x17C, struct.pack("<i", client))
+        w.write(cg + 0x3328, struct.pack("<Q", cent))
+    fakes = {"?Com_GetClientDObj@@YAPEAUDObj@@HW4LocalClientNum_t@@@Z": _logged("Com_GetClientDObj", "ii", obj),
+             "?CG_DObjUpdateInfo@@YAXPEBUcg_s@@PEAUDObj@@_N@Z": _logged("CG_DObjUpdateInfo", "pqb"),
+             "?CG_ProcessClientNoteTracks@@YAXPEAUcg_s@@H@Z": _logged("CG_ProcessClientNoteTracks", "pi"),
+             "?sub_1402CDF70@@YAXW4LocalClientNum_t@@PEAUcentity_s@@@Z": _logged("sub_1402CDF70", "iq"),
+             "?sub_1402B4F90@@YAXW4LocalClientNum_t@@PEAUcentity_s@@@Z": _logged("sub_1402B4F90", "iq")}
+    return {"args": [0], "setup": setup, "fakes": fakes}
+
+
 r = random.Random(4816)
 CASES = [
     {"symbol": SYM["CG_DrawActiveFrame"], "build": STORE, "ret": "int",
@@ -580,6 +598,8 @@ CASES = [
      "inputs": [_flag_input(r, [0, r.choice([0, 1])]) for _ in range(40)]},
     {"symbol": "?CG_DObjUpdateInfo@@YAXPEBUcg_s@@PEAUDObj@@_N@Z", "build": STORE, "ret": "void",
      "inputs": [_dobj_input(r) for _ in range(60)]},
+    {"symbol": "?sub_1402CEB10@@YAXW4LocalClientNum_t@@@Z", "build": STORE, "ret": "void",
+     "inputs": [_own_body_input(r) for _ in range(40)]},
     {"symbol": "?Key_AddCatcher@@YAXW4LocalClientNum_t@@H@Z", "build": STORE, "ret": "void",
      "inputs": [_flag_input(r, [0, r.choice([8, 0x10, 0, -1, r.getrandbits(31)])]) for _ in range(40)]},
 ]

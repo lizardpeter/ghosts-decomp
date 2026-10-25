@@ -317,3 +317,138 @@ void CG_AddViewWeapon(LocalClientNum_t localClientNum)
 	sub_1402F51A0(cgameGlob, &placement, angles);
 	sub_1402F30A0(localClientNum, &placement, ps, cgameGlob->predictedPlayerEntity, drawGun);
 }
+
+// --- Store 1402FB790: the timed repeats on the microsecond clock (B0079) -----------------------------------------
+//
+// The original advances its 64 repeating events by (int)(timescale * (the wall clock's whole milliseconds since the
+// last call)), truncated per call: at a timescale below 1 and 1 ms frames that is 0 every frame, so they never run
+// out at 1000 fps and do at 60 (and at 1 the per-call truncation is exact). Enhanced: the scaled time is measured in
+// microseconds (Sys_Microseconds) and the part below a millisecond is carried to the next call, so the repeats see the
+// same scaled milliseconds over any span whatever the frame rate; the rest of the function is the original's. With a
+// timescale of 1 and a clock on whole milliseconds it is the original bit for bit. The queue is still handed over on
+// the call after (the original's one-call hand-off; it runs once a frame, before the ticks).
+
+#include "enhanced/render_time.h"
+
+struct TimedRepeat
+{
+	unsigned char event[0x20];
+	unsigned int elapsed;
+	unsigned int sinceLast;
+	unsigned int interval;
+	unsigned int count;
+	int active;
+	int now;
+	int counted;
+	unsigned char unknown3C[4];
+};
+
+struct TimedRepeatEvent
+{
+	int frame;
+	unsigned char unknown4[4];
+	unsigned char event[0x20];
+};
+
+extern TimedRepeat unk_143E8EF80[64];
+extern TimedRepeatEvent unk_143E8E580[64];
+extern int unk_143E8FFD8;
+extern int unk_143E8FF84;
+extern const dvar_t *cl_paused;
+
+extern "C" void Com_Memcpy(void *dest, const void *src, const unsigned int count);
+int Sys_Milliseconds();
+float sub_140460E10();
+unsigned int sub_14028EEA0(int weapon, bool isAlternate);
+void sub_1402F6560(int a, unsigned long long b, int weapon, int d, bool e, bool isAlternate, bool g, bool h, int i);
+
+struct RepeatClock
+{
+	long long lastUs;
+	double carryUs;  // scaled microseconds not yet given out as whole milliseconds
+	int valid;
+};
+static RepeatClock s_repeatClock;
+
+void sub_1402FB790()
+{
+	const long long nowUs = Sys_Microseconds();
+	const int now = Sys_Milliseconds();
+	const float scale = sub_140460E10();
+	++unk_143E8FFD8;
+	RepeatClock *c = &s_repeatClock;
+	if (!c->valid)
+	{
+		c->lastUs = (long long)unk_143E8FF84 * 1000;
+		c->carryUs = 0.0;
+		c->valid = 1;
+	}
+	const double scaled = c->carryUs + (double)scale * (double)(nowUs - c->lastUs);
+	c->lastUs = nowUs;
+	unk_143E8FF84 = now;
+	int msec = -1;
+	if (scaled >= 0.0 && scaled < 2147483647000.0)
+	{
+		msec = (int)(scaled / 1000.0);
+		c->carryUs = scaled - (double)msec * 1000.0;
+	}
+	if (msec < 0 || cl_paused->current.integer != 0)
+	{
+		c->carryUs = 0.0;  // as the original, time that isn't given out is dropped
+		return;
+	}
+	for (int i = 0; i < 64; ++i)
+	{
+		TimedRepeat *t = &unk_143E8EF80[i];
+		if (!t->active)
+			continue;
+		t->elapsed += msec;
+		if (t->elapsed > 300)
+		{
+			t->active = 0;
+			continue;
+		}
+		if (!t->counted)
+		{
+			const unsigned int limit = sub_14028EEA0(*(const int *)&t->event[0x10], t->event[0x19]);
+			if (limit - 1 <= 3 && t->count >= limit)
+			{
+				t->count = 0;
+				t->active = 0;
+				t->sinceLast = 0;
+				continue;
+			}
+		}
+		unsigned int since = t->sinceLast;
+		if (!t->now)
+		{
+			since += msec;
+			t->sinceLast = since;
+		}
+		if (since < t->interval && !t->now)
+			continue;
+		t->sinceLast = 0;
+		for (unsigned int j = 0; j < 64; ++j)
+		{
+			if (!unk_143E8E580[j].frame)
+			{
+				unk_143E8E580[j].frame = unk_143E8FFD8;
+				Com_Memcpy(unk_143E8E580[j].event, t->event, 0x20);
+				break;
+			}
+		}
+		++t->count;
+		t->now = 0;
+	}
+	const int previous = unk_143E8FFD8 - 1;
+	for (int j = 0; j < 64; ++j)
+	{
+		TimedRepeatEvent *q = &unk_143E8E580[j];
+		if (!q->frame || q->frame != previous)
+			continue;
+		const unsigned char *e = q->event;
+		sub_1402F6560(*(const int *)e, *(const unsigned long long *)(e + 8), *(const int *)(e + 0x10),
+		              *(const int *)(e + 0x14), e[0x18], e[0x19], e[0x1A], e[0x1B], *(const int *)(e + 0x1C));
+		q->frame = 0;
+	}
+}

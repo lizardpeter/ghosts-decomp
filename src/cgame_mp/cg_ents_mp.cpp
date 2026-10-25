@@ -42,3 +42,24 @@ void CG_DObjUpdateInfo(const cg_s *cgameGlob, DObj *obj, bool notify)
 {
 	DObjUpdateClientInfo(obj, (float)cgameGlob->frametime * 0.001f, notify);
 }
+
+DObj *Com_GetClientDObj(int handle, LocalClientNum_t localClientNum);
+void CG_ProcessClientNoteTracks(cg_s *cgameGlob, int clientNum);
+void sub_1402CDF70(LocalClientNum_t localClientNum, centity_s *cent);  // the player's own model posed (name unknown)
+void sub_1402B4F90(LocalClientNum_t localClientNum, centity_s *cent);  // ... and added to the scene (name unknown)
+
+// Store 1402CEB10 (name unknown): the player's own model in third person, from CG_DrawActiveFrame when 1402CF440 says
+// so: its XAnim advanced by the frame (CG_DObjUpdateInfo with notetracks, then CG_ProcessClientNoteTracks), then
+// posed and added to the scene for cg.predictedPlayerEntity
+void sub_1402CEB10(LocalClientNum_t localClientNum)
+{
+	cg_s *cgameGlob = CG_GetLocalClientGlobals(localClientNum);
+	DObj *obj = Com_GetClientDObj(cgameGlob->predictedPlayerState.clientNum, localClientNum);
+	if (obj)
+	{
+		CG_DObjUpdateInfo(cgameGlob, obj, true);
+		CG_ProcessClientNoteTracks(cgameGlob, cgameGlob->predictedPlayerState.clientNum);
+	}
+	sub_1402CDF70(localClientNum, cgameGlob->predictedPlayerEntity);
+	sub_1402B4F90(localClientNum, cgameGlob->predictedPlayerEntity);
+}

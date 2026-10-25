@@ -214,3 +214,111 @@ void CG_AddViewWeapon(LocalClientNum_t localClientNum)
 	cgameGlob->weapLastIdleFactor = ws.fLastIdleFactor;
 	sub_1402F30A0(localClientNum, &placement, ps, cgameGlob->predictedPlayerEntity, drawGun);
 }
+
+// --- Store 1402FB790: the timed repeats ---------------------------------------------------------------------------
+
+// A repeating event (name unknown): 64 at 143E8EF80. The first 0x20 bytes are the event 1402F6560 is called with
+// (weapon at +0x10, its alternate flag at +0x19); every `interval` ms of its own clock it is queued, at most until
+// the weapon's count (14028EEA0, 1..4) is reached when `counted` is clear; 300 ms after its start it ends.
+struct TimedRepeat
+{
+	unsigned char event[0x20];
+	unsigned int elapsed;    // ms since it started
+	unsigned int sinceLast;  // ms since it was last queued
+	unsigned int interval;
+	unsigned int count;      // times queued
+	int active;
+	int now;                 // queue it on the next call whatever the interval
+	int counted;             // nonzero: no count limit
+	unsigned char unknown3C[4];
+};
+static_assert(sizeof(TimedRepeat) == 0x40, "TimedRepeat size");
+
+// The queue (name unknown): 64 at 143E8E580, handed to 1402F6560 one call after they are queued
+struct TimedRepeatEvent
+{
+	int frame;               // unk_143E8FFD8 when queued; 0 for a free slot
+	unsigned char unknown4[4];
+	unsigned char event[0x20];
+};
+static_assert(sizeof(TimedRepeatEvent) == 0x28, "TimedRepeatEvent size");
+
+extern TimedRepeat unk_143E8EF80[64];
+extern TimedRepeatEvent unk_143E8E580[64];
+extern int unk_143E8FFD8;  // the calls so far (name unknown)
+extern int unk_143E8FF84;  // Sys_Milliseconds at the last call (name unknown)
+extern const dvar_t *cl_paused;
+
+extern "C" void Com_Memcpy(void *dest, const void *src, const unsigned int count);  // universal/com_shared.cpp
+int Sys_Milliseconds();
+float sub_140460E10();                                 // the game's timescale (name unknown)
+unsigned int sub_14028EEA0(int weapon, bool isAlternate);  // the weapon's repeat count, 1..4 (name unknown)
+void sub_1402F6560(int a, unsigned long long b, int weapon, int d, bool e, bool isAlternate, bool g, bool h, int i);
+
+// Store 1402FB790 (name unknown): from CG_DrawActiveFrame once a frame. Advances every active repeat by the wall
+// clock's milliseconds since the last call times the timescale (truncated per call), queues the ones that are due,
+// then hands over the ones the previous call queued.
+void sub_1402FB790()
+{
+	const int now = Sys_Milliseconds();
+	const float scale = sub_140460E10();
+	++unk_143E8FFD8;
+	const int msec = (int)(scale * (float)(now - unk_143E8FF84));
+	unk_143E8FF84 = now;
+	if (msec < 0 || cl_paused->current.integer != 0)
+		return;
+	for (int i = 0; i < 64; ++i)
+	{
+		TimedRepeat *t = &unk_143E8EF80[i];
+		if (!t->active)
+			continue;
+		t->elapsed += msec;
+		if (t->elapsed > 300)
+		{
+			t->active = 0;
+			continue;
+		}
+		if (!t->counted)
+		{
+			const unsigned int limit = sub_14028EEA0(*(const int *)&t->event[0x10], t->event[0x19]);
+			if (limit - 1 <= 3 && t->count >= limit)
+			{
+				t->count = 0;
+				t->active = 0;
+				t->sinceLast = 0;
+				continue;
+			}
+		}
+		unsigned int since = t->sinceLast;
+		if (!t->now)
+		{
+			since += msec;
+			t->sinceLast = since;
+		}
+		if (since < t->interval && !t->now)
+			continue;
+		t->sinceLast = 0;
+		for (unsigned int j = 0; j < 64; ++j)
+		{
+			if (!unk_143E8E580[j].frame)
+			{
+				unk_143E8E580[j].frame = unk_143E8FFD8;
+				Com_Memcpy(unk_143E8E580[j].event, t->event, 0x20);
+				break;
+			}
+		}
+		++t->count;
+		t->now = 0;
+	}
+	const int previous = unk_143E8FFD8 - 1;
+	for (int j = 0; j < 64; ++j)
+	{
+		TimedRepeatEvent *q = &unk_143E8E580[j];
+		if (!q->frame || q->frame != previous)
+			continue;
+		const unsigned char *e = q->event;
+		sub_1402F6560(*(const int *)e, *(const unsigned long long *)(e + 8), *(const int *)(e + 0x10),
+		              *(const int *)(e + 0x14), e[0x18], e[0x19], e[0x1A], e[0x1B], *(const int *)(e + 0x1C));
+		q->frame = 0;
+	}
+}

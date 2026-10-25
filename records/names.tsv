@@ -1210,3 +1210,29 @@ iw6mp64_MSStore_ship	140300960	function	?sub_140300960@@YAHW4LocalClientNum_t@@P
 iw6mp64_MSStore_ship	14037AEA0	function	?sub_14037AEA0@@YAXPEAUXModel@@@Z	sub_14037AEA0		unnamed	0	name unknown: keeps the arms model (R_RegisterModel of 14018DB60's name) loaded this frame; from CG_AddViewWeapon
 iw6mp64_MSStore_ship	14037AEF0	function	?sub_14037AEF0@@YAXPEBUXModel@@@Z	sub_14037AEF0		unnamed	0	name unknown: keeps a weapon or attachment model loaded this frame; from CG_AddViewWeapon
 iw6mp64_MSStore_ship	14026A870	function	?sub_14026A870@@YAMPEBUplayerState_s@@H@Z	sub_14026A870		unnamed	0	name unknown: the horizontal speed |velocity.xy|, or with pm_flags 8 (a ladder) 0 within 500 ms of ps+0x80 and else velocity z; CG_CalcViewValues stores it in cg.xyspeed (cg+0xB5264) for the viewmodel's bob
+iw6mp64_MSStore_ship	14031FED0	function	?sub_14031FED0@@YA_NH@Z	sub_14031FED0		unnamed	0	name unknown: (controller index) -> bool; sub_1402AA2A0 moves its ramp toward the rampUp/rampDown flags only while it is true
+iw6mp64_MSStore_ship	143E8EF80	data	?unk_143E8EF80@@3PAUTimedRepeat@@A	unk_143E8EF80		unnamed	0	name unknown: 64 repeating events (0x40 each: the 0x20-byte event for 1402F6560, elapsed, since last, interval, count, active, now, counted) advanced by sub_1402FB790
+iw6mp64_MSStore_ship	143E8E580	data	?unk_143E8E580@@3PAUTimedRepeatEvent@@A	unk_143E8E580		unnamed	0	name unknown: sub_1402FB790's queue: 64 x 0x28 (the call counter when queued, the 0x20-byte event), handed to 1402F6560 on the next call
+iw6mp64_MSStore_ship	143E8FFD8	data	?unk_143E8FFD8@@3HA	unk_143E8FFD8		unnamed	0	name unknown: sub_1402FB790's call counter (its queue's stamp)
+iw6mp64_MSStore_ship	143E8FF84	data	?unk_143E8FF84@@3HA	unk_143E8FF84		unnamed	0	name unknown: Sys_Milliseconds at sub_1402FB790's last call
+iw6mp64_MSStore_ship	140460E10	function	?sub_140460E10@@YAMXZ	sub_140460E10		unnamed	0	name unknown: returns the float at 146A7D7A4 (the timescale sub_1402FB790 scales its milliseconds by)
+iw6mp64_MSStore_ship	14028EEA0	function	?sub_14028EEA0@@YAIH_N@Z	sub_14028EEA0		unnamed	0	name unknown: (weapon, alternate) -> a count 1..4 that ends a repeating event in sub_1402FB790
+iw6mp64_MSStore_ship	1402F6560	function	?sub_1402F6560@@YAXH_KHH_N111H@Z	sub_1402F6560		unnamed	0	name unknown: the repeating event's handler: 9 arguments, the 0x20-byte event spread (int, u64, weapon, int, 4 bools, int); from sub_1402FB790
+iw6mp64_MSStore_ship	14BAF3368	data	?unk_14BAF3368@@3HA	unk_14BAF3368		unnamed	0	name unknown: the doppler (sub_1406AD9E0) has run: the first update's msec, 0 before
+iw6mp64_MSStore_ship	14BAF336C	data	?unk_14BAF336C@@3PAMA	unk_14BAF336C		unnamed	0	name unknown: the listener's position at the doppler's last update
+iw6mp64_MSStore_ship	14BAF3378	data	?unk_14BAF3378@@3PAY02MA	unk_14BAF3378		unnamed	0	name unknown: 32 channels' source positions at the doppler's last update
+iw6mp64_MSStore_ship	14BAF34F8	data	?unk_14BAF34F8@@3PAMA	unk_14BAF34F8		unnamed	0	name unknown: 32 channels' doppler pitch (1 without doppler)
+iw6mp64_MSStore_ship	14BAEC804	data	?unk_14BAEC804@@3PAUSndDopplerChannel@@A	unk_14BAEC804		unnamed	0	name unknown: sound channels 8..39 as the doppler reads them (0xF8 apart: the entity at +0, the alias at +0x74)
+iw6mp64_MSStore_ship	14BAF3578	data	?unk_14BAF3578@@3PEBUSndDopplerParms@@EB	unk_14BAF3578		unnamed	0	name unknown: doppler parameters overriding the dvars unless snd_dopplerAuditionEnable
+iw6mp64_MSStore_ship	14BAF3580	data	?snd_dopplerEnable@@3PEBUdvar_t@@EB	snd_dopplerEnable	sound/snd.cpp	registration	0.9	assigned Dvar_RegisterBool("snd_dopplerEnable") by 1406A3DF0
+iw6mp64_MSStore_ship	14BAF3588	data	?snd_dopplerAuditionEnable@@3PEBUdvar_t@@EB	snd_dopplerAuditionEnable	sound/snd.cpp	registration	0.9	assigned the "snd_dopplerAuditionEnable" dvar by 1406A3DF0
+iw6mp64_MSStore_ship	14BAF3590	data	?snd_dopplerBaseSpeedOfSound@@3PEBUdvar_t@@EB	snd_dopplerBaseSpeedOfSound	sound/snd.cpp	registration	0.9	assigned the "snd_dopplerBaseSpeedOfSound" dvar by 1406A3DF0
+iw6mp64_MSStore_ship	14BAF3598	data	?snd_dopplerPlayerVelocityScale@@3PEBUdvar_t@@EB	snd_dopplerPlayerVelocityScale	sound/snd.cpp	registration	0.9	assigned the "snd_dopplerPlayerVelocityScale" dvar by 1406A3DF0
+iw6mp64_MSStore_ship	14BAF35A0	data	?snd_dopplerPitchMin@@3PEBUdvar_t@@EB	snd_dopplerPitchMin	sound/snd.cpp	registration	0.9	assigned the "snd_dopplerPitchMin" dvar by 1406A3DF0
+iw6mp64_MSStore_ship	14BAF35A8	data	?snd_dopplerPitchMax@@3PEBUdvar_t@@EB	snd_dopplerPitchMax	sound/snd.cpp	registration	0.9	assigned the "snd_dopplerPitchMax" dvar by 1406A3DF0
+iw6mp64_MSStore_ship	14BAF35B0	data	?snd_dopplerSmoothing@@3PEBUdvar_t@@EB	snd_dopplerSmoothing	sound/snd.cpp	registration	0.9	assigned the "snd_dopplerSmoothing" dvar by 1406A3DF0
+iw6mp64_MSStore_ship	1406AD9E0	function	?sub_1406AD9E0@@YAXH@Z	sub_1406AD9E0		unnamed	0	name unknown: the sound channels' doppler pitch from the listener's and the sources' movement over the update's msec (cg.frametime), smoothed per update (B0067); from 1406AD170
+iw6mp64_MSStore_ship	1404DC1A0	function	?sub_1404DC1A0@@YA_NH@Z	sub_1404DC1A0		unnamed	0	name unknown: (channel) -> the channel gets no doppler (free or paused); from sub_1406AD9E0
+iw6mp64_MSStore_ship	1402C0600	function	?sub_1402C0600@@YAXHPEAMPEAX@Z	sub_1402C0600		unnamed	0	name unknown: (entity, out origin, scratch) a sound entity's position; from sub_1406AD9E0
+iw6mp64_MSStore_ship	1402CDF70	function	?sub_1402CDF70@@YAXW4LocalClientNum_t@@PEAUcentity_s@@@Z	sub_1402CDF70		unnamed	0	name unknown: (lc, cg.predictedPlayerEntity): the player's own model posed in third person; from sub_1402CEB10
+iw6mp64_MSStore_ship	1402B4F90	function	?sub_1402B4F90@@YAXW4LocalClientNum_t@@PEAUcentity_s@@@Z	sub_1402B4F90		unnamed	0	name unknown: (lc, cg.predictedPlayerEntity): the player's own model added to the scene; tail call of sub_1402CEB10

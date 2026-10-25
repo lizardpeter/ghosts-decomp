@@ -1,4 +1,11 @@
-"""Differential cases for the viewmodel (cgame/cg_weapons.cpp: CG_AddViewWeapon), against the Store build.
+"""Differential cases for the viewmodel (cgame/cg_weapons.cpp: CG_AddViewWeapon) and the timed repeats
+(sub_1402FB790), against the Store build.
+
+sub_1402FB790: the wall clock (Sys_Milliseconds, faked) against the last call's (forward, equal, backwards), the
+timescale (1, 0.5, 0, negative, NaN), cl_paused, 64 repeats (active or not; elapsed around 300; since-last around the
+interval; the now and counted flags; counts around 14028EEA0's limit, which is faked from 0 to 5), and a queue with
+free slots, full, and entries stamped with the previous call's counter or others; 1402F6560 logged with its nine
+arguments.
 
 Every callee is faked and logged with its arguments: the model functions, the gun conditions, the ADS test, the hip
 integrator 14027B740, the bob conditions, BG_CalculateWeaponMovement (logged with the weaponState_t it gets, all but
@@ -190,7 +197,66 @@ def _input(r):
     return {"args": [0], "setup": setup, "fakes": _fakes(s)}
 
 
+def _repeat_input(r, scale=None):
+    now = r.getrandbits(31)
+    last = (now - r.choice([0, 1, 5, 16, 300, 1000, -5])) & 0xFFFFFFFF
+    choice = r.choice([1.0, 1.0, 0.5, 0.0, -1.0, 2.0, float("nan")])
+    scale = choice if scale is None else scale
+    paused = r.choice([0, 0, 0, 1])
+    counter = r.getrandbits(30) + 2
+    limits = [r.choice([0, 1, 2, 3, 4, 5]) for _ in range(64)]
+    repeats = []
+    for i in range(64):
+        event = bytearray(r.getrandbits(8) for _ in range(0x20))
+        for b in range(0x18, 0x1C):
+            event[b] = r.choice([0, 1])
+        struct.pack_into("<i", event, 0x10, i)          # the weapon: the fake's index into limits
+        fields = struct.pack("<IIIIiii", r.choice([0, 1, 290, 300, 301, r.getrandbits(32)]),
+                             r.choice([0, 10, 49, 50, 99]), r.choice([0, 50, 100]), r.choice([0, 1, 2, 3, 4, 5]),
+                             r.choice([0, 0, 1]), r.choice([0, 0, 1]), r.choice([0, 1])) + bytes(4)
+        repeats.append(bytes(event) + fields)
+    queue = []
+    for j in range(64):
+        stamp = r.choice([0, 0, counter, counter - 1, counter + 1, r.getrandbits(31)])
+        if r.random() < 0.1:
+            stamp = 0
+        ev = bytearray(r.getrandbits(8) for _ in range(0x20))
+        for b in range(0x18, 0x1C):
+            ev[b] = r.choice([0, 1])
+        queue.append(struct.pack("<i4x", stamp) + bytes(ev))
+    if r.random() < 0.2:
+        queue = [struct.pack("<i4x", counter + 7) + q[8:] for q in queue]   # full
+
+    def setup(w):
+        CURRENT["m"] = w.m
+        w.write(va("unk_143E8EF80"), b"".join(repeats))
+        w.write(va("unk_143E8E580"), b"".join(queue))
+        w.write(va("unk_143E8FFD8"), struct.pack("<i", counter))
+        w.write(va("unk_143E8FF84"), struct.pack("<I", last))
+        w.m.mu.mem_write(DVAR + 0x10, struct.pack("<i", paused))
+        w.u64(va("cl_paused"), DVAR)
+
+    def scale_fake(mu):
+        from unicorn.x86_const import UC_X86_REG_XMM0
+        mu.reg_write(UC_X86_REG_XMM0, struct.unpack("<I", struct.pack("<f", scale))[0])
+        return None
+
+    def handler(mu):
+        from unicorn.x86_const import UC_X86_REG_RSP
+        rsp = mu.reg_read(UC_X86_REG_RSP)
+        stack = _rd(mu, rsp + 0x28, 0x28)
+        _log("call", "sub_1402F6560", arg(mu, 0) & 0xFFFFFFFF, arg(mu, 1), arg(mu, 2) & 0xFFFFFFFF,
+             arg(mu, 3) & 0xFFFFFFFF, stack[0], stack[8], stack[0x10], stack[0x18], stack[0x20:0x24])
+        return None
+    fakes = {"?Sys_Milliseconds@@YAHXZ": lambda mu: now,
+             "?sub_140460E10@@YAMXZ": scale_fake,
+             "?sub_14028EEA0@@YAIH_N@Z": lambda mu: limits[arg(mu, 0) & 63],
+             "?sub_1402F6560@@YAXH_KHH_N111H@Z": handler}
+    return {"args": [], "setup": setup, "fakes": fakes, "now": now, "last": last}
+
+
 r = random.Random(4815)
 CASES = [
     {"symbol": SYMBOL, "build": STORE, "ret": "void", "inputs": [_input(r) for _ in range(1200)]},
+    {"symbol": "?sub_1402FB790@@YAXXZ", "build": STORE, "ret": "void", "inputs": [_repeat_input(r) for _ in range(500)]},
 ]

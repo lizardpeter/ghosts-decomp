@@ -261,6 +261,21 @@ int CL_LastTickTime()
 	return s_grid.lastCmdTime;
 }
 
+// CL_CommandsDue without changing the grid: what CL_PrepareFrameInput will find this frame
+int CL_TicksDue(LocalClientNum_t localClientNum, int *prevTime)
+{
+	const clientActive_t *cl = CL_GetLocalClientGlobals(localClientNum);
+	const int target = cl->serverTime;
+	int last = s_grid.lastCmdTime;
+	if (!s_grid.valid || target - last > CMD_REANCHOR_MSEC || last - target > CMD_REANCHOR_MSEC)
+		last = target - CMD_STEP_MSEC;
+	int n = 0;
+	while (n < CMD_MAX_PER_FRAME && target - (last + CMD_STEP_MSEC * n) >= CMD_STEP_MSEC)
+		++n;
+	*prevTime = last;
+	return n;
+}
+
 // The temporary view command: the newest command's input with this frame's angles plus aimAngles (the kick and the
 // offset, as CL_FinishMove adds cgameKickAngles), at cl->serverTime
 void CL_BuildViewCmd(LocalClientNum_t localClientNum, const float *aimAngles)

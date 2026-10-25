@@ -259,6 +259,7 @@ def cgame_fakes(anim=noop):
 DAF = "?CG_DrawActiveFrame@@YAHW4LocalClientNum_t@@HW4DemoType@@W4CubemapShot@@HHH@Z"
 CG_KICK_AVEL, CG_FRAMETIME, CG_BGS_TIME, CG_BGS_FRAMETIME = 0xB5268, 0x7188C, 0xFAE58, 0xFAE64
 CG_RECOIL = 0xA9AFC                         # cg_s: the viewmodel's recoilAngles, recoilSpeed
+CG_JAM, CG_TURRET_FOV, CG_RAMP = 0x10EDBC, 0x10EDC4, 0x10F828   # radarJamLevel, scriptedViewFov, ramp
 PE_SEQ, PE_EVENTS = 0x128, 0x12C            # playerState_s: pe.eventSequence, pe.events[4] (8 bytes each)
 TRANS_SEQ = 8                               # transPlayerState_t: eventSequence
 SHOCK_PARMS = SCRATCH + 0xC0000
@@ -279,7 +280,7 @@ class Ticks:
     def __init__(self, ps_size=PS_SIZE, shots=None):
         self.ps_size = ps_size
         self.rows = []       # (frame, cg.time, cg.oldTime, cg.frametime, bgs.time, bgs.frametime, ps, pm, kick,
-                             #  the viewmodel's recoil) before the tick's integrators
+                             #  the viewmodel's recoil, (jam, turret FOV, ramp) raw) before the tick's integrators
         self.events = []     # (cg.time, sequence, type, parm)
         self.entity_events = []
         self.frame = 0
@@ -297,7 +298,8 @@ class Ticks:
         pm = rd(mu, static(PREDICT, "cg_pmove"), PM_SIZE)
         kick = rd(mu, cg + CG_KICK_AVEL, 24)
         recoil = struct.unpack("<6f", rd(mu, cg + CG_RECOIL, 24))
-        self.rows.append((self.frame, time, old, msec, bgs_time, bgs_msec, state, pm, kick, recoil))
+        extra = (rd(mu, cg + CG_JAM, 4), rd(mu, cg + CG_TURRET_FOV, 4), rd(mu, cg + CG_RAMP, 4))
+        self.rows.append((self.frame, time, old, msec, bgs_time, bgs_msec, state, pm, kick, recoil, extra))
         seq, saved = struct.unpack("<i", state[PE_SEQ:PE_SEQ + 4])[0], struct.unpack("<i", rd(mu, trans + TRANS_SEQ, 4))[0]
         for s in range(saved, seq):
             etype, parm = struct.unpack_from("<ii", state, PE_EVENTS + 8 * (s & 3))
@@ -358,6 +360,10 @@ def frame_fakes(ticks, drawn, sent):
                 "?sub_1402F51A0@@YAXPEAUcg_s@@PEAUGfxScaledPlacement@@PEAM@Z",
                 "?sub_1402F30A0@@YAXW4LocalClientNum_t@@PEBUGfxScaledPlacement@@PEBUplayerState_s@@PEAUcentity_s@@H@Z"):
         f[sym] = noop                          # the viewmodel's placement and scene (CG_AddViewWeapon's own callees)
+    f["?sub_14031FED0@@YA_NH@Z"] = _ret0          # the ramp's input: off
+    for sym in ("?sub_1402CDF70@@YAXW4LocalClientNum_t@@PEAUcentity_s@@@Z",
+                "?sub_1402B4F90@@YAXW4LocalClientNum_t@@PEAUcentity_s@@@Z"):
+        f[sym] = noop                          # the player's own model's pose and scene entry
     f["?BG_GetNumWeapons@@YAIXZ"] = lambda mu: 256
     f["?sub_14060DC10@@YAMXZ"] = noop          # the far plane: whatever xmm0 holds goes to the faked FX camera
     f["?BG_GetOverlay@@YAPEBUADSOverlay@@TWeapon@@_N@Z"] = lambda mu: OVERLAY

@@ -1,5 +1,9 @@
-"""Differential cases for CG_DrawActive (cgame_mp/cg_draw_mp.cpp) and the client setters it calls
-(client_mp/cl_cgame_mp.cpp), against the Store build.
+"""Differential cases for CG_DrawActive and sub_1402AA2A0 (cgame_mp/cg_draw_mp.cpp) and the client setters
+CG_DrawActive calls (client_mp/cl_cgame_mp.cpp), against the Store build.
+
+sub_1402AA2A0 (the ramp): cls.frametime (0, 1, 16, 300, negative), the ramp (-1..1, past the ends, 0, NaN), both
+flags, pm_flags 1 and 0x10, 14031FED0's answer (faked), the ADS-in time BG_GetADSTransTimes writes (faked: 0.2,
+0, NaN).
 
 CG_DrawActive: random zoom sensitivity and shellshock sensitivity (0, NaN, negative), kick and ADS offset angles (NaN
 payloads too, so the order of the additions is visible), the selected weapon, offhand and alternate value, the extra
@@ -65,7 +69,48 @@ def _client_input(r, args):
 
 
 r = random.Random(1805)
+def _ramp_input(r, near=False):
+    frametime = r.choice([0, 1, 5, 16, 300, -7, 7, 13, 33, r.getrandbits(16)])
+    ramp = r.choice([0.0, 1.0, -1.0, 0.5, -0.3, 1.5, -2.0, 0.001, float("nan"), 0.9995, -0.9995])
+    up, down = r.choice([0, 1]), r.choice([0, 1])
+    flags = r.choice([0, 1, 0x10, 0x11, r.getrandbits(32)])
+    enabled = r.choice([0, 1, 1])
+    if near:   # just below the limits, standing still: the clamps' exact bounds
+        frametime, ramp, flags, enabled = r.choice([0, -1]), r.choice([0.9995, -0.9995, 0.99999]), 0, 1
+    ads_in = r.choice([0.2, 0.35, 0.0, float("nan"), 0.3, 0.7, 0.123, 0.45])
+
+    def setup(w):
+        CURRENT["m"] = w.m
+        cg = va("cgArray")
+        w.write(va("cls") + 0x118, struct.pack("<i", frametime))
+        w.write(cg + 0xC, struct.pack("<I", flags))
+        w.write(cg + 0x41C, struct.pack("<II", 0x11, r2))
+        w.write(cg + 0x10F823, bytes([down, up]))
+        w.write(cg + 0x10F828, struct.pack("<f", ramp))
+
+    r2 = r.choice([0, 0x4000])
+
+    def times(mu):
+        from win32_display import arg
+        from unicorn.x86_const import UC_X86_REG_RSP
+        m = CURRENT.get("m")
+        if m is not None:
+            m.observed.append(("call", "BG_GetADSTransTimes", log_value(mu, "p", 0), arg(mu, 1) & 0xFFFFFFFF,
+                               arg(mu, 2) & 0xFF))
+        out = struct.unpack("<Q", bytes(mu.mem_read(mu.reg_read(UC_X86_REG_RSP) + 0x28, 8)))[0]
+        mu.mem_write(arg(mu, 3), struct.pack("<f", ads_in))
+        mu.mem_write(out, struct.pack("<f", 0.1))
+        return None
+    fakes = {"?sub_14031FED0@@YA_NH@Z": lambda mu: enabled,
+             "?CL_ControllerIndexFromClientNum@@YAHW4LocalClientNum_t@@@Z": lambda mu: 0,
+             "?BG_GetViewmodelWeapon@@YA?ATWeapon@@PEBUplayerState_s@@@Z": lambda mu: 0x11,
+             "?BG_GetADSTransTimes@@YAXPEBUplayerState_s@@TWeapon@@_NPEAM3@Z": times}
+    return {"args": [0], "setup": setup, "fakes": fakes}
+
+
 CASES = [
+    {"symbol": "?sub_1402AA2A0@@YAXW4LocalClientNum_t@@@Z", "build": STORE, "ret": "void",
+     "inputs": [_ramp_input(r) for _ in range(800)] + [_ramp_input(r, near=True) for _ in range(40)]},
     {"symbol": "?CG_DrawActive@@YAXW4LocalClientNum_t@@H@Z", "build": STORE, "ret": "void",
      "inputs": [_draw_input(r) for _ in range(600)]},
     {"symbol": "?CL_SetFOVSensitivityScale@@YAXW4LocalClientNum_t@@M@Z", "build": STORE, "ret": "void",

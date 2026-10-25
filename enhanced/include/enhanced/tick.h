@@ -19,6 +19,8 @@ int CL_PrepareFrameInput(LocalClientNum_t localClientNum);
 int CL_EmitTickCommand(LocalClientNum_t localClientNum);
 // The newest grid command's time: the latest tick's
 int CL_LastTickTime();
+// How many ticks CL_PrepareFrameInput will find due this frame, and the time before the first (no state changed)
+int CL_TicksDue(LocalClientNum_t localClientNum, int *prevTime);
 // cl_viewCmd from the newest command, this frame's view angles plus aimAngles, at cl->serverTime
 void CL_BuildViewCmd(LocalClientNum_t localClientNum, const float *aimAngles);
 
@@ -28,8 +30,11 @@ void CG_EarlyPredictTick();                             // the faithful sub_1402
 void CG_SaveTickState(LocalClientNum_t localClientNum); // the faithful CG_SavePlayerState: the tick's end
 // The own view's step-forward (P0017's partial Pmove with cl_viewCmd), swapped into cg.predictedPlayerState
 void CG_PresentOwnView(LocalClientNum_t localClientNum);
-// Puts back every presentation copy (the own view's fields today); a no-op when nothing is swapped in
+// Puts back every presentation copy (the own view's fields, the turret scope's FOV); a no-op when nothing is swapped in
 void CG_RestorePresentation();
+
+// --- cgame (enhanced/cgame_mp/cg_draw_mp.cpp) ---------------------------------------------------------------------
+void CG_RampTick(LocalClientNum_t localClientNum, int frametime);  // sub_1402AA2A0's step with this many ms
 
 // --- cgame (enhanced/cgame/cg_weapons.cpp) ----------------------------------------------------------------------
 extern int cg_tickLoopFrame;                             // 1 while CG_DrawActiveFrame runs the tick loop

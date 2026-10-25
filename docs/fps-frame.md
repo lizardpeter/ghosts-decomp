@@ -303,6 +303,8 @@ it exists; nothing here changes the protocol, the meaning of `cg.time` or what t
   enhanced build.
 - **Effect:** cosmetic (how fast the minimap's jamming fades in and out).
 - **Verify:** the jam level after a target step at fixed times, for several frame times.
+- **Since the tick loop** (docs/cgame-frame.md 4.11): done as the per-tick form of this, `1 - (14/15)^0.3` of the way
+  in every 5 ms tick (the original block, its snap within 0.1 kept); bit-identical at every tick at any frame rate.
 
 ### 4.6 Doppler smoothing
 
@@ -310,6 +312,9 @@ it exists; nothing here changes the protocol, the meaning of `cg.time` or what t
   `p = p · w^(msec/16.667) + new · (1 - w^(msec/16.667))`; and measure the speeds over the fractional frame time.
 - **Effect:** cosmetic, audible.
 - **Verify:** a source passing at constant speed, pitch versus time for several frame times.
+- **Since stage 3** (docs/cgame-frame.md 4.11): 1406AD9E0 is reconstructed (src/sound/snd.cpp) and the weight is a
+  time constant as above (enhanced/sound/snd.cpp, with exp and log); the speeds are still measured over the update's
+  integer msec (cg.frametime), as before.
 
 ### 4.7 Optional
 

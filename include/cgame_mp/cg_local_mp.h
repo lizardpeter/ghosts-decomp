@@ -317,7 +317,12 @@ struct cg_s
 	bool vehicleViewActive;         // 1402EA200 turned the third-person vehicle view on (name unknown)
 	unsigned char unknown10F059[0x10F05C - 0x10F059];
 	unsigned int sightedClientsMask;  // copied to usercmd_s::sightedClientsMask (name unknown)
-	unsigned char unknown10F060[0x10F880 - 0x10F060];
+	unsigned char unknown10F060[0x10F823 - 0x10F060];
+	bool rampDown;                    // sub_1402AA2A0 moves ramp toward -1 while set (name unknown)
+	bool rampUp;                      // ... toward +1 while set, before rampDown (name unknown)
+	unsigned char unknown10F825[0x10F828 - 0x10F825];
+	float ramp;                       // -1..1, moved by cls.frametime / 300 a frame, back to 0 otherwise (name unknown)
+	unsigned char unknown10F82C[0x10F880 - 0x10F82C];
 	SpawnSightGlob spawnSight;        // name unknown
 	unsigned char unknown10FE80[0x10FF10 - 0x10FE80];
 	float predictedWeaponPosFrac;     // predictedPlayerState's fWeaponPosFrac after prediction (name unknown)

@@ -191,6 +191,8 @@ void CG_CheckEntEvents(LocalClientNum_t localClientNum, centity_s *cent, int unu
 void CG_EntityEvent(LocalClientNum_t localClientNum, centity_s *cent, int event, int eventParm, bool predicted);
 int sub_1402CF440(LocalClientNum_t localClientNum);          // the player's own model is updated (third person)
 void sub_1402CEB10(LocalClientNum_t localClientNum);         // ... and updates it
+void sub_1402CDF70(LocalClientNum_t localClientNum, centity_s *cent);  // its pose (sub_1402CEB10's second half)
+void sub_1402B4F90(LocalClientNum_t localClientNum, centity_s *cent);  // its scene entry
 void sub_1403AF520(LocalClientNum_t localClientNum);         // effects: worker command 0xB
 void sub_140471E70(LocalClientNum_t localClientNum, int frametime);
 void sub_14037E3D0(LocalClientNum_t localClientNum);         // dynamic entities from the physics (DynEntCl)
@@ -324,6 +326,251 @@ static void CG_KickTick(cg_s *cgameGlob, int msec)
 	}
 }
 
+// --- the frame's integrators, as functions so the tick loop can run them per tick (src, unchanged but where noted) -
+
+// The radar jamming level's rate per 5 ms tick that moves it as 1/15 per frame does at 60 fps (16.667 ms):
+// 1 - (14/15)^(5 / 16.667) = 1 - (14/15)^0.3 (docs/cgame-frame.md 4.6, 4.11)
+#define CG_JAM_TICK_RATE 0.020485131f
+
+static void CG_RadarJam(cg_s *cgameGlob, bool perTick)
+{
+	float jam = cgameGlob->radarJamLevel;
+	float jamFloor = 0.5f;
+	const float jamDistance = cgameGlob->radarJamDistance;
+	if (cgameGlob->predictedPlayerState.radarBlocked || jam > 0.0f
+	    || (!(0.0f >= jamDistance) && !(jamDistance > radarjamDistMax->current.value)))
+	{
+		const float distMax = radarjamDistMax->current.value;
+		const float distMin = radarjamDistMin->current.value;
+		const float range = distMax - distMin;
+		if (range != 0.0f)
+		{
+			float distance;
+			if (cgameGlob->radarJamDistance == -1.0f)
+			{
+				cgameGlob->radarJamDistance = distMax;
+				distance = distMax;
+			}
+			else
+			{
+				distance = cgameGlob->radarJamDistance;
+				if (distMin > distance)
+				{
+					cgameGlob->radarJamDistance = distMin;
+					distance = distMin;
+				}
+			}
+			float target = 1.0f - (distance - distMin) / range;
+			if (radarjamSinCurve->current.enabled)
+				target = sinf(target * 3.1415927f * 0.5f);
+			const int strength = cgameGlob->predictedPlayerState.radarStrength;
+			if (strength <= -3)
+				jamFloor = 1.0f;
+			else if (strength > -2)
+				jamFloor = strength > -1 ? 0.0f : 0.3f;
+			target = target > jamFloor ? target : jamFloor;
+			const float toGo = target - jam;
+			if (0.01f > toGo * toGo)
+				jam = target;
+			if (target != jam)
+				jam = perTick ? toGo * CG_JAM_TICK_RATE + jam : toGo / 15.0f + jam;
+			float level = jam - 1.0f >= 0.0f ? 1.0f : jam;
+			if (0.0f - jam >= 0.0f)
+				level = 0.0f;
+			cgameGlob->radarJamLevel = level;
+		}
+	}
+}
+
+static bool s_turretZooming;  // the scope zoomed in the previous tick (the sound's edge)
+
+static void CG_TurretFov(cg_s *cgameGlob, bool perTick)
+{
+	const unsigned int turret = sub_1402F8530(cgameGlob, cgameGlob->localClientNum);
+	if ((unsigned char)turret)
+	{
+		const WeaponDef *weapDef = bg_weaponDefs[(unsigned char)turret];
+		float fov;
+		if (sub_1402F86E0(cgameGlob->localClientNum) && weapDef->overlayInterface == 2)
+		{
+			usercmd_s cmd;
+			CL_GetUserCmd(cgameGlob->localClientNum, CL_GetCurrentCmdNumber(cgameGlob->localClientNum), &cmd);
+			const float oldFov = cgameGlob->scriptedViewFov;
+			const float zoomed = (float)cgameGlob->frametime / 1000.0f * ((float)cmd.forwardmove / -127.0f)
+			                     * weapDef->turretScopeZoomRate + oldFov;
+			fov = weapDef->turretScopeZoomMin;
+			if (!(fov > zoomed))
+				fov = weapDef->turretScopeZoomMax < zoomed ? weapDef->turretScopeZoomMax : zoomed;
+			const bool zooming = __builtin_fabsf(fov - oldFov) > 0.0f;
+			if (perTick)
+			{
+				// B0077: the zoom sound when zooming starts, not on every change
+				if (zooming && !s_turretZooming && weapDef->turretZoomSound)
+					sub_1402C1130(cgameGlob->localClientNum, weapDef->turretZoomSound);
+				s_turretZooming = zooming;
+			}
+			else if (zooming && weapDef->turretZoomSound)
+			{
+				sub_1402C1130(cgameGlob->localClientNum, weapDef->turretZoomSound);
+			}
+		}
+		else
+		{
+			s_turretZooming = false;
+			const float frac = cgameGlob->predictedPlayerState.weapCommon_fWeaponPosFrac;
+			fov = (1.0f - frac) * weapDef->turretFov + frac * weapDef->turretFovADS;
+		}
+		cgameGlob->scriptedViewFov = fov;
+	}
+	else
+	{
+		s_turretZooming = false;
+	}
+}
+
+// The animation of every entity in the next snapshot, and its notetracks (src)
+static void CG_EntityAnimation(LocalClientNum_t localClientNum, cg_s *cgameGlob)
+{
+	unsigned int count = (unsigned int)cgameGlob->nextSnap->numEntities;
+	for (unsigned long long i = 0; count; ++i, --count)
+	{
+		const int entityNum = *(const int *)cgameGlob->nextSnap->entities[i];
+		DObj *obj = Com_GetClientDObj(entityNum, localClientNum);
+		if (obj)
+		{
+			CG_DObjUpdateInfo(cgameGlob, obj, true);
+			CG_ProcessClientNoteTracks(cgameGlob, entityNum);
+		}
+	}
+}
+
+// ... once for each tick the frame will run (the same times, CL_TicksDue), with that tick's times: here, before
+// CG_AddPacketEntities, as the original's place in the frame (it doesn't depend on the input or the prediction)
+static void CG_EntityAnimationTicks(LocalClientNum_t localClientNum, cg_s *cgameGlob)
+{
+	int prev;
+	const int ticks = CL_TicksDue(localClientNum, &prev);
+	const int frameTime = cgameGlob->time, frameOldTime = cgameGlob->oldTime, frameMsec = cgameGlob->frametime;
+	const int bgsTime = cgameGlob->bgs.time, bgsMsec = cgameGlob->bgs.frametime;
+	for (int k = 0; k < ticks; ++k, prev += CMD_STEP_MSEC)
+	{
+		cgameGlob->oldTime = prev;
+		cgameGlob->time = prev + CMD_STEP_MSEC;
+		cgameGlob->frametime = CMD_STEP_MSEC;
+		cgameGlob->bgs.time = prev + CMD_STEP_MSEC;
+		cgameGlob->bgs.frametime = CMD_STEP_MSEC;
+		CG_EntityAnimation(localClientNum, cgameGlob);
+	}
+	cgameGlob->time = frameTime;
+	cgameGlob->oldTime = frameOldTime;
+	cgameGlob->frametime = frameMsec;
+	cgameGlob->bgs.time = bgsTime;
+	cgameGlob->bgs.frametime = bgsMsec;
+}
+
+// The tick's eye: the canonical predicted origin with the view height (what the drawn view starts from)
+static void CG_TickEye(const cg_s *cgameGlob, float eye[3])
+{
+	const playerState_s *ps = &cgameGlob->predictedPlayerState;
+	eye[0] = ps->origin[0];
+	eye[1] = ps->origin[1];
+	eye[2] = ps->origin[2] + ps->viewHeightCurrent;
+}
+
+static void CG_SwapVec(float *a, float *b)
+{
+	for (int i = 0; i < 3; ++i)
+	{
+		const float t = a[i];
+		a[i] = b[i];
+		b[i] = t;
+	}
+}
+
+// #35: the environment volume and its blend (sub_1402E61B0, the original) with the tick's eye in place of the view
+// it reads (refdef_baseVieworg, or lastVieworg in third person), put back after it (B0080)
+static void CG_VolumeTick(LocalClientNum_t localClientNum, cg_s *cgameGlob)
+{
+	float base[3], last[3];
+	CG_TickEye(cgameGlob, base);
+	for (int i = 0; i < 3; ++i)
+		last[i] = base[i];
+	CG_SwapVec(cgameGlob->refdef_baseVieworg, base);
+	CG_SwapVec(cgameGlob->lastVieworg, last);
+	sub_1402E61B0(localClientNum);
+	CG_SwapVec(cgameGlob->refdef_baseVieworg, base);
+	CG_SwapVec(cgameGlob->lastVieworg, last);
+}
+
+// #22: the radar sweep and its blips (CG_CompassIncreaseRadarTime, the original) with the tick's eye and the
+// canonical yaw in place of the drawn view's origin and yaw, put back after it
+static void CG_RadarSweepTick(LocalClientNum_t localClientNum, cg_s *cgameGlob)
+{
+	float eye[3];
+	CG_TickEye(cgameGlob, eye);
+	CG_SwapVec(cgameGlob->refdef_vieworg, eye);
+	const float yaw = cgameGlob->refdefViewAngles[1];
+	cgameGlob->refdefViewAngles[1] = cgameGlob->predictedPlayerState.viewangles[1];
+	CG_CompassIncreaseRadarTime(localClientNum);
+	cgameGlob->refdefViewAngles[1] = yaw;
+	CG_SwapVec(cgameGlob->refdef_vieworg, eye);
+}
+
+// The turret scope's FOV for the presentation: the latest tick's zoomed on by the rest to the own view's presentation
+// time (the same step as the tick's, with the newest command's forward/back), on a copy put back at the frame's end
+// (CG_RestorePresentation). Without a zooming scope it is the latest tick's.
+struct PresentedFov
+{
+	int active;
+	float canonical;
+};
+static PresentedFov s_presentedFov;
+
+void CG_RestoreTurretFov()
+{
+	if (!s_presentedFov.active)
+		return;
+	CG_GetLocalClientGlobals(LOCAL_CLIENT_0)->scriptedViewFov = s_presentedFov.canonical;
+	s_presentedFov.active = 0;
+}
+
+static void CG_PresentTurretFov(LocalClientNum_t localClientNum, cg_s *cgameGlob)
+{
+	CG_RestoreTurretFov();
+	const unsigned int turret = sub_1402F8530(cgameGlob, cgameGlob->localClientNum);
+	if (!(unsigned char)turret || !sub_1402F86E0(cgameGlob->localClientNum))
+		return;
+	const WeaponDef *weapDef = bg_weaponDefs[(unsigned char)turret];
+	if (weapDef->overlayInterface != 2)
+		return;
+	const double rest = CG_PresentTime(PC_OWN_VIEW) - (double)CL_LastTickTime();
+	if (!(rest > 0.0))
+		return;
+	usercmd_s cmd;
+	CL_GetUserCmd(cgameGlob->localClientNum, CL_GetCurrentCmdNumber(cgameGlob->localClientNum), &cmd);
+	const float oldFov = cgameGlob->scriptedViewFov;
+	const float zoomed = (float)rest / 1000.0f * ((float)cmd.forwardmove / -127.0f) * weapDef->turretScopeZoomRate + oldFov;
+	float fov = weapDef->turretScopeZoomMin;
+	if (!(fov > zoomed))
+		fov = weapDef->turretScopeZoomMax < zoomed ? weapDef->turretScopeZoomMax : zoomed;
+	s_presentedFov.canonical = oldFov;
+	s_presentedFov.active = 1;
+	cgameGlob->scriptedViewFov = fov;
+}
+
+// #54's first half (src sub_1402CEB10): the player's own model's animation in third person, with its notetracks
+static void CG_OwnBodyAnimation(LocalClientNum_t localClientNum, cg_s *cgameGlob)
+{
+	if (!sub_1402CF440(localClientNum))
+		return;
+	DObj *obj = Com_GetClientDObj(cgameGlob->predictedPlayerState.clientNum, localClientNum);
+	if (obj)
+	{
+		CG_DObjUpdateInfo(cgameGlob, obj, true);
+		CG_ProcessClientNoteTracks(cgameGlob, cgameGlob->predictedPlayerState.clientNum);
+	}
+}
+
 // One 5 ms tick at t = the newest command's time + 5 (docs/cgame-frame.md 4.2)
 static void CG_RunTick(LocalClientNum_t localClientNum, cg_s *cgameGlob, bool firstOfFrame)
 {
@@ -355,9 +602,18 @@ static void CG_RunTick(LocalClientNum_t localClientNum, cg_s *cgameGlob, bool fi
 	CG_TransitionPlayerState(localClientNum, &cgameGlob->predictedPlayerState, &cgameGlob->savedTrans);
 	CG_FireViewlockedEvents(localClientNum, cgameGlob);
 
-	// the ticked integrators: the originals, with the tick's cg.frametime (5): the kick, the viewmodel's animation and
-	// its movement (sway, recoil, bob: CG_AddViewWeapon's first half)
+	// the ticked integrators: the originals, with the tick's cg.frametime (5): the ramp (5 ms instead of the client's
+	// frame), the radar jamming level, the hinges, the kick, the turret's FOV, the viewmodel's animation and its
+	// movement (sway, recoil, bob: CG_AddViewWeapon's first half)
+	CG_RadarSweepTick(localClientNum, cgameGlob);
+	CG_RadarJam(cgameGlob, true);
+	CG_VolumeTick(localClientNum, cgameGlob);
+	CG_RampTick(localClientNum, CMD_STEP_MSEC);
+	if (sub_140345260(localClientNum))
+		sub_14019B2C0((float)cgameGlob->frametime * 0.001f);
 	CG_KickTick(cgameGlob, cgameGlob->frametime);
+	CG_TurretFov(cgameGlob, true);
+	CG_OwnBodyAnimation(localClientNum, cgameGlob);
 	CG_UpdateViewWeaponAnim(localClientNum);
 	CG_ViewWeaponTick(localClientNum);
 
@@ -540,7 +796,8 @@ int CG_DrawActiveFrame(LocalClientNum_t localClientNum, int serverTime, DemoType
 	if (sub_140187D70(localClientNum))
 		sub_14018A640(localClientNum);
 	R_SetLodOrigin(cgameGlob->refdef_displayViewport, 1.0f);
-	CG_CompassIncreaseRadarTime(localClientNum);
+	if (!CG_TickLoopActive(localClientNum))
+		CG_CompassIncreaseRadarTime(localClientNum);  // the tick loop: every tick, from the tick's eye
 	FX_SetNextUpdateTime(localClientNum, cgameGlob->time);
 
 	// the shell shock: the snapshot's, or the test shock
@@ -573,78 +830,30 @@ int CG_DrawActiveFrame(LocalClientNum_t localClientNum, int serverTime, DemoType
 	}
 	CG_ClearHudGrenades(cgameGlob);
 
-	// the animation of every entity in the next snapshot, and its notetracks
-	unsigned int count = (unsigned int)cgameGlob->nextSnap->numEntities;
-	for (unsigned long long i = 0; count; ++i, --count)
-	{
-		const int entityNum = *(const int *)cgameGlob->nextSnap->entities[i];
-		DObj *obj = Com_GetClientDObj(entityNum, localClientNum);
-		if (obj)
-		{
-			CG_DObjUpdateInfo(cgameGlob, obj, true);
-			CG_ProcessClientNoteTracks(cgameGlob, entityNum);
-		}
-	}
+	// the animation of every entity in the next snapshot, and its notetracks: in the tick loop once per due tick,
+	// here, before the entities are added to the scene
+	const bool tickLoop = CG_TickLoopActive(localClientNum);
+	cg_tickLoopFrame = tickLoop;
+	if (tickLoop)
+		CG_EntityAnimationTicks(localClientNum, cgameGlob);
+	else
+		CG_EntityAnimation(localClientNum, cgameGlob);
 	sub_140178750(localClientNum);
 	sub_1402EC410(localClientNum);
 	sub_140377D80();
 	int delayedEntities[16];
 	const long long delayedCount = CG_AddPacketEntities(localClientNum, delayedEntities);
 
-	// the radar jamming level: 1/15 of the way to its target per frame
-	float jam = cgameGlob->radarJamLevel;
-	float jamFloor = 0.5f;
-	const float jamDistance = cgameGlob->radarJamDistance;
-	if (cgameGlob->predictedPlayerState.radarBlocked || jam > 0.0f
-	    || (!(0.0f >= jamDistance) && !(jamDistance > radarjamDistMax->current.value)))
-	{
-		const float distMax = radarjamDistMax->current.value;
-		const float distMin = radarjamDistMin->current.value;
-		const float range = distMax - distMin;
-		if (range != 0.0f)
-		{
-			float distance;
-			if (cgameGlob->radarJamDistance == -1.0f)
-			{
-				cgameGlob->radarJamDistance = distMax;
-				distance = distMax;
-			}
-			else
-			{
-				distance = cgameGlob->radarJamDistance;
-				if (distMin > distance)
-				{
-					cgameGlob->radarJamDistance = distMin;
-					distance = distMin;
-				}
-			}
-			float target = 1.0f - (distance - distMin) / range;
-			if (radarjamSinCurve->current.enabled)
-				target = sinf(target * 3.1415927f * 0.5f);
-			const int strength = cgameGlob->predictedPlayerState.radarStrength;
-			if (strength <= -3)
-				jamFloor = 1.0f;
-			else if (strength > -2)
-				jamFloor = strength > -1 ? 0.0f : 0.3f;
-			target = target > jamFloor ? target : jamFloor;
-			const float toGo = target - jam;
-			if (0.01f > toGo * toGo)
-				jam = target;
-			if (target != jam)
-				jam = toGo / 15.0f + jam;
-			float level = jam - 1.0f >= 0.0f ? 1.0f : jam;
-			if (0.0f - jam >= 0.0f)
-				level = 0.0f;
-			cgameGlob->radarJamLevel = level;
-		}
-	}
+	// the radar jamming level: 1/15 of the way to its target per frame (in the tick loop per tick, at the same rate
+	// over time as 1/15 at 60 fps)
+	if (!tickLoop)
+		CG_RadarJam(cgameGlob, false);
 
 	sub_1402D4BF0(localClientNum);
-	sub_1402E61B0(localClientNum);
+	if (!tickLoop)
+		sub_1402E61B0(localClientNum);  // the tick loop: every tick, from the tick's eye
 	sub_1402FB790();
 	sub_1402F11D0(localClientNum, cgameGlob->unknown10AD28, cgameGlob->time);
-	const bool tickLoop = CG_TickLoopActive(localClientNum);
-	cg_tickLoopFrame = tickLoop;
 	if (sub_140345260(localClientNum))
 	{
 		sub_1401B3710(cgameGlob->time);
@@ -673,7 +882,8 @@ int CG_DrawActiveFrame(LocalClientNum_t localClientNum, int serverTime, DemoType
 	{
 		CL_Input(localClientNum);
 	}
-	sub_1402AA2A0(localClientNum);
+	if (!tickLoop)
+		sub_1402AA2A0(localClientNum);  // the tick loop runs the ramp in every tick
 	if (tickLoop)
 	{
 		// the ticks, then the frame's own times back for the presentation
@@ -689,6 +899,7 @@ int CG_DrawActiveFrame(LocalClientNum_t localClientNum, int serverTime, DemoType
 		cgameGlob->bgs.time = bgsTime;
 		cgameGlob->bgs.frametime = bgsMsec;
 		CG_PresentViewCommand(localClientNum, cgameGlob);
+		CG_PresentTurretFov(localClientNum, cgameGlob);
 	}
 	else
 	{
@@ -722,14 +933,26 @@ int CG_DrawActiveFrame(LocalClientNum_t localClientNum, int serverTime, DemoType
 	if (!tickLoop)
 		CG_FireViewlockedEvents(localClientNum, cgameGlob);
 	if (sub_1402CF440(localClientNum))
-		sub_1402CEB10(localClientNum);
+	{
+		if (tickLoop)
+		{
+			// the player's own model: its animation ran in the ticks; posed and added to the scene here
+			sub_1402CDF70(localClientNum, cgameGlob->predictedPlayerEntity);
+			sub_1402B4F90(localClientNum, cgameGlob->predictedPlayerEntity);
+		}
+		else
+		{
+			sub_1402CEB10(localClientNum);
+		}
+	}
 	sub_1403AF520(localClientNum);
 	sub_140471E70(localClientNum, cgameGlob->frametime);
 	if (sub_140345260(localClientNum))
 	{
 		sub_14037E3D0(localClientNum);
 		sub_140588090(0, cgameGlob->time);
-		sub_14019B2C0((float)cgameGlob->frametime * 0.001f);
+		if (!tickLoop)
+			sub_14019B2C0((float)cgameGlob->frametime * 0.001f);  // the tick loop: every tick, 5 ms
 	}
 	const bool b = sub_1402DF740(localClientNum);
 	const bool a = sub_1402DF750(localClientNum);
@@ -799,32 +1022,9 @@ int CG_DrawActiveFrame(LocalClientNum_t localClientNum, int serverTime, DemoType
 		CL_SendCmd(localClientNum);
 	}
 
-	// a turret's FOV: its scope zooms with the forward/back keys, else hip to ADS
-	const unsigned int turret = sub_1402F8530(cgameGlob, cgameGlob->localClientNum);
-	if ((unsigned char)turret)
-	{
-		const WeaponDef *weapDef = bg_weaponDefs[(unsigned char)turret];
-		float fov;
-		if (sub_1402F86E0(cgameGlob->localClientNum) && weapDef->overlayInterface == 2)
-		{
-			usercmd_s cmd;
-			CL_GetUserCmd(cgameGlob->localClientNum, CL_GetCurrentCmdNumber(cgameGlob->localClientNum), &cmd);
-			const float oldFov = cgameGlob->scriptedViewFov;
-			const float zoomed = (float)cgameGlob->frametime / 1000.0f * ((float)cmd.forwardmove / -127.0f)
-			                     * weapDef->turretScopeZoomRate + oldFov;
-			fov = weapDef->turretScopeZoomMin;
-			if (!(fov > zoomed))
-				fov = weapDef->turretScopeZoomMax < zoomed ? weapDef->turretScopeZoomMax : zoomed;
-			if (__builtin_fabsf(fov - oldFov) > 0.0f && weapDef->turretZoomSound)
-				sub_1402C1130(cgameGlob->localClientNum, weapDef->turretZoomSound);
-		}
-		else
-		{
-			const float frac = cgameGlob->predictedPlayerState.weapCommon_fWeaponPosFrac;
-			fov = (1.0f - frac) * weapDef->turretFov + frac * weapDef->turretFovADS;
-		}
-		cgameGlob->scriptedViewFov = fov;
-	}
+	// a turret's FOV: its scope zooms with the forward/back keys, else hip to ADS (in the tick loop per tick)
+	if (!tickLoop)
+		CG_TurretFov(cgameGlob, false);
 
 	// the view (the viewmodel's animation ran in the ticks)
 	if (!tickLoop)

@@ -740,6 +740,10 @@ swapping the whole state, the zero-leftover angles, the command, its time, the s
 Not done: the viewmodel, sound and the local player's shadow at the swapped position on hardware, and the normal
 (trace-using) movement's own global writes, *unverified* (7.6).
 
+Since docs/cgame-frame.md 4.11 (stage 3) the frame's other integrators run in the ticks too (the radar, the
+jamming, the volume blend, the ramp, the hinges, the turret FOV, the entities' and the own model's XAnim) or on the µs
+clock (the timed repeats); the own view's step below is unchanged.
+
 Since docs/cgame-frame.md 4.10 (the tick loop), the step is the presentation's own-view step (`CG_PresentOwnView`,
 called by the enhanced `CG_DrawActiveFrame` after its ticks): the ticks predict the canonical state with the faithful
 `CG_PredictPlayerState`, `CG_TransitionPlayerState` and the events run in the ticks on the canonical state, the view

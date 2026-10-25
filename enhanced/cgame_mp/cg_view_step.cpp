@@ -376,9 +376,12 @@ void CG_PresentOwnView(LocalClientNum_t localClientNum)
 }
 
 // The one restore point (the end of CG_DrawActiveFrame), and the safety nets below and at the start of every tick
+void CG_RestoreTurretFov();  // enhanced/cgame_mp/cg_tick.cpp
+
 void CG_RestorePresentation()
 {
 	CG_RestoreCanonicalView();
+	CG_RestoreTurretFov();
 }
 
 // Store 1402D3170, enhanced: the saved state is the canonical one

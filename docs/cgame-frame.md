@@ -50,7 +50,10 @@ Sources and conventions:
   `CG_AddViewWeapon` (R, 1,200 inputs) for the viewmodel's split.
 - **Implemented:** stage 1 (4.9: the µs clock, the render time, the mode table) and stage 2 (4.10: the tick loop with
   commands, prediction, events, kick, the viewmodel's movement and animation, the presentation's own view and
-  viewmodel; P0014-P0017 folded). Left: the `CG_CalcViewValues` split and 4.6's items (stage 3).
+  viewmodel; P0014-P0017 folded) and stage 3 (4.11: the radar, jamming, volume, ramp, hinges, turret FOV and the
+  entities' and own model's XAnim in the ticks; the timed repeats on the µs clock; the doppler as a time constant).
+  Left, with the reasons in 4.11: the `CG_CalcViewValues` cameras, reactive motion, the kill-cam blend, and the
+  HUD's and sound's step-forward after the frame.
 - **New findings** (section 5), not in records/bugs.tsv: P0017 saves and restores the wrong 0x5D8 bytes for the
   character info; a turret scope's zoom sound is started every frame while zooming; 64 hinged objects integrate
   with frame-length Euler steps; the HUD timers run on the wall clock with a one-frame delay in frames;
@@ -612,6 +615,73 @@ mutations of the reconstructed `CG_AddViewWeapon` (every condition, mask, shift 
 the gun flag, the bob flag) all fail its differential test; the first attempt at `viewmodelIndex > 0` survived (no
 input had index 1; added).
 
+### 4.11 Stage 3 as implemented (the frame's other integrators)
+
+4.6's items and 4.10's list, one by one. Ticked items run inside each 5 ms tick with the tick's `cg.time`,
+`cg.oldTime`, `cg.frametime` (5) and `bgs` (enhanced/cgame_mp/cg_tick.cpp unless noted); the frame without the tick
+loop runs the originals once a frame as before.
+
+| # | Item | Now | How | Presentation |
+|---|---|---|---|---|
+| 22 | radar sweep and blips (`CG_CompassIncreaseRadarTime`) | **ticked** | the original per tick with the tick's eye (canonical origin + view height) and canonical yaw swapped into `refdef_vieworg`/`refdefViewAngles[1]` for the call | the HUD draws after the frame, after the restore: the latest tick's sweep (at most 5 ms old) |
+| 28 | other entities' XAnim and notetracks | **ticked** | the loop runs once per due tick (`CL_TicksDue`, the same times the ticks get) at its original place, before `CG_AddPacketEntities` (it needs neither the input nor the prediction) | the latest tick's pose: a step-forward of XAnim is not feasible (4.10); positions are interpolated at T_r already (4.9) |
+| 33 | radar jamming level | **ticked** | the original block per tick with the rate `1 - (14/15)^0.3 = 0.020485131` of the way per tick: today's 1/15 per frame **at 60 fps** over time (chosen over 1/15 per tick, which would settle in 75 ms instead of 250); the snap within 0.1 kept | the HUD's: the latest tick's |
+| 35 | environment volume and blend (sub_1402E61B0) | **ticked** | the original per tick with the tick's eye swapped into the view it reads (`refdef_baseVieworg`, and `lastVieworg` in third person), so the blend (1402E5F90, `frac += cg.frametime · rate`) steps 5 ms and the volume is the predicted eye's (B0080) | the sound system's: the latest tick's |
+| 36 | timed repeats (sub_1402FB790, reconstructed) | **µs clock**, once a frame | enhanced/cgame/cg_weapons.cpp: the scaled time measured in µs with the part below a millisecond carried (B0079). At a timescale below 1 the original truncates per call (0 at 1 ms frames); at 1 on whole ms it is the original. The one-call hand-off of the queue is kept: what it delays is unverified, so it is not changed | - |
+| 39 | reactive motion (sub_1401B2960) | **once a frame, unchanged** | its wind phase is a float sum of the frame's seconds, but the call also places the camera's actor impulses from the drawn refdef: ticking it would feed the presentation's view into it, and splitting it needs it reconstructed | - |
+| 46 | the ramp (sub_1402AA2A0, reconstructed) | **ticked** | enhanced/cgame_mp/cg_draw_mp.cpp: `CG_RampTick(lc, 5)`, the original body with the frame time a parameter (the original reads `cls.frametime`) | the latest tick's (its reader is unknown) |
+| 54 | the player's own model in third person (sub_1402CEB10, reconstructed) | **split** | its XAnim and notetracks per tick; its pose (1402CDF70) and scene entry (1402B4F90) in the presentation | the latest tick's pose |
+| 57 | hinges (sub_14019B2C0) | **ticked** | the original per tick with `cg.frametime · 0.001` = 0.005 | the latest tick's (the physics world's own fixed steps, 140588090, stay once a frame at the frame's time) |
+| 65 | turret FOV | **ticked**, stepped | the original block per tick (the tick's command's forward/back, 5 ms); the zoom sound on the edge: when zooming starts, not on every change (B0077) | stepped forward: the latest tick's FOV zoomed on by the rest to `CG_PresentTime(PC_OWN_VIEW)` with the same step, a presentation copy put back by `CG_RestorePresentation` |
+| 68 | `CG_CalcViewValues`' DiffTrack cameras | **once a frame, unchanged** | see below | - |
+| 69 | kill-cam blend (`LerpKillCamView`) | **once a frame, unchanged** | it blends the drawn view toward its target by `frametime / (end - oldTime)` of the remaining way: exact linear for a still target, and its state is the previous frame's drawn view (presentation), so there is nothing to tick | - |
+| (sound) | doppler pitch (sub_1406AD9E0, reconstructed) | **time constant** | enhanced/sound/snd.cpp: the old pitch's weight `k/(k+1)` per 16.667 ms, raised to `msec/16.667` for an update of msec (B0067); without a positive k the original | - |
+| (72) | 1402F51A0's vector at cg+0xB52A0 | **settled: not an integrator** | it is the view's axis (`refdef_viewaxis` copied by `CG_CalcViewValues`, the placement's by 1402F30A0); 1402F51A0 rotates the offset by it (140531AF0) and adds the cg_gun_x/y/z offsets along its three vectors | - |
+
+**Not done, with the reason** (left once a frame):
+
+- **#68, the `CG_CalcViewValues` cameras.** The DiffTrack filters are in the remote-vehicle and killstreak camera
+  1405B7B30 (state at 149F89700 + lc · 0x44: the filtered angles, offsets, zoom and FOV, stepped by `DiffTrackAngle`
+  1405304D0 and `DiffTrack` 140530470 with `cg.frametime · 0.001`), reached through 1405B8880, 1405B88C0 and
+  1405B8840 for three entity slots, and in 1405B88F0 and 1402EC620. Their targets are the followed entity's pose as
+  interpolated for the frame (`cg.frameInterpolation`), the last two usercmds and the controller, and they write the
+  refdef and a view-angle delta back into the client (140307160). Ticking them exactly needs the followed entity
+  interpolated at every tick time, the usercmd of each tick, and the client's angle delta applied per tick: the
+  camera functions (about 530 lines) and their entity interpolation reconstructed first. They run only in those
+  camera modes; the first-person view in `CG_CalcViewValues` is closed-form in time plus the stepped state.
+- **#39 reactive motion** and **#69 the kill-cam blend**: above.
+- **Presentation at the render time** for the HUD items (radar sweep, jamming) and the sound items (volume): they are
+  read after `CG_DrawActiveFrame` (the 2D, the sound update), after the one restore point, so they show the latest
+  tick; stepping them forward needs a restore point after the 2D and the sound update.
+
+Tests (tests/enhanced/test_tick.py stage-3 tests, test_timers.py, test_ramp.py, test_doppler.py; the reconstructions'
+differential tests in test_cg_draw.py, test_cg_weapons.py, test_snd.py, test_cg_view.py):
+
+- **(a), extended**: a frame with the jamming active, the ramp held then released, a turret scope zooming, the hinges,
+  two DObjs (an entity's and the player's own) and the volume and the radar (both logged with the eye and yaw they
+  read), at 60, 144, 165, 240, 360, 500 and 1000 fps with the nudges, against 5 ms frames: the jamming level, the
+  turret FOV and the ramp bit-identical at every tick; the hinges' dt, both DObjs' XAnim dt and notetracks, the
+  volume's and the radar's calls at the same ticks with the same arguments; the jamming level's and the ramp's rates
+  per tick exactly the formulas; the zoom sound once.
+- **(b)**: the turret FOV the view is computed with is the latest tick's stepped by the rest to the render time; the
+  canonical one after the frame.
+- The timed repeats: the original at timescale 1 on whole ms (500 inputs); at 0.5 the same scaled time at 1 ms and
+  16/17 ms frames (the original doesn't advance at 1 ms frames).
+- The doppler: the original without smoothing (400 inputs); an approaching source's pitch over time is the closed
+  form at 60 fps, 144 Hz and 500 fps (the original's settles about eight times sooner at 500 fps).
+- The ramp: the enhanced function is the original (800 inputs), and `CG_RampTick` with a frame time the original
+  with that `cls.frametime`.
+
+Mutation checks: 29 mutations of the enhanced stage-3 code (each per-tick call moved back to the frame or dropped,
+the jam rate, the eye and yaw swaps, the turret edge and its presentation, the ramp's per-tick frame time, the own
+body run whole, the µs clock's carry and pause, the doppler weight and its fallback) and 26 of the new faithful
+functions (1402AA2A0, 1402FB790, 1406AD9E0, 1402CEB10: bounds, operands, swapped arguments, dropped statements). All
+55 are killed. Three enhanced ones (the ramp run per frame, the yaw swap, the own body called whole) first survived
+and are killed since the world test logs the ramp and checks the eye's yaw and the body's two calls; four faithful
+ones (the ADS rate, the doppler's still distance, its clamp and its sent limit) since the inputs cover those
+branches; the ramp's clamp at 1 since 40 inputs stand just below the limits. Equivalent mutants are left out:
+`1.0f < v` against `v > 1.0f`, and `>=` against `>` where both branches give the same value.
+
 ## 5. Findings
 
 New, for the enhanced build (not in records/bugs.tsv; listed here and in the report):
@@ -632,7 +702,9 @@ New, for the enhanced build (not in records/bugs.tsv; listed here and in the rep
    (*unverified* whether that matters during kill cams or demos), and their events are handed over one frame later
    in frames.
 5. **The environment volume blend reads the previous frame's view origin** (sub_1402E61B0, #35): transitions start
-   one frame late (16 ms at 60 fps, 1 ms at 1000 fps).
+   one frame late (16 ms at 60 fps, 1 ms at 1000 fps). *Corrected in stage 3* (4.11): that holds in third person
+   only (`lastVieworg`); in first person it reads `refdef_baseVieworg`, this frame's eye as interpolated between the
+   snapshots by 1402D3230, so it lags the predicted eye by the interpolation instead.
 6. **`CG_AddPacketEntities` flips a parity bit per call** (143D3C6B8, #32): it must run exactly once per drawn frame.
 7. **`CG_SetInitialSnapshot` resets cg.time after the frame computed `frametime`** (#12): on the first snapshot the
    frame's frametime (and bgs.frametime) belong to the old time. Harmless today (*unverified*); a tick loop must take

@@ -83,9 +83,9 @@ def _run(env, pattern, nudges=None, pmove=None, mouse=None, shots=SHOTS, counts=
 
 def _by_tick(g):
     rows = {}
-    for frame, time, old, msec, bgs_time, bgs_msec, ps, pm, kick, recoil in g.ticks.rows:
+    for frame, time, old, msec, bgs_time, bgs_msec, ps, pm, kick, recoil, extra in g.ticks.rows:
         assert time not in rows, ("a tick ran twice", time)
-        rows[time] = (old, msec, bgs_time, bgs_msec, ps, pm, kick, recoil)
+        rows[time] = (old, msec, bgs_time, bgs_msec, ps, pm, kick, recoil, extra)
     cmds = {}
     for frame in g.frame_commands:
         for raw in frame:
@@ -104,13 +104,14 @@ def _compare(name, g, ref, upto=None, minimum=150):
     assert len(common) >= minimum, (name, len(common))
     assert common == sorted(ref_rows)[:len(common)], name   # no tick missing at the start or in between
     for t in common:
-        old, msec, bgs_time, bgs_msec, ps, pm, kick, recoil = rows[t]
+        old, msec, bgs_time, bgs_msec, ps, pm, kick, recoil, extra = rows[t]
         assert (old, msec, bgs_time, bgs_msec) == (t - 5, 5, t, 5), (name, t, old, msec, bgs_time, bgs_msec)
         r = ref_rows[t]
         assert ps == r[4], (name, t, "state", _first_diff(ps, r[4]))
         assert pm == r[5], (name, t, "cg_pmove", _first_diff(pm, r[5]))
         assert kick == r[6], (name, t, "kick", struct.unpack("<6f", kick), struct.unpack("<6f", r[6]))
         assert recoil == r[7], (name, t, "recoil")
+        assert extra == r[8], (name, t, "jam, turret FOV, ramp", extra, r[8])
         assert cmds[t] == ref_cmds[t], (name, t, "usercmd")
     last = common[-1]
     events = [e for e in g.ticks.events if e[0] <= last]
@@ -556,3 +557,217 @@ def test_a_viewmodel_animation_per_tick(env):
             g.frame(msec)
         want = [(frame, 5, t, t - 5) for frame, t, *_ in g.ticks.rows]
         assert seen == want, (pattern[:3], seen[:4], want[:4])
+
+
+# --- stage 3: the frame's other integrators in the ticks ---------------------------------------------------------
+
+TURRETDEF = 0x00500000 + 0xD0000
+JAMDVARS = 0x00500000 + 0xD8000
+DOBJ = 0xDD000000
+
+
+class WorldGame(TickGame):
+    """TickGame with the frame's other integrators live: the radar jamming (blocked, strength -2: floor 0.5), the ramp
+    (rampUp held, its input on; released at a fixed tick), a turret scope zooming with forward held (the zoom sound
+    logged), the hinges (logged), two snapshot entities, one with a DObj (DObjUpdateClientInfo and the notetracks
+    logged). Logged entries carry cg.time and cg.frametime."""
+
+    def __init__(self, env, release_ramp_at=None, **kw):
+        super().__init__(env, mouse=Mouse(0.0, 0.0), shots={}, **kw)
+        self.fakes.pop("?CG_DObjUpdateInfo@@YAXPEBUcg_s@@PEAUDObj@@_N@Z")   # the real one (src)
+        self.fakes.pop("?sub_1402AA2A0@@YAXW4LocalClientNum_t@@@Z")         # the real ones: they must not run per
+        self.fakes.pop("?sub_1402CEB10@@YAXW4LocalClientNum_t@@@Z")         # frame in the tick loop
+        self.log = []
+        cg = va("cgArray")
+        w = self.world
+
+        def times(mu):
+            return struct.unpack("<ii", rd(mu, cg + 0x71890, 4) + rd(mu, cg + 0x7188C, 4))
+
+        def logger(name, extra=None):
+            def run(mu):
+                from win32_display import arg
+                self.log.append((name,) + times(mu) + ((extra(mu),) if extra else ()))
+                return 0
+            return run
+
+        def xmm0(mu):
+            from unicorn.x86_const import UC_X86_REG_XMM0
+            return mu.reg_read(UC_X86_REG_XMM0) & 0xFFFFFFFF
+
+        def xmm1(mu):
+            from unicorn.x86_const import UC_X86_REG_XMM1
+            return mu.reg_read(UC_X86_REG_XMM1) & 0xFFFFFFFF
+        self.fakes.update({
+            "?sub_14031FED0@@YA_NH@Z": lambda mu: 1,
+            "?sub_1402F8530@@YAIPEBUcg_s@@W4LocalClientNum_t@@@Z": lambda mu: 0x21,
+            "?sub_1402F86E0@@YA_NW4LocalClientNum_t@@@Z": lambda mu: 1,
+            "?sub_1402C1130@@YAHW4LocalClientNum_t@@PEBX@Z": logger("zoom sound"),
+            "?sub_14019B2C0@@YAXM@Z": logger("hinges", xmm0),
+            "?Com_GetClientDObj@@YAPEAUDObj@@HW4LocalClientNum_t@@@Z":
+                lambda mu: {5: DOBJ, 0: DOBJ + 0x100}.get(__import__("win32_display").arg(mu, 0) & 0xFFFFFFFF, 0),
+            "?sub_1402CF440@@YAHW4LocalClientNum_t@@@Z": lambda mu: 1,       # the own model is shown (third person)
+            "?DObjUpdateClientInfo@@YAXPEAUDObj@@M_N@Z":
+                logger("xanim", lambda mu: (__import__("win32_display").arg(mu, 0), xmm1(mu))),
+            "?CG_ProcessClientNoteTracks@@YAXPEAUcg_s@@H@Z":
+                logger("notetracks", lambda mu: __import__("win32_display").arg(mu, 1) & 0xFFFFFFFF),
+            "?sub_1402E61B0@@YAXW4LocalClientNum_t@@@Z":
+                logger("volume", lambda mu: rd(mu, cg + 0x71914, 12) + rd(mu, cg + 0x10E840, 12)),
+            "?CG_CompassIncreaseRadarTime@@YAXW4LocalClientNum_t@@@Z":
+                logger("radar", lambda mu: rd(mu, cg + 0x718E0, 12) + rd(mu, cg + 0xA9A94, 4)),
+        })
+        w.poke(cg + 0x228, struct.pack("<i", 1))          # radarBlocked
+        w.poke(cg + 0x230, struct.pack("<i", -2))         # radarStrength: floor 0.5
+        w.poke(cg + 0x10EDBC, struct.pack("<f", 0.0))
+        w.poke(cg + 0x10EDC4, struct.pack("<f", 40.0))    # the turret's FOV
+        w.poke(cg + 0x10F824, b"\1")                      # rampUp
+        from frame_sim import CL_VIEWANGLES
+        w.poke(va("clients") + CL_VIEWANGLES, struct.pack("<3f", 0.0, 33.0, 0.0))   # a yaw the drawn view hasn't
+        from frame_sim import SNAP
+        w.poke(SNAP + 0x3C80, struct.pack("<i", 2))
+        w.poke(SNAP + 0x3C88, struct.pack("<i", 5))
+        w.poke(SNAP + 0x3C88 + 0x108, struct.pack("<i", 9))
+        if release_ramp_at is not None:
+            self.ticks.writes[release_ramp_at] = [(0x10F824, b"\0")]
+
+    def call(self, name, args, ret="void"):
+        from frame_sim import S, scratch_setup
+
+        def setup(w):
+            scratch_setup(w)
+            mu = w.m.mu
+            turret = bytearray(0x970)
+            struct.pack_into("<Q", turret, 0x138, 0x12340000)
+            struct.pack_into("<i", turret, 0x5E8, 2)
+            struct.pack_into("<5f", turret, 0x950, 65.0, 30.0, 20.0, 10.0, 60.0)
+            mu.mem_write(TURRETDEF, bytes(turret))
+            w.u64(va("bg_weaponDefs") + 8 * 0x21, TURRETDEF)
+            for i, (n, v) in enumerate((("radarjamDistMin", 200.0), ("radarjamDistMax", 800.0))):
+                mu.mem_write(JAMDVARS + 0x40 * i + 0x10, struct.pack("<f", v))
+                w.u64(va(n), JAMDVARS + 0x40 * i)
+            mu.mem_write(JAMDVARS + 0x80 + 0x10, b"\0")
+            w.u64(va("radarjamSinCurve"), JAMDVARS + 0x80)
+        return self.world.call(S[name] if name in S else name, args, setup, self.fakes, ret=ret)
+
+
+def _world_run(env, pattern, nudges=None):
+    g = WorldGame(env, release_ramp_at=START + 5 * 70)
+    g.client.key(KB_FORWARD, True)
+    start = g.client.realtime
+    applied = set()
+    g.frame(1)
+    for msec in pattern:
+        elapsed = g.client.realtime - start + msec
+        change = 0
+        for at, d in (nudges or {}).items():
+            if at not in applied and elapsed >= at:
+                applied.add(at)
+                change += d
+        g.frame(msec, change)
+    return g
+
+
+def test_a_frame_integrators_identical_at_every_frame_rate(env):
+    """(a) for the integrators ticked in stage 3 (docs/cgame-frame.md 4.11): the radar jamming level, the ramp, the
+    turret's FOV at every tick, and the logged calls (the hinges with dt, the entities' XAnim with dt and their
+    notetracks, the zoom sound, the volume blend and the radar sweep with the eye and yaw they read) at the same ticks
+    with the same arguments, at 60-1000 fps with the nudges against 5 ms frames; the zoom sound once, when the zoom
+    starts (B0077); the volume and the radar read the tick's own eye (B0080)."""
+    ref = _world_run(env, [5] * 120, NUDGES)
+    rows, _ = _by_tick(ref)
+    jams = [struct.unpack("<f", r[8][0])[0] for r in rows.values()]
+    fovs = [struct.unpack("<f", r[8][1])[0] for r in rows.values()]
+    ramps = [struct.unpack("<f", r[8][2])[0] for r in rows.values()]
+    assert jams[0] == 0.0 and jams[-1] == 0.5 and len(set(jams)) > 10, jams[:20]
+    assert fovs[0] == 40.0 and fovs[-1] < 30.0 and len(set(fovs)) > 50, fovs[:5]
+    assert max(ramps) == 1.0 and ramps[-1] < 1.0, ramps[60:80]
+    # the rates: the jamming level 1 - (14/15)^0.3 of the way per tick until within 0.1; the ramp 5/300 per tick
+    k = f32(0.020485131)
+    for a, b in zip(jams, jams[1:]):
+        to_go = f32(0.5 - a)
+        want = 0.5 if f32(to_go * to_go) < f32(0.01) else f32(f32(to_go * k) + a)
+        assert b == want, (a, b, want)
+    step = f32(5.0 / 300.0)
+    for a, b in zip(ramps, ramps[1:]):
+        if a < 1.0 and b > a:
+            assert b == min(1.0, f32(step + a)), (a, b)
+    sounds = [e for e in ref.log if e[0] == "zoom sound"]
+    assert len(sounds) == 1, sounds
+    by_kind = {k: [e for e in ref.log if e[0] == k] for k in ("hinges", "xanim", "notetracks", "volume", "radar")}
+    ticks = sorted(rows)
+    for kind, entries in by_kind.items():
+        times = [e[1] for e in entries]
+        if kind in ("xanim", "notetracks"):   # two DObjs a tick: an entity's and the player's own (third person)
+            assert times == [t for t in ticks[:len(entries) // 2] for _ in range(2)], kind
+            assert {e[3] if kind == "notetracks" else e[3][0] for e in entries} == (
+                {5, 0} if kind == "notetracks" else {DOBJ, DOBJ + 0x100}), kind
+        else:
+            assert times == ticks[:len(entries)] and len(entries) >= len(ticks) - 1, kind
+        assert all(e[2] == 5 for e in entries), kind
+    assert {e[3] for e in by_kind["hinges"]} == {struct.unpack("<I", struct.pack("<f", 5 * f32(0.001)))[0]}
+    # the volume and the radar read the tick's eye (the canonical origin + view height) and yaw (B0080)
+    for kind in ("volume", "radar"):
+        for e in by_kind[kind]:
+            ps = rows[e[1]][4]
+            x, y, z = struct.unpack_from("<3f", ps, 0x1C)
+            eye = struct.pack("<3f", x, y, f32(z + struct.unpack_from("<f", ps, 0x194)[0]))
+            if kind == "volume":
+                assert e[3] == eye + eye, (e[1], e[3])
+            else:
+                assert e[3] == eye + ps[0x188:0x18C], (e[1], e[3])
+    moving = {e[3] for e in by_kind["volume"]}
+    assert len(moving) > 50
+    for fps in FPS:
+        g = _world_run(env, frame_pattern(fps, 600), NUDGES)
+        _compare(f"{fps} fps", g, ref, minimum=100)
+        last = max(t for t in _by_tick(g)[0] if t in rows)
+        for kind in ("hinges", "xanim", "notetracks", "zoom sound", "volume", "radar"):  # per kind
+            assert sorted(e for e in g.log if e[0] == kind and e[1] <= last) == \
+                sorted(e for e in ref.log if e[0] == kind and e[1] <= last), (fps, kind)
+
+
+def test_a_jam_rate_keeps_the_60_fps_look(env):
+    """The ticked jamming level against the original's 1/15 per frame at 60 fps (16/17 ms frames): over the same
+    time it moves the same way within float rounding (the rate per tick is 1 - (14/15)^0.3), and both snap to the
+    target (within 0.1) within two 60 fps frames of each other (the crossing quantized to 16.7 ms against 5 ms)."""
+    k = 1 - (14 / 15) ** 0.3
+    jam, out, snap_tick = 0.0, {}, None
+    for tick in range(1, 200):
+        to_go = 0.5 - jam
+        if to_go * to_go < 0.01 and snap_tick is None:
+            snap_tick = tick * 5
+        jam = 0.5 if to_go * to_go < 0.01 else jam + to_go * k
+        out[tick * 5] = jam
+    jam60, snap60 = 0.0, None
+    for frame in range(1, 60):
+        to_go = 0.5 - jam60
+        t60 = frame * 1000 / 60
+        if to_go * to_go < 0.01 and snap60 is None:
+            snap60 = t60
+        jam60 = 0.5 if to_go * to_go < 0.01 else jam60 + to_go / 15
+        if snap60 is None and t60 < snap_tick - 5:
+            nearest = out[5 * round(t60 / 5)]
+            assert abs(nearest - jam60) < 0.01, (frame, nearest, jam60)
+    assert abs(snap60 - snap_tick) < 34, (snap60, snap_tick)   # the 60 fps frames' quantization of the crossing
+
+
+def test_b_turret_fov_at_the_render_time(env):
+    """The turret scope's FOV the view is computed with (what CG_CalcViewValues sees) is the latest tick's zoomed on
+    by the time to the render time with the tick's own step; after the frame it is the tick's again."""
+    g = WorldGame(env)
+    seen = []
+    cg = va("cgArray")
+    g.fakes["?CG_CalcViewValues@@YAXW4LocalClientNum_t@@@Z"] = lambda mu: seen.append(
+        struct.unpack("<f", rd(mu, cg + 0x10EDC4, 4))[0]) or None
+    g.client.key(KB_FORWARD, True)
+    g.frame(1)
+    stepped = 0
+    for msec, frac in ((1, 0), (1, 300), (2, 0), (1, 700), (1, 0), (3, 500), (1, 999)):
+        g.frame(msec, fraction_us=frac)
+        canonical = struct.unpack("<f", g.world.read(cg + 0x10EDC4, 4))[0]
+        rest = g.times[-1] + frac / 1000.0 - g.ticks.rows[-1][1]
+        want = f32(f32(f32(rest) / 1000.0) * f32(127 / -127) * 20.0 + canonical) if rest > 0 else canonical
+        want = max(10.0, min(60.0, want))
+        assert abs(seen[-1] - want) < 1e-5, (msec, frac, seen[-1], want, canonical)
+        stepped += seen[-1] != canonical
+    assert stepped >= 4
