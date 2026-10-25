@@ -143,8 +143,19 @@ Store pseudocode by
 includes `140631540` calling `14036DF30`; the latter enters
 `while (DAT_145CAEDF8 != 0)` with event pumping and `Sleep(1)`. Other
 snapshots include `14053DA90`/ `14053D490` waiting on a separate
-synchronisation flag and thread worker code. These are **observations of
-waiting**, not proof of the flag's producer or the reason it remains set.
+synchronisation flag and thread worker code. The generated-source tracing run
+[40201808534](https://github.com/lizardpeter/ghosts-decomp/actions/runs/40201808534)
+found 15 references to this flag. The DB loading path at 14036DF30
+sets `DAT_145CAEDF8` to 1 when `DAT_145CAEDFC` requests work.
+The worker at 14036FF40 and helper 140370130 then use an atomic/locked
+**1 → 2 → 0 handshake** before the initiating caller can proceed.
+This is evidence of a worker synchronization wait, not proof that the
+worker is dead or the content is missing. Changing the flag without
+completing the DB work would violate the original loader contract.
+P0030 samples `DAT_145CAEDF8`, `DAT_145CAEDFC` and two worker queue
+counters read-only at five-second intervals in later native smoke reports.
+That will distinguish persistent unprocessed requests from repeated normal
+transitions; it does not itself fix map/UI loading.
 `tools/analysis/inspect_loader_flag.py` finds writes/reads of the flag in
 generated Store code before any proposed change to the loader.
 
