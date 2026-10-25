@@ -121,6 +121,33 @@ particular, `DIRECT_MAP_START_REQUESTED` is emitted **before** invoking
 the original map-start function and is not evidence that a map loaded.
 No player names, IDs, tokens or endpoints appear in the markers.
 
+Native [40131610432](https://github.com/lizardpeter/ghosts-decomp/actions/runs/40131610432)
+was the first debug run with P0025 milestones. It recorded
+`IW6D:DIRECT_COMMANDS_REGISTERED` but **not** `LOCAL_PROFILE_CONFIGURED`,
+the join request or a map-start request. The 90-second capture remained black.
+This proves custom command registration executed, not that the startup
+`+direct_player` line had been consumed by the engine's command buffer.
+
+P0029 now parses a single exact `+direct_player` ID/name pair from the Windows
+process command line during NET_Init. Parsing is bounded, quote aware, and
+delegates all identity validation to the existing local profile provider; it
+does not fake GDK objects, open sockets, change dvars, or launch maps. In
+[native 40201268224](https://github.com/lizardpeter/ghosts-decomp/actions/runs/40201268224),
+both `DIRECT_COMMANDS_REGISTERED` and **`LOCAL_PROFILE_PREPARED`** were
+observed from the actual game. Its normal deferred command still had not
+executed. New native jobs additionally require these two milestones to pass.
+
+The read-only stack snapshot from that prior run was mapped back to generated
+Store pseudocode by
+`tools/analysis/inspect_native_stacks.py`: the initialisation call chain
+includes `140631540` calling `14036DF30`; the latter enters
+`while (DAT_145CAEDF8 != 0)` with event pumping and `Sleep(1)`. Other
+snapshots include `14053DA90`/ `14053D490` waiting on a separate
+synchronisation flag and thread worker code. These are **observations of
+waiting**, not proof of the flag's producer or the reason it remains set.
+`tools/analysis/inspect_loader_flag.py` finds writes/reads of the flag in
+generated Store code before any proposed change to the loader.
+
 The complete game installation is not yet staged in the diagnostic. Later asset,
 graphics, profile/statistics and connection failures must be addressed from
 their own observed evidence. Native map loading, a completed join and full
