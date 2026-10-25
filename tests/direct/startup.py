@@ -23,6 +23,12 @@ def main():
         output = Path(tmp) / 'package'
         package.package(original_exe(package.BUILD),
                         ROOT/'build'/package.BUILD/'direct/recon.dll', output, 'direct')
+        # A normal direct package must contain the reproducible local hardware
+        # startup probe, not require a separate repository checkout.
+        for filename in ('LaunchDirect.ps1', 'ProbeStartup.ps1', 'native_smoke.py'):
+            packaged = output / filename
+            assert packaged.is_file() and packaged.read_bytes() == (
+                ROOT / 'tools' / 'direct' / filename).read_bytes()
         exe = Image(output/'iw6mp64_offline.exe')
         dll = Image(output/'recon.dll')
         m = Machine(exe, dll)
