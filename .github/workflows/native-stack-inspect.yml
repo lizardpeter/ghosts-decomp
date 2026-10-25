@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - tools/analysis/inspect_native_stacks.py
+      - tools/analysis/inspect_loader_flag.py
       - .github/workflows/native-stack-inspect.yml
   workflow_dispatch:
 
@@ -20,14 +21,19 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /tools/analysis/inspect_native_stacks.py
+            /tools/analysis/inspect_loader_flag.py
             /analysis/iw6mp64_MSStore_ship/functions.tsv
             /analysis/iw6mp64_MSStore_ship/pseudocode/_unattributed/
       - name: Resolve the actual Store stack addresses from native 40131610432
         run: |
           python3 tools/analysis/inspect_native_stacks.py \
             --excerpt-lines 42 --output native-stack-functions.json
+      - name: Trace renderer/asset wait flag reads and writes
+        run: python3 tools/analysis/inspect_loader_flag.py
       - uses: actions/upload-artifact@v4
         with:
           name: store-native-stack-functions
-          path: native-stack-functions.json
+          path: |
+            native-stack-functions.json
+            native-loader-flag.json
           retention-days: 7
