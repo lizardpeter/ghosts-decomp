@@ -159,6 +159,40 @@ transitions; it does not itself fix map/UI loading.
 `tools/analysis/inspect_loader_flag.py` finds writes/reads of the flag in
 generated Store code before any proposed change to the loader.
 
+### Diagnose on a real Windows gaming PC (P0031)
+
+The automated Windows runner reports `Microsoft Hyper-V Video` with
+`d3d10warp.dll` loaded; its black screen may depend on that virtual GPU,
+so a repeat on a normal supported GPU with a **complete, legitimately
+installed game** is necessary before changing rendering or DB worker code.
+
+New **direct-mode packages include** `ProbeStartup.ps1` and
+`native_smoke.py` beside `LaunchDirect.ps1`. On a Windows PC with 64-bit
+Python 3.9+ available, open an **elevated PowerShell** terminal in the
+package directory and run:
+
+```powershell
+.\ProbeStartup.ps1 -GameDirectory 'D:\Games\Ghosts' -Seconds 120
+```
+
+The script checks the pinned direct-mode manifest and EXE/DLL hashes, uses
+the original installed content and local runtime DLLs, and temporarily
+applies an executable-specific **outbound block** for the packaged EXE.
+It never disables or removes Windows Gaming Services. The test starts
+an ephemeral local player, never sends gameplay traffic, runs for a bounded
+period, samples `DAT_145CAEDF8` and the worker/queue flags every five
+seconds, and records debug messages, loaded modules, thread stacks and
+pending zone names. The firewall block and any runtime DLLs it copied
+from the installation are removed in `finally`, including failures.
+
+Reports stay in `local-diagnostics/summary.json` and `game.json`
+**locally**. Only add `-Screenshot` if a full desktop capture is appropriate:
+it can include unrelated private windows. Review logs before sharing; no
+diagnostic uploads anything. This is **not** a live multiplayer test.
+A missing package dependency, invalid content, unexpected SDK load or
+different real-GPU behavior is new evidence to investigate, not a
+reason to force `DAT_145CAEDF8` to zero.
+
 The complete game installation is not yet staged in the diagnostic. Later asset,
 graphics, profile/statistics and connection failures must be addressed from
 their own observed evidence. Native map loading, a completed join and full
