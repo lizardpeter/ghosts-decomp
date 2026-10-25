@@ -124,6 +124,26 @@ login status. The original retry function at 140311310 then emits `getchallenge`
 replaced by the selected transport's readiness. Full local profile setup and other join initialization work
 remain to be reconstructed.
 
+## Native local-player bootstrap (P0029)
+
+The native debug observer confirmed that direct commands register during
+`NET_Init` but the engine's deferred `+direct_player` console line does not
+execute in the bounded startup run. P0029 therefore prepares the **same**
+self-asserted local player ID and name from the launcher arguments as soon as
+NET_Init runs. The parser recognizes an exact, single `+direct_player` token,
+one 16-digit hex ID and a validated ASCII display name, respecting quotes and
+rejecting malformed/duplicate commands. No vendor account, licence, or
+network state is created. The normal engine `direct_player` command can later
+sync its original name cache and dvar when startup completes.
+
+Native run 40201268224 confirms both `DIRECT_COMMANDS_REGISTERED` and
+`LOCAL_PROFILE_PREPARED`. The engine's deferred
+`LOCAL_PROFILE_CONFIGURED`, challenge send, map startup and an actual game
+remain unverified in that run; a prepared profile is not a playable client.
+The direct join/host bridge now checks for the player before switching the
+existing `onlinegame` dvar to the LAN branch, so refused requests no longer
+silently change multiplayer mode.
+
 ## Local multiplayer readiness (P0024)
 
 The two Store multiplayer eligibility queries at **14054B1B0** and
