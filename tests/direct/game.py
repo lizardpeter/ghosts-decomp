@@ -75,12 +75,14 @@ def main():
         m.mu.mem_write(0x143E96821,b'\1')
         m.mu.mem_write(0x143E96890,struct.pack('<i',0))
         m.mu.mem_write(0x146B456A0,struct.pack('<i',12345))
-        assert call(dll.exports['Iw6DirectBeginJoin'],[endpoint])[0]==-5
+        assert call(dll.exports['Iw6DirectBeginJoin'],[endpoint])[0]==-9
         online_dvar=0x143E90000
         m.mu.mem_write(online_dvar,bytes(0x60))
         m.mu.mem_write(online_dvar+0x10,b'\1')
         m.mu.mem_write(0x1442B98C8,struct.pack('<Q',online_dvar))
         assert call(dll.exports['Iw6DirectBeginJoin'],[endpoint])[0]==-9
+        # Failed joins must not mutate onlinegame before local identity exists.
+        assert bytes(m.mu.mem_read(online_dvar+0x10,1))==b'\x01'
         # Xbox-independent eligibility must fail closed without a local ID.
         # Exercise both patched original game entries, not only our export.
         def readiness(address, controller=0, expected=0, why=12):
@@ -99,6 +101,11 @@ def main():
         assert call(0x1401A7DB0,[0],ret_type='cstr')[0]==b'Local Player'
         assert settings==[(b'name',b'Local Player')]
         assert native_markers[-1]==b'IW6D:LOCAL_PROFILE_CONFIGURED',native_markers
+        # With a valid player but no initialized LAN dvar the entry refuses
+        # to join, rather than forcing a made-up network state.
+        m.mu.mem_write(0x1442B98C8,struct.pack('<Q',0))
+        assert call(dll.exports['Iw6DirectBeginJoin'],[endpoint])[0]==-5
+        m.mu.mem_write(0x1442B98C8,struct.pack('<Q',online_dvar))
         # An Xbox-connected onlinegame branch is never made eligible by a
         # locally configured identity. A NULL reason and other controllers are
         # also denied without touching vendor account state.
