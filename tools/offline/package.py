@@ -237,7 +237,8 @@ def package(original, dll, output, mode='offline'):
         for name in (() if mode == 'direct' else ('ConfigureSandbox.ps1', 'LaunchSandbox.ps1')):
             shutil.copyfile(ROOT / 'tools/offline' / name, output / name)
         if mode == 'direct':
-            shutil.copyfile(ROOT / 'tools/direct/LaunchDirect.ps1', output / 'LaunchDirect.ps1')
+            for name in ('LaunchDirect.ps1', 'ProbeStartup.ps1', 'native_smoke.py'):
+                shutil.copyfile(ROOT / 'tools/direct' / name, output / name)
     except BaseException:
         shutil.rmtree(output)
         raise
