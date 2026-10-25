@@ -168,6 +168,12 @@ jobs:
                   observed_events = $directMessages
                   game_join_verified = $false
                 } | ConvertTo-Json -Depth 8 | Set-Content diagnostics/direct-milestones.json
+                # Unlike menu/map loading, these two startup checkpoints
+                # must occur in this exact launch with +direct_player.
+                if ($directMessages -notcontains 'IW6D:DIRECT_COMMANDS_REGISTERED' -or
+                    $directMessages -notcontains 'IW6D:LOCAL_PROFILE_PREPARED') {
+                  throw 'Native direct commands or early local profile bootstrap did not execute'
+                }
               }
             } finally { Remove-NetFirewallRule -Name $rule }
           }
