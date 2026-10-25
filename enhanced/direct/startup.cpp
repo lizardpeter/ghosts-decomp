@@ -39,15 +39,6 @@ bool Same(const char *a, const char *b)
     while (*a && *b && *a == *b) { ++a; ++b; }
     return *a == *b;
 }
-void Copy(char *to, const char *from, unsigned cap)
-{
-    for (unsigned i = 0; i < cap; ++i)
-    {
-        to[i] = from[i];
-        if (!from[i]) return;
-    }
-    to[cap - 1] = 0;
-}
 }
 
 extern "C" int Iw6DirectLoadStartupProfile()
