@@ -80,8 +80,10 @@ extern "C" int Iw6DirectBeginJoin(const char *endpoint)
     if (!Iw6DirectParse(endpoint, &peer, 0)) return lastResult = -1;
     if (!State<unsigned char>(0x143E96821)) return lastResult = -2;
     if (State<int>(0x143E96890) >= 3) return lastResult = -3;
-    if (!LocalNetworkMode()) return lastResult = -5;
+    // Refuse an unconfigured player *before* changing onlinegame. An invalid
+    // join/host request must not put the menu into LAN mode as a side effect.
     if (!Iw6DirectPlayerId(0)) return lastResult = -9;
+    if (!LocalNetworkMode()) return lastResult = -5;
     if (!Iw6DirectOpen("0.0.0.0:0", 0) || !Iw6DirectSelectPeer(endpoint))
     { Iw6DirectClose(); return lastResult = -4; }
 
@@ -113,8 +115,10 @@ extern "C" int Iw6DirectHost(const char *bind, const char *map, const char *game
         !Identifier(gametype, 31, 1)) return lastResult = -6;
     if (!State<unsigned char>(0x143E96821)) return lastResult = -2;
     if (State<int>(0x143E96890) >= 3 || ServerRunning()) return lastResult = -3;
-    if (!LocalNetworkMode()) return lastResult = -5;
+    // Refuse an unconfigured player *before* changing onlinegame. An invalid
+    // join/host request must not put the menu into LAN mode as a side effect.
     if (!Iw6DirectPlayerId(0)) return lastResult = -9;
+    if (!LocalNetworkMode()) return lastResult = -5;
     if (!Iw6DirectOpen(bind, 1)) return lastResult = -4;
     Dvar_SetStringByName("g_gametype", gametype);
     Dvar_SetStringByName("ui_gametype", gametype);
