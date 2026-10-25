@@ -149,13 +149,20 @@ found 15 references to this flag. The DB loading path at 14036DF30
 sets `DAT_145CAEDF8` to 1 when `DAT_145CAEDFC` requests work.
 The worker at 14036FF40 and helper 140370130 then use an atomic/locked
 **1 → 2 → 0 handshake** before the initiating caller can proceed.
-This is evidence of a worker synchronization wait, not proof that the
-worker is dead or the content is missing. Changing the flag without
-completing the DB work would violate the original loader contract.
-P0030 samples `DAT_145CAEDF8`, `DAT_145CAEDFC` and two worker queue
-counters read-only at five-second intervals in later native smoke reports.
-That will distinguish persistent unprocessed requests from repeated normal
-transitions; it does not itself fix map/UI loading.
+The original code implements a synchronization wait, but the native stack
+snapshot did **not** establish that this wait was active. The first run
+with five-second sampling,
+[40201962452](https://github.com/lizardpeter/ghosts-decomp/actions/runs/40201962452),
+captured **18 samples**, all reporting `asset_handshake=0`,
+`asset_request=0`, `thread_queue_a=0` and `thread_queue_b=0`.
+The thread remained inside `14036DF30` near its **end**, not necessarily
+at the initial wait loop, and startup was still black after 90 seconds.
+**Do not treat the handshake as the confirmed blocker.** It was not stuck
+nonzero during the observed samples. The next question is what CALL sites
+and original engine subsystems were active at the captured return addresses.
+`tools/analysis/inspect_native_stacks.py` now reports nearby disassembly
+and the end of each function to ground that analysis without bypassing
+content loading or game initialization.
 `tools/analysis/inspect_loader_flag.py` finds writes/reads of the flag in
 generated Store code before any proposed change to the loader.
 
