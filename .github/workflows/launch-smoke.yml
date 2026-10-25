@@ -161,6 +161,7 @@ jobs:
                 $directMessages = @($gameReport.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6D:*' } | ForEach-Object { $_.text })
                 [pscustomobject]@{
                   commands_registered = ($directMessages -contains 'IW6D:DIRECT_COMMANDS_REGISTERED')
+                  local_profile_prepared = ($directMessages -contains 'IW6D:LOCAL_PROFILE_PREPARED')
                   local_profile_configured = ($directMessages -contains 'IW6D:LOCAL_PROFILE_CONFIGURED')
                   join_challenge_ready = ($directMessages -contains 'IW6D:DIRECT_JOIN_CHALLENGE_READY')
                   map_start_requested = ($directMessages -contains 'IW6D:DIRECT_MAP_START_REQUESTED')
