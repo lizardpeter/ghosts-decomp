@@ -2,7 +2,9 @@
 """Trace reads/writes of the Store renderer/asset startup wait flag.
 
 Read generated Store pseudocode without modifying analysis/. The native
-debugger observed the game inside 14036DF30 waiting for DAT_145CAEDF8.
+debugger found a stack return site inside 14036DF30, which contains
+this handshake. Native run 40201962452 sampled zero throughout 90 seconds;
+that wait is NOT verified as the cause of the black startup screen.
 """
 import json
 from pathlib import Path
