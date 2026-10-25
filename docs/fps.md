@@ -44,7 +44,8 @@ smoothing the server doesn't have. The steps, in order (`docs/frame.md` gives th
    `minMsec = 1000 / maxfps` (integer division; 1 if that is 0), or **1 when `maxfps` is 0**.
 2. `com_lastFrameIndex` (146A7D794) is incremented; `idx = old value % 3`.
 3. `Com_EventLoop` (R), then `now = Sys_Milliseconds()` (R, 14054FE20: `timeGetTime() - sys_timeBase`, 1 ms
-   resolution after `timeBeginPeriod(1)`).
+   resolution after `timeBeginPeriod(1)`; the enhanced build takes the same milliseconds from QueryPerformanceCounter,
+   docs/cgame-frame.md 4.9).
 4. `msec = max(0, now - com_frameTime)`. `g_maxFpsWaitTime = minMsec - msec`; if that is at least 1, `now +=
    g_maxFpsWaitTime` and `msec = minMsec`, else `g_maxFpsWaitTime = 0`. `com_frameTime = now`. The wait itself is
    slept later, in `R_SyncGpu` (docs/frame.md section 3).
@@ -730,6 +731,11 @@ swapping the whole state, the zero-leftover angles, the command, its time, the s
 
 Not done: the viewmodel, sound and the local player's shadow at the swapped position on hardware, and the normal
 (trace-using) movement's own global writes, *unverified* (7.6).
+
+Since docs/cgame-frame.md 4.9 (stage 1), the step's time is the own view's presentation time, not
+`cl.serverTime`. The partial Pmove runs to `floor(T_r)`, where T_r is the fractional, slewed render time, and the
+copy's origin moves on by `velocity · (T_r − floor(T_r))`. Only in `PM_STEP_FORWARD`: any other mode of
+`cg_presentMode[PC_OWN_VIEW]` draws the canonical prediction.
 
 ## Reconstructed for this document
 

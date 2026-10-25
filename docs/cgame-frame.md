@@ -235,9 +235,9 @@ entities interpolated as now, one switch per category; a high-resolution clock u
 
 ### 4.1 The clock
 
-- **One counter.** `Sys_MicrosecondsQPC()` (int64 µs from `QueryPerformanceCounter`; the enhanced build already reads
-  QPC for its waits). `Sys_Milliseconds` becomes `(int)(µs / 1000) − base` (floor): the same integer meaning, now
-  consistent with the fraction. Every original millisecond value keeps being computed exactly as today from it.
+- **One counter.** `Sys_Microseconds()` (int64 µs from `QueryPerformanceCounter`). `Sys_Milliseconds` becomes
+  `(int)(µs / 1000)` (floor; both count from the first read): the same integer meaning, now consistent with the
+  fraction. Every original millisecond value keeps being computed exactly as today from it.
 - **Com_Frame** keeps its integer msec rules (limiter, smoothing, timescale), so `cls.realtime`, `frame_msec` and the
   protocol are unchanged; it also keeps `cls.realtimeUs` (int64) advanced by the frame's real length in µs (the
   smoothing and the timescale applied to the fraction too, so `cls.realtimeUs / 1000` tracks `cls.realtime`).
@@ -398,6 +398,86 @@ input script (the same mouse path, keys and fire presses as a function of time) 
   canonical tick state is bit-identical to (a)'s reference. Then flip them all back: identical to the first run.
 - Mutation checks as for P0014-P0017: reading `cg.frametime` instead of 5 in any ticked integrator, skipping a
   restore, using the stepped kick for the usercmd, a category reading another's mode — each must fail a test.
+
+### 4.9 Stage 1 as implemented (the clock, the render time, the mode table)
+
+Stage 1 of the design: 4.1's clock and render time, 4.3's table, wired into other entities and the own view. The
+tick loop (4.2) and the per-item fixes (4.6) are stages 2 and 3.
+
+- **The clock** (enhanced/win32/win_clock.cpp): `Sys_Microseconds()` counts `QueryPerformanceCounter` from its first
+  read (`sys_qpcBase`, `sys_qpcFrequency`), split as `t / f · 10⁶ + t % f · 10⁶ / f` so it can't overflow;
+  `Sys_Milliseconds()` (overrides 14054FE20) is its floor in ms. The QPC base has its own flag (`sys_qpcInitialized`):
+  14054FD70 also initialises the original bases (`sys_timeBase`, `sys_counterBase`, `sys_timeBasesInitialized`) from
+  timeGetTime, and the enhanced first read only sets those when nothing has. Nothing else in the Store build calls
+  timeGetTime (14054FD70 and the original Sys_Milliseconds are its only callers), so every game millisecond now comes
+  from QPC.
+- **cls_realtimeUs** (enhanced/client_mp/cl_render_time.cpp): the enhanced `sub_140316290` (overrides 140316290; the
+  faithful body copied unchanged) then sets `cls_realtimeUs = 1000 · cls.realtime + clamp(Sys_Microseconds() −
+  1000 · com_frameTime, 0, 999)`. Com_Frame's body (limiter, smoothing, timescale) is untouched, so `cls.realtime`,
+  `cls.frametime`, `frame_msec` and everything sent are the original's.
+- **T_r** (`CL_RenderTime()`, same file): `cl.serverTime + fraction + slew`, computed once per frame (cached on
+  `cls_realtimeUs` and `cl.serverTime`). `CL_SetCGameTime` (140306C40) is not overridden: the frame's correction is
+  observed as the change of `cl.serverTime − cls.realtime` since the last frame. It is either a delta nudge (±1, −2)
+  or `cl.serverTime` held by its `max`. A correction of up to 10 ms is taken out of T_r and put back linearly over
+  the snapshot interval (`cl.snap.serverTime − cl.oldSnapServerTime`, 50 ms when out of 1..500). A larger one (the
+  delta halved or reset) jumps. A backward step of up to 10 ms is held, so T_r never goes back short of a reset.
+- **The table** (enhanced/cgame_mp/cg_present.cpp, enhanced/include/enhanced/render_time.h): `PresentCategory`,
+  `PresentMode`, `cg_presentMode[]` with 4.3's defaults (own view, viewmodel, HUD, sound `PM_STEP_FORWARD`; other
+  entities, effects `PM_INTERPOLATE`), `CG_PresentMode`, `CG_PresentTime` (cg.time + `CL_RenderTimeOffset()`; plus
+  `cg_presentExtrapolateMsec` in `PM_EXTRAPOLATE`; the own view in `PM_INTERPOLATE` at cg.time).
+- **Other entities**: the enhanced `CG_SetFrameInterpolation` (overrides 1402B5B70) blends at
+  `CG_PresentTime(PC_OTHER_ENTITIES)`, fractional; it forms the integer difference first, so with no fraction it is
+  the original bit for bit. `PM_EXTRAPOLATE` is the same blend past 1 at the render time plus the lead: switching
+  other entities to zero interpolation later only means choosing the lead.
+- **The own view** (enhanced/cgame_mp/cg_view_step.cpp, P0017): when `CG_PresentMode(PC_OWN_VIEW)` is
+  `PM_STEP_FORWARD`, the partial Pmove runs to `floor(CG_PresentTime(PC_OWN_VIEW))` instead of `cl.serverTime`, and
+  the copy's origin moves on by `velocity · rest` for the rest of the millisecond. In any other mode the canonical
+  prediction is drawn.
+- **Left for stages 2 and 3, still at cg.time**: the viewmodel (CG_AddViewWeapon's weaponState time and XAnim), the
+  effects (`FX_SetNextUpdateTime(cg.time)`, an integer, inside the frame), the HUD (the 2D after the frame, the radar
+  sweep and fades), sound (the listener follows the drawn view already; doppler and the update times don't), the
+  renderer's scene time (`R_SetLodOrigin`, refdef.time), the closed-form view terms in `CG_CalcViewValues` (shakes,
+  step smoothing, error decay at cg.time), trajectories evaluated at cg.time in `CG_AddPacketEntities`. Each needs an
+  override of a function not yet reconstructed, or the tick loop.
+
+Deviations from 4.1:
+
+1. The fraction is measured when the client's clock advances (in `sub_140316290`, after the server frame), not at
+   Com_Frame's own clock read, and it is clamped to 0..999 µs. With the com_maxfps wait added to `com_frameTime` the
+   fraction is 0, which is right: the frame is meant for the end of the wait.
+2. The fraction is real time, not scaled by the timescale (exact at timescale 1).
+3. Only corrections up to 10 ms are slewed (4.1 said "the ±1/−2 ms corrections"; the held `cl.serverTime` is the
+   same kind and is slewed too).
+4. The own view's `PM_INTERPOLATE` is the canonical prediction (no tick states to blend before stage 2), and
+   `PM_EXTRAPOLATE` for it draws the canonical prediction as well.
+5. With the slew, a frame whose `cl.serverTime` repeated now steps the view forward by the slewed time. So P0017's
+   zero-leftover angle path is reached only when T_r is exactly the newest command's time.
+
+Tests (tests/enhanced/test_render_time.py, 13 tests):
+- **The clock.** Sys_Milliseconds and Sys_Microseconds are the floors of the QPC counts for four frequencies. Fed
+  timeGetTime values that read the same milliseconds (near the 32-bit wrap), the original Sys_Milliseconds returns the
+  same values. The QPC clock still takes its base after 14054FD70's init.
+- **The client clock.** The enhanced `sub_140316290` writes exactly the original's globals on 150 inputs, and
+  `cls_realtimeUs` follows its rule.
+- **T_r.** It is `cl.serverTime` + the fraction at 2.5, 4.17, 6.94, 1 and 16.67 ms frames, monotonic and in
+  [cl.serverTime, +1). After a +1, −1, −2 or +2 correction it is continuous and back on `cl.serverTime` + fraction
+  within one interval. A held `cl.serverTime` is caught up; a 300 ms correction jumps. A slew put back faster than
+  real time holds T_r.
+- **(c) Other entities.** At 2.5, 4.17 and 6.94 ms frames `frameInterpolation` advances by ΔT_r / 50 (within 2·10⁻⁶),
+  and the original `CG_InterpolateEntityPosition`'s position by 190 · ΔT_r / 1000. With no fraction the blend equals
+  the original's on 300 inputs (snapshots up to 2³¹ apart).
+- **(b) The own view.** The drawn origin is the fraction-0 run's plus velocity · rest (0.25, 0.6, 0.999 ms), with the
+  same frame's angles and an identical canonical state. `PM_INTERPOLATE` draws the canonical state.
+- **(d) One switch, one category.** Other entities' `PM_EXTRAPOLATE` with a 7 ms lead moves the blend by exactly
+  7/50 and leaves the own view's drawn states identical. The own view's `PM_INTERPOLATE` changes the drawn view and
+  not the blend. `CG_PresentTime`/`CG_PresentMode` are checked for every category and mode, an out-of-range mode
+  included.
+
+Mutation checks: 26 mutations of the new code (the µs split, the ms floor, the QPC base and its flag, the fraction's
+clamp and base, frame_msec's clamp, the slew's sign, rate, decay, limit and reset, the monotonic hold, the fraction's
+scale, the accessor's offset, lead, own-view case and mode clamp, the blend's offset, divisor and clamp, the mode check
+and the rest of the own view) all fail. Two first attempts survived and got tests: the monotonic hold (a slew put back
+in 1 ms) and the own view's `PM_INTERPOLATE` time (the accessor tested directly).
 
 ## 5. Findings
 

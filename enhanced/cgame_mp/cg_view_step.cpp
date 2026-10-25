@@ -22,6 +22,7 @@
 
 #include "bgame/bg_public.h"
 #include "cgame_mp/cg_local_mp.h"
+#include "enhanced/render_time.h"
 #include "enhanced/view_step.h"
 #include "qcommon/dvar.h"
 
@@ -166,7 +167,9 @@ static inline float CG_AngleNormalize180(const float angle)
 	return (scaled - (float)floor((double)(scaled + 0.5f))) * 360.0f;
 }
 
-// The view's state at cl->serverTime, swapped into cg.predictedPlayerState (docs/fps.md 7.6)
+// The view's state at the own view's presentation time T (CG_PresentTime, docs/cgame-frame.md 4.3), swapped into
+// cg.predictedPlayerState (docs/fps.md 7.6): a partial Pmove to floor(T), then the velocity for the sub-millisecond
+// rest T - floor(T). In PM_INTERPOLATE the own view is the canonical prediction (nothing is swapped).
 static void CG_ViewAtRenderTime(LocalClientNum_t localClientNum, int predicted)
 {
 	cg_s *cgameGlob = CG_GetLocalClientGlobals(localClientNum);
@@ -176,7 +179,15 @@ static void CG_ViewAtRenderTime(LocalClientNum_t localClientNum, int predicted)
 		return;
 	if (cgameGlob->demoType || (ps->otherFlags & 0x2000) || ps->pm_type == 1 || ps->pm_type == 8 || (ps->linkFlags & 4))
 		return;
-	const int leftover = cl->serverTime - ps->commandTime;
+	if (CG_PresentMode(PC_OWN_VIEW) != PM_STEP_FORWARD)
+		return;
+	const double presentTime = CG_PresentTime(PC_OWN_VIEW);
+	double viewTimeFloor = (double)(long long)presentTime;
+	if (viewTimeFloor > presentTime)
+		viewTimeFloor -= 1.0;
+	const int viewTime = (int)viewTimeFloor;
+	const float rest = (float)(presentTime - viewTimeFloor);  // 0 <= rest < 1 ms
+	const int leftover = viewTime - ps->commandTime;
 	if (leftover < 0 || leftover > 4 * CMD_STEP_MSEC)
 		return;
 
@@ -189,7 +200,7 @@ static void CG_ViewAtRenderTime(LocalClientNum_t localClientNum, int predicted)
 		s_viewPm.ps = &s_viewPs;
 		Enh_Copy(&s_viewPm.oldcmd, &latest, sizeof(latest));
 		Enh_Copy(&s_viewPm.cmd, &cl_viewCmd, sizeof(cl_viewCmd));
-		s_viewPm.cmd.serverTime = cl->serverTime;
+		s_viewPm.cmd.serverTime = viewTime;
 		s_viewPm.viewChange = 0.0f;
 		unsigned char *characterInfo = CG_CharacterInfo(ps->clientNum);
 		if (characterInfo)
@@ -213,6 +224,13 @@ static void CG_ViewAtRenderTime(LocalClientNum_t localClientNum, int predicted)
 			s_viewPs.viewangles[0] = 85.0f;
 		else if (s_viewPs.viewangles[0] < -85.0f)
 			s_viewPs.viewangles[0] = -85.0f;
+	}
+	// the rest of the millisecond: on along the stepped velocity
+	if (rest > 0.0f)
+	{
+		const float seconds = rest * 0.001f;
+		for (int i = 0; i < 3; ++i)
+			s_viewPs.origin[i] = s_viewPs.velocity[i] * seconds + s_viewPs.origin[i];
 	}
 
 	CG_CopyViewFields(s_canonical.origin, s_canonical.velocity, s_canonical.viewangles, &s_canonical.bobCycle,

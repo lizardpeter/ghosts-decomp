@@ -134,6 +134,12 @@ HWND GetForegroundWindow(void);
 BOOL GetCursorPos(POINT *lpPoint);
 
 DWORD timeGetTime(void);  // winmm (timeapi.h)
+typedef union _LARGE_INTEGER
+{
+	long long QuadPart;
+} LARGE_INTEGER;
+BOOL QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount);  // kernel32 (profileapi.h)
+BOOL QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency);
 
 BOOL SetCursorPos(int X, int Y);
 BOOL ClipCursor(const RECT *lpRect);

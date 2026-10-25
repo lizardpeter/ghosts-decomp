@@ -109,8 +109,11 @@ frame rate.
 
 ### Where a fractional time would go
 
+Implemented in the enhanced build for items 1, 2 (as a slewed render time rather than a fractional `cl.serverTime`)
+and 4, and for the own view (5, as a step forward instead of an interpolation): docs/cgame-frame.md 4.9.
+
 1. `cls.realtime`: keep the integer (it is the protocol's and the game logic's clock) and add a fractional part from
-   the high-resolution counter (`Sys_Milliseconds` is integer; the enhanced build already reads QPC for its waits).
+   the high-resolution counter (`Sys_Milliseconds` is integer; the enhanced build now derives it from QPC).
 2. `CL_SetCGameTime`: a fractional `cl.serverTime`, with the delta corrections slewed over a snapshot interval instead
    of 1 ms steps. The integer part still stamps usercmds.
 3. `CG_DrawActiveFrame`: `cg.time` stays integer; a new `cg.timeFrac` (0 to 1 ms) beside it.
