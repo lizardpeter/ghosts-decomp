@@ -1,6 +1,17 @@
 # Windows CI: execute launcher/profile preparation with process launch intercepted.
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+# Verify the local real-GPU diagnostic parses under Windows PowerShell without
+# requiring an elevated CI runner or invoking any firewall or game process.
+$probePath = Join-Path $repoRoot 'tools/direct/ProbeStartup.ps1'
+$probeTokens = $null
+$probeErrors = $null
+[System.Management.Automation.Language.Parser]::ParseFile(
+    $probePath, [ref]$probeTokens, [ref]$probeErrors) | Out-Null
+if ($probeErrors.Count) {
+    throw ('Local startup diagnostic PowerShell syntax error: ' +
+           ($probeErrors | ForEach-Object { $_.Message } | Out-String))
+}
 $taskRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('iw6-launcher-' + [guid]::NewGuid().ToString('N'))
 $oldLocalAppData = $env:LOCALAPPDATA
 $oldStartProcess = Get-Item Function:\Start-Process -ErrorAction SilentlyContinue
