@@ -32,7 +32,7 @@ $a = $r | Get-NetFirewallApplicationFilter
     return r
 
 
-def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None):
+def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, loader_flags=False):
     if C.sizeof(C.c_void_p) != 8:
         raise RuntimeError('Use 64-bit Python')
     kernel = C.WinDLL('kernel32', use_last_error=True)
@@ -155,6 +155,24 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None):
         finally:
             kernel.CloseHandle(handle)
         return threads
+    def startup_flags():
+        # Read-only, pinned original Store image addresses. A flag sample is
+        # a snapshot, not a claim that the worker thread has run or completed.
+        addresses = {
+            'asset_handshake': 0x145CAEDF8,
+            'asset_request': 0x145CAEDFC,
+            'thread_queue_a': 0x149BED150,
+            'thread_queue_b': 0x149BED154,
+        }
+        values = {}
+        for name, address in addresses.items():
+            value = W.DWORD()
+            read = SIZE()
+            if (kernel.ReadProcessMemory(process.process,address,C.byref(value),4,C.byref(read))
+                    and read.value == 4):
+                values[name] = value.value
+        return values
+
     startup, process = Startup(), Process()
     startup.cb = C.sizeof(startup)
     command = C.create_unicode_buffer(subprocess.list2cmdline([str(exe),*arguments]))
@@ -162,15 +180,29 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None):
         raise C.WinError(C.get_last_error())
     result = {'pid':process.pid, 'events':[], 'timed_out':False, 'exit_code':None,
               'game_join_verified':False, 'whole_process_egress_verified':False}
-    deadline = time.monotonic()+seconds
+    start_time = time.monotonic()
+    deadline = start_time+seconds
+    next_loader_sample = start_time+5
+    if loader_flags:
+        result['loader_state'] = []
     terminated = False
     try:
         while True:
-            if time.monotonic() >= deadline:
+            now = time.monotonic()
+            if loader_flags and not terminated and now >= next_loader_sample:
+                sample = startup_flags()
+                if sample:
+                    result['loader_state'].append({'elapsed_seconds':round(now-start_time,2),
+                                                   'values':sample})
+                next_loader_sample = now+5
+            if now >= deadline:
                 if terminated:
                     break
                 result['timed_out'] = True
                 result['window_text'] = windows()
+                if loader_flags:
+                    result['loader_state'].append({'elapsed_seconds':round(now-start_time,2),
+                                                   'values':startup_flags(), 'timeout_sample':True})
                 result['threads']=thread_snapshot()
                 times=[W.FILETIME() for _ in range(4)]
                 kernel.GetProcessTimes.argtypes=[W.HANDLE,*([C.POINTER(W.FILETIME)]*4)]
@@ -297,6 +329,7 @@ def main():
     parser.add_argument('--seconds',type=int,default=30)
     parser.add_argument('--imports',type=Path)
     parser.add_argument('--pending-zones',action='store_true',help='read the pinned Store DB request queue at timeout')
+    parser.add_argument('--loader-flags',action='store_true',help='sample pinned Store asset/thread handshake flags read-only')
     parser.add_argument('--screenshot',type=Path,help='capture the disposable Windows test desktop at timeout')
     parser.add_argument('arguments',nargs=argparse.REMAINDER)
     args=parser.parse_args()
@@ -305,7 +338,7 @@ def main():
     exe=args.exe.resolve(strict=True)
     rule=firewall(exe,args.firewall_rule)
     arguments=args.arguments[1:] if args.arguments[:1]==['--'] else args.arguments
-    result=observe(exe,args.cwd.resolve(strict=True),arguments,args.seconds,args.pending_zones,args.screenshot)
+    result=observe(exe,args.cwd.resolve(strict=True),arguments,args.seconds,args.pending_zones,args.screenshot,args.loader_flags)
     result['firewall']=rule
     if args.imports:
         result['import_audit']=audit_imports(exe,args.imports)
