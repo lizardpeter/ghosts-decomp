@@ -50,6 +50,7 @@ jobs:
           python3 tests/direct/transport.py
           python3 tests/direct/profile.py
           IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct
+          IW6_ORIGINALS=.work/originals python3 tests/direct/startup.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/host.py
