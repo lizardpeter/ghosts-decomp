@@ -6,6 +6,8 @@
 #include "qcommon/dvar.h"
 void Dvar_SetBool(const dvar_t *, bool);
 extern "C" __declspec(dllimport) void OutputDebugStringA(const char *);
+extern "C" int Iw6DirectLoadStartupProfile();
+extern "C" void Iw6DirectStartupMilestone(const char *text) { OutputDebugStringA(text); }
 void Dvar_SetStringByName(const char *, const char *);
 
 namespace
@@ -183,6 +185,9 @@ extern "C" void Iw6DirectInit()
     Cmd_AddCommandInternal("direct_host", Host, &hostCommand);
     commandsRegistered = true;
     OutputDebugStringA("IW6D:DIRECT_COMMANDS_REGISTERED");
+    // Normal +commands can be held while assets/UI initialise. Read only the
+    // launcher profile early; deferred engine commands retain their normal job.
+    Iw6DirectLoadStartupProfile();
 }
 extern "C" bool Iw6DirectSendPacket(int length, const void *data, netadr_s to)
 {
