@@ -1,0 +1,33 @@
+name: Diagnose native Store startup stacks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/analysis/inspect_native_stacks.py
+      - .github/workflows/native-stack-inspect.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /tools/analysis/inspect_native_stacks.py
+            /analysis/iw6mp64_MSStore_ship/functions.tsv
+            /analysis/iw6mp64_MSStore_ship/pseudocode/_unattributed/
+      - name: Resolve the actual Store stack addresses from native 40131610432
+        run: |
+          python3 tools/analysis/inspect_native_stacks.py \
+            --excerpt-lines 42 --output native-stack-functions.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: store-native-stack-functions
+          path: native-stack-functions.json
+          retention-days: 7
