@@ -184,6 +184,9 @@ retail servers, or authenticated network identity. Other original LUI licence
 and profile paths remain to be disentangled, and no vendor capability/permission
 check is bypassed for retail or Xbox-network mode.
 
+See [player identity and presence](player-identity.md) for the original
+controller record, cached display name, and multiplayer wire ID.
+
 ## Remaining path to a playable game
 
 - **Local identity and session ownership:** 140311570 still fills xuid/xnaddr, stats versions and related fields.
