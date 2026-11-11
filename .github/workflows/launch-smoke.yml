@@ -129,6 +129,9 @@ jobs:
       - name: Audit staged DLLs before starting the custom game
         run: python tools/offline/detachment_audit.py --exe package/iw6mp64_offline.exe --manifest package/manifest.json --output diagnostics/vendor-prelaunch-audit.json
       - name: Observe fixture and custom game with outbound firewall blocks
+        # Keep the debug observer but use the normal Windows heap at startup.
+        env:
+          _NO_DEBUG_HEAP: '1'
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
