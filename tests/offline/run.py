@@ -57,6 +57,16 @@ def check():
         tampered_manifest = dict(manifest, dll_sha256=hashlib.sha256(dll_tampered).hexdigest())
         assert any("Replacement DLL imports forbidden provider" in e for e in
                    detachment_audit.audit_package(image_bytes, tampered_manifest, bytes(dll_tampered)))
+        replacement = output / 'recon.dll'
+        assert not detachment_audit.audit_local_dlls(output, replacement)
+        companion = output / 'companion.dll'
+        companion.write_bytes(dll_tampered)
+        assert detachment_audit.audit_local_dlls(output, replacement) == [
+            "companion.dll imports forbidden provider: xcurl.dll"]
+        companion.rename(output / 'XCurl.DLL')
+        assert detachment_audit.audit_local_dlls(output, replacement) == [
+            "Forbidden provider staged beside executable: XCurl.DLL"]
+        (output / 'XCurl.DLL').unlink()
         altered = dict(manifest, guards=[
             g for g in manifest['guards'] if int(g['va'], 16) != 0x1406AEE74])
         assert any('Missing GDK guard' in e for e in
@@ -232,7 +242,9 @@ def check():
         m.on_import('kernel32.dll!GetProcAddress', lambda mu: (calls.append(1), mu.reg_write(UC_X86_REG_RAX,123)))
         for path, name in [('C:\\Windows\\WINHTTP.dll', b'WinHttpOpen\0'),
                            ('combase.dll',b'RoGetActivationFactory\0'),
-                           ('combase.dll',b'RoActivateInstance\0')]:
+                           ('combase.dll',b'RoActivateInstance\0'),
+                           ('ntdll.dll',b'LdrLoadDll\0'),
+                           ('ntdll.dll',b'LdrGetProcedureAddress\0')]:
             module_path(path)
             assert m.call(dll.exports['Iw6OfflineGetProcAddress'],[1,name])[0] == 0
             assert not calls

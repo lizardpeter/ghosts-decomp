@@ -23,7 +23,13 @@ original behavior; detachment applies only to the opt-in offline/direct package.
   `recon.dll`**: package SHA-256, the named exports at the exact jump targets,
   its selected offline/direct profile and its own static SDK imports. Package
   creation fails closed if any of these known boundaries regress.
-* Native Windows CI now applies the same audit to the package and checks the
+* Native Windows CI audits the staged game directory before startup. It
+  rejects forbidden DLL filenames, regular and delay imports from local
+  companion DLLs, and export forwarders to forbidden providers. The game
+  executable cannot retain direct imports of the guarded loader APIs, and its
+  procedure adapter refuses the native `LdrLoadDll` and
+  `LdrGetProcedureAddress` entry points.
+* Native Windows CI also checks the
   bounded debugger module-load trace for `xgameruntime.dll`,
   `xcurl.dll` and `xboxliveapi.dll`. The result is uploaded to
   `native-launch-diagnostics/vendor-audit.json`.

@@ -53,6 +53,12 @@ UNEXPECTED_RUNTIME_DLLS = {
 REQUIRED_LOADER_WRAPPERS = {"Iw6OfflineGetProcAddress"}
 
 
+ORIGINAL_LOADER_IMPORTS = {
+    "loadlibrarya", "loadlibraryw", "loadlibraryexa", "loadlibraryexw",
+    "getprocaddress", "ldrloaddll", "ldrgetprocedureaddress",
+}
+
+
 def _name(value):
     return (value.decode("ascii") if isinstance(value, bytes) else str(value)).lower()
 
@@ -182,6 +188,8 @@ def audit_package(image, manifest, dll_image=None):
     for rva, (provider, name) in sorted(imports.items()):
         if provider in FORBIDDEN_IMPORT_DLLS:
             errors.append("Forbidden provider import %s!%s at IAT %X" % (provider, name, rva))
+        if name in ORIGINAL_LOADER_IMPORTS:
+            errors.append("Unguarded loader import %s!%s at IAT %X" % (provider, name, rva))
         if provider == "ws2_32.dll" and name in ORIGINAL_WINSOCK_EGRESS:
             errors.append("Original network egress import %s at IAT %X" % (name, rva))
 
@@ -209,6 +217,35 @@ def audit_package(image, manifest, dll_image=None):
     else:
         errors.extend(audit_replacement_dll(dll_image, manifest))
     # Manifest status flags are deliberately not promoted by this static test.
+    return errors
+
+
+def audit_local_dlls(directory, replacement):
+    """Inspect app-local DLLs before launch, including delay imports and forwarders."""
+    errors = []
+    for path in sorted(directory.iterdir()):
+        if not path.is_file() or path.suffix.lower() != ".dll" or path == replacement:
+            continue
+        if path.name.lower() in FORBIDDEN_IMPORT_DLLS:
+            errors.append(f"Forbidden provider staged beside executable: {path.name}")
+            continue
+        try:
+            with pefile.PE(str(path)) as dll:
+                for table in ("DIRECTORY_ENTRY_IMPORT", "DIRECTORY_ENTRY_DELAY_IMPORT"):
+                    for entry in getattr(dll, table, []):
+                        provider = _name(entry.dll)
+                        if provider in FORBIDDEN_IMPORT_DLLS:
+                            errors.append(f"{path.name} imports forbidden provider: {provider}")
+                exports = getattr(dll, "DIRECTORY_ENTRY_EXPORT", None)
+                for symbol in exports.symbols if exports else ():
+                    if symbol.forwarder:
+                        provider = _name(symbol.forwarder).rsplit(".", 1)[0]
+                        if not provider.endswith(".dll"):
+                            provider += ".dll"
+                        if provider in FORBIDDEN_IMPORT_DLLS:
+                            errors.append(f"{path.name} forwards to forbidden provider: {provider}")
+        except (OSError, pefile.PEFormatError, UnicodeError) as error:
+            errors.append(f"Cannot inspect local DLL {path.name}: {error}")
     return errors
 
 
@@ -243,6 +280,7 @@ def main():
     manifest = json.loads(args.manifest.read_text())
     dll_path = args.dll or args.exe.with_name("recon.dll")
     errors = audit_package(image, manifest, dll_path.read_bytes() if dll_path.exists() else None)
+    errors.extend(audit_local_dlls(args.exe.resolve().parent, dll_path.resolve()))
     runtime = None
     if args.runtime:
         more, runtime = audit_runtime(json.loads(args.runtime.read_text()))

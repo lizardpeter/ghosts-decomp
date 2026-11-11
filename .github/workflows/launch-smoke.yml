@@ -126,6 +126,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Original startup asset staging failed' }
       - name: Install PE audit dependency
         run: python -m pip install --quiet pefile
+      - name: Audit staged DLLs before starting the custom game
+        run: python tools/offline/detachment_audit.py --exe package/iw6mp64_offline.exe --manifest package/manifest.json --output diagnostics/vendor-prelaunch-audit.json
       - name: Observe fixture and custom game with outbound firewall blocks
         shell: pwsh
         run: |
