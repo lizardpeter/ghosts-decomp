@@ -205,7 +205,7 @@ def audit_package(image, manifest, dll_image=None):
         errors.append("Cannot inspect packaged function guards: %s" % error)
     # A correct manifest cannot omit one of the documented vendor entry
     # boundaries and still be accepted. Validate all 42 common redirects,
-    # then all 18 additional direct-mode game/local-session redirects.
+    # then all 22 additional direct-mode game/local-session redirects.
     for label, required in (
         ("GDK", GDK_ENTRIES),
         ("Demonware authentication/lobby/telemetry", DEMONWARE_AND_TELEMETRY_ENTRIES),
