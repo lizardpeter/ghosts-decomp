@@ -63,13 +63,13 @@ def main():
             online=w.alloc(bytes(0x10)+b'\1'+bytes(0x50));w.u64(0x1442B98C8,online)
             running=w.alloc(bytes(0x60));w.u64(0x146A7D6C0,running)
         events.clear()
-        result=m.call(dll.exports['Iw6DirectHost'],[b'0.0.0.0:27016\0',b'MP_PRISON\0',b'war\0'],setup=setup,fakes=fakes)
+        result=m.call(dll.exports['Iw6DirectHost'],[b'0.0.0.0:27016\0',b'MP_PRISONBREAK\0',b'war\0'],setup=setup,fakes=fakes)
         assert result[0]==3,(result[0],events)
         assert events==[('setting',b'g_gametype',b'war'),('setting',b'ui_gametype',b'war'),
-                        ('asset',b'mp_prison'),('prepare',b'mp_prison'),('spawn',b'mp_prison',1,0,0,0)],events
+                        ('asset',b'mp_prisonbreak'),('prepare',b'mp_prisonbreak'),('spawn',b'mp_prisonbreak',1,0,0,0)],events
         events.clear()
         absent={**fakes,0x14036C020:lambda mu:0}
-        result=m.call(dll.exports['Iw6DirectHost'],[b'0.0.0.0:27016\0',b'mp_prison\0',b'war\0'],setup=setup,fakes=absent)
+        result=m.call(dll.exports['Iw6DirectHost'],[b'0.0.0.0:27016\0',b'mp_prisonbreak\0',b'war\0'],setup=setup,fakes=absent)
         assert result[0]==3 and ('content_rejected',) in events and not any(e[0]=='spawn' for e in events),(result[0],events)
         assert not any(n.startswith(('winhttp.dll!','xcurl.dll!')) for n in m.imports_called)
     print('PASS: direct_host executes original map normalization/preparation to SV_SpawnServer; missing-content rejection retained; native loading unverified')
