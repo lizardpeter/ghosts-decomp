@@ -27,6 +27,14 @@ try {
     New-Item -ItemType Directory -Force -Path $bundle,$game,$env:LOCALAPPDATA | Out-Null
     $launcher = Join-Path $bundle 'LaunchDirect.ps1'
     Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/direct/LaunchDirect.ps1') -Destination $launcher
+    $launcherTokens = $null
+    $launcherErrors = $null
+    [System.Management.Automation.Language.Parser]::ParseFile(
+        $launcher, [ref]$launcherTokens, [ref]$launcherErrors) | Out-Null
+    if ($launcherErrors.Count) {
+        throw ('Enhanced launcher PowerShell syntax error: ' +
+               ($launcherErrors | ForEach-Object { $_.Message } | Out-String))
+    }
     [System.IO.File]::WriteAllText((Join-Path $bundle 'iw6mp64_enhanced.exe'),'test-exe')
     [System.IO.File]::WriteAllText((Join-Path $bundle 'recon.dll'),'test-dll')
     $manifest = @{ mode='direct'; exe_sha256=(Get-FileHash (Join-Path $bundle 'iw6mp64_enhanced.exe')).Hash; dll_sha256=(Get-FileHash (Join-Path $bundle 'recon.dll')).Hash }
@@ -50,14 +58,25 @@ try {
         $menuArgs -match '\+(?:connect|direct_host)') {
         throw 'Menu-only launch added a connection/host command or lost local identity.'
     }
+    $sharedKey = '00112233445566778899aabbccddeeff'
+    & $launcher -GameDirectory $game -Connect '10.0.0.2:27016' -NetworkKey $sharedKey -Profile 'one'
+    if ($global:Iw6TestLaunches.Count -ne 5 -or
+        $global:Iw6TestLaunches[4].arguments -notmatch ('\+direct_key ' + $sharedKey + ' \+connect 10\.0\.0\.2:27016$')) {
+        throw 'Authenticated direct session did not set network key before connect.'
+    }
+    $refused = $false
+    try { & $launcher -GameDirectory $game -Connect '10.0.0.2:27016' -Profile 'one' } catch { $refused = $true }
+    if (!$refused -or $global:Iw6TestLaunches.Count -ne 5) {
+        throw 'Unauthenticated non-loopback connection was launched.'
+    }
     $refused = $false
     try { & $launcher -GameDirectory $game -Connect '127.0.0.1:27016;quit' -Profile 'one' } catch { $refused = $true }
-    if (!$refused -or $global:Iw6TestLaunches.Count -ne 4) { throw 'Invalid endpoint was launched.' }
+    if (!$refused -or $global:Iw6TestLaunches.Count -ne 5) { throw 'Invalid endpoint was launched.' }
     [System.IO.File]::WriteAllText((Join-Path $bundle 'recon.dll'),'tampered')
     $refused = $false
     try { & $launcher -GameDirectory $game -Connect '127.0.0.1:27016' -Profile 'one' } catch { $refused = $true }
-    if (!$refused -or $global:Iw6TestLaunches.Count -ne 4) { throw 'Tampered package was launched.' }
-    Write-Output 'PASS: Windows launcher profile persistence, menu-only, host/connect arguments and refusal paths; game process was not executed'
+    if (!$refused -or $global:Iw6TestLaunches.Count -ne 5) { throw 'Tampered package was launched.' }
+    Write-Output 'PASS: Windows launcher profile persistence, menu-only, keyed direct-connect, host/connect arguments and refusal paths; game process was not executed'
 } finally {
     $env:LOCALAPPDATA = $oldLocalAppData
     Remove-Item Function:\Start-Process -ErrorAction SilentlyContinue
