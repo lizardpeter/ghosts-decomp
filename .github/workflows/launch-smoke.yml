@@ -250,6 +250,53 @@ jobs:
                   observed_events = $hostMessages
                   playable_game_verified = $false
                 } | ConvertTo-Json -Depth 8 | Set-Content diagnostics/host-milestones.json
+
+                # P0038 controlled read-only original-asset selection:
+                # Compare the real signed base ui_mp.ff without the OPTIONAL
+                # patch_ui_mp.ff zone. The original files are only moved
+                # within a disposable CI staging directory and ALWAYS put
+                # back in finally. Never rewrite, resign, or bypass FF checks.
+                $hold = Join-Path 'diagnostics' 'held-ui-patch'
+                New-Item -ItemType Directory -Force -Path (Join-Path $hold 'english') | Out-Null
+                $held = @()
+                try {
+                  foreach ($relative in @('patch_ui_mp.ff','english/eng_patch_ui_mp.ff')) {
+                    $source = Join-Path $game $relative
+                    if (Test-Path -LiteralPath $source) {
+                      $destination = Join-Path $hold $relative
+                      Move-Item -LiteralPath $source -Destination $destination
+                      $held += $relative
+                    }
+                  }
+                  # Reset only the previous forced-timeout crash sentinel,
+                  # so the UI experiment can actually execute native code.
+                  if (Test-Path -LiteralPath $crashMarker) {
+                    Remove-Item -LiteralPath $crashMarker -Force
+                  }
+                  python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 45 --output diagnostics/base-ui-game.json --pending-zones --loader-flags --screenshot diagnostics/base-ui.png -- +set fs_basepath $game +set fs_homepath $profile +set logfile 2 +set r_fullscreen 0 +direct_player 0000000000000001 LocalProbe
+                  if ($LASTEXITCODE -ne 0) { throw 'Base UI selection observation failed' }
+                  python tools/offline/detachment_audit.py --exe package/iw6mp64_enhanced.exe --manifest package/manifest.json --dll-directory game --runtime diagnostics/base-ui-game.json --output diagnostics/base-ui-vendor-audit.json
+                  if ($LASTEXITCODE -ne 0) { throw 'Base UI startup attempted forbidden vendor DLL' }
+                  $baseReport = Get-Content diagnostics/base-ui-game.json -Raw | ConvertFrom-Json
+                  $baseFatal = @($baseReport.window_text | Where-Object { $_ -like "*Disc read error*" -or $_ -eq 'Fatal Error' })
+                  $originalFatal = @($gameReport.window_text | Where-Object { $_ -like "*Disc read error*" -or $_ -eq 'Fatal Error' })
+                  [pscustomobject]@{
+                    experiment = 'signed base ui_mp without optional patch_ui_mp'
+                    held_original_files = $held
+                    full_ui_fatal_dialog = ($originalFatal.Count -gt 0)
+                    base_ui_fatal_dialog = ($baseFatal.Count -gt 0)
+                    base_ui_window_titles = @($baseReport.window_text)
+                    base_ui_renderer = @($baseReport.graphics_state) | Select-Object -Last 1
+                    base_ui_fastfile = @($baseReport.fastfile_state) | Select-Object -Last 1
+                    vendor_audit_passed = $true
+                    menu_input_verified = $false
+                    gameplay_verified = $false
+                  } | ConvertTo-Json -Depth 9 | Set-Content diagnostics/base-ui-comparison.json
+                } finally {
+                  foreach ($relative in $held) {
+                    Move-Item -LiteralPath (Join-Path $hold $relative) -Destination (Join-Path $game $relative) -Force
+                  }
+                }
               }
             } finally { Remove-NetFirewallRule -Name $rule }
           }
