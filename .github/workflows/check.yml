@@ -2,6 +2,12 @@
 # reconstruction compiles, every differential test passes and records/ only claims what tests prove.
 name: check
 
+# Keep one verification run for the newest branch revision rather than
+# launching duplicate push and pull_request runs for every successive change.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 on:
   push:
   pull_request:
