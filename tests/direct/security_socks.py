@@ -21,6 +21,9 @@ def main():
     assert package.DIRECT[VA] == EXPORT
     assert VA in detachment_audit.DIRECT_ENTRIES
     assert len(package.DIRECT) == len(detachment_audit.DIRECT_ENTRIES) == 18
+    # Regression: these are PS4 server PDB entrypoints, not verified Store
+    # addresses. A cross-build native detour would corrupt unrelated code.
+    assert not ({0x1400AD720, 0x1400ACEA0, 0x1400AD5F0} & package.DIRECT.keys())
 
     # Exercise the exact C++ implementation exported by the enhanced game.
     # It has no credential parsing, no network calls, and no socket state.
