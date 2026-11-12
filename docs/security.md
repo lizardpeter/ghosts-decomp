@@ -87,3 +87,19 @@ a server datagram (or vice versa). Keyed v2 is rejected outright; v1 remains
 loopback-only and no-key. Tests verify reflection, tampering, replay, and
 downgrade refusal. This is not a per-session handshake or a claim that native
 Store lobby parsers have been hardened.
+
+## P0043: socket-level loopback enforcement for no-key direct sessions
+
+The original local-only v1 transport rejected non-loopback datagrams after
+`recvfrom`, but still allowed a listener to bind `0.0.0.0` (all network
+interfaces). P0043 moves the boundary to the OS socket: an unkeyed wildcard
+bind is implemented as `127.0.0.1`, and any explicitly non-loopback bind
+address without a key fails. Only configured shared-key v3 sessions can
+listen on all interfaces. `tests/direct/transport.py` sends an otherwise
+valid v1 packet to a second loopback destination (`127.0.0.2`) and asserts
+it is not delivered, while `127.0.0.1` continues to work.
+
+This complements—but does not replace—the receive-side MAC, packet-size and
+replay checks. The shared network key must be configured on both parties
+before non-local traffic is exposed; private transport authentication is not
+a substitute for checking in-engine lobby/command authorization.
