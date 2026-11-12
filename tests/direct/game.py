@@ -94,7 +94,7 @@ def main():
         call(0x14054F200,[],ret_type='void',fakes=init_hooks)
         call(0x14054F200,[],ret_type='void',fakes=init_hooks)
         assert registered_net_dvars == [True], registered_net_dvars
-        assert set(commands)=={'connect','direct_listen','direct_stop','direct_player','direct_host'}
+        assert set(commands)=={'connect','direct_listen','direct_stop','direct_player','direct_host','direct_key'}
         assert native_markers==[b'IW6D:LOCAL_NETWORK_DVARS_REGISTERED',
                                 b'IW6D:DIRECT_COMMANDS_REGISTERED'],native_markers
         assert not any(n.startswith('ws2_32.dll!') for n in m.imports_called)
