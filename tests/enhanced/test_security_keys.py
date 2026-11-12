@@ -28,10 +28,13 @@ def test_reject_signed_high_ascii_key(env):
         def reject(mu):
             touched.append(True)
             raise AssertionError("invalid key reached a binding accessor")
-        # The original call targets are pinned in src/client/cl_keys.cpp.
+        # Use the Store Key_SetBinding match, not the PS4 server reference VA.
+        # Also intercept the enhanced replacement itself to catch accidental
+        # negative-index dispatch through source-linked calls.
         _, _, _, _ = env.call(export, [], setup=arguments(args), fakes={
-            0x1400AD440: reject,  # Key_SetBinding
-            0x1400ACFE0: reject,  # Key_GetBinding
+            0x140310B30: reject,  # Store original Key_SetBinding
+            "?Key_SetBinding@@YAXW4LocalClientNum_t@@HH@Z": reject,
+            "?Key_GetBinding@@YAHW4LocalClientNum_t@@H@Z": reject
         })
         assert not touched, export
 
