@@ -253,3 +253,48 @@ launch the EXE. Neither test substitutes for a native game with full assets.
 `tests/direct/transport.py` also rejects checksum-valid retail-format packets, unsupported envelope
 versions/flags and length mismatches. The package records IW6D/version 1 and refuses a direct DLL
 without the wire-version export. Earlier experimental unwrapped packets are no longer compatible.
+
+## Enhanced direct transport: authenticated peer protection (2026-11-12)
+
+The canonical enhanced build now supports two **incompatible** private wire formats,
+both implemented only by `enhanced/direct/transport.cpp`; faithful `src/` is unchanged.
+
+- **v1 (no key):** accepts and transmits **only 127.0.0.0/8 loopback** datagrams.
+  The original 16-bit checksum detects accidental corruption but is not an
+  authentication mechanism. The listener may still bind `0.0.0.0`, but
+  non-loopback datagrams are discarded before the game parser and cannot be
+  destinations for replies.
+- **v2 (explicit 128-bit key):** strict framing (4-byte magic, version/flags,
+  bounded 2-byte payload length, nonzero 64-bit sequence, at most 1262 bytes of
+  payload, 64-bit SipHash-2-4 tag). The tag covers the entire header,
+  sequence, and payload. Packets must have the valid key before a source is
+  admitted; replays are rejected per peer using a 64-packet sliding window.
+  The game engine sees only payloads that pass these checks.
+- **Reconfiguration:** `direct_key <32-hex-characters>` invalidates the prior
+  socket/admission state. Invalid values fail closed and clear a previously
+  configured secret. Keys can only be changed before connecting/hosting.
+
+Use **the same uniformly random 32-hex key on host and client**:
+
+```powershell
+$bytes = [byte[]]::new(16)
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+$key = [Convert]::ToHexString($bytes).ToLowerInvariant()
+.\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -HostEndpoint '0.0.0.0:27016' -Map mp_prisonbreak -GameType war -NetworkKey $key
+# On another machine, use the same key with -Connect <host-IP>:27016.
+```
+
+**Limitations:** SipHash here authenticates possession of the **shared network key**;
+it does **not** encrypt game traffic, authenticate an individual user's identity,
+or prevent one participant who knows the key from impersonating another. Replay
+state is per socket lifetime, not across game restarts. Command-line arguments
+can expose a key to local process-inspection tools. A challenge handshake with
+per-session keys, authenticated individual peers, and mature authenticated
+encryption are needed before advertising production internet-safe multiplayer.
+This change hardens the experimental direct transport; it does not prove the
+unreconstructed native game's other packet handlers are secure.
+
+Regression: `python3 tests/direct/transport.py` checks real UDP round trips,
+legacy localhost restrictions, authenticated framing, corrupted tags,
+duplicate sequences, and downgrade rejection. The Windows launcher and
+enhanced integration tests also run in CI.
