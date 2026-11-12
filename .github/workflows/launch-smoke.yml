@@ -23,6 +23,7 @@ on:
       - enhanced/win32/gdk.cpp
       - enhanced/direct/transport.cpp
       - enhanced/direct/game.cpp
+      - enhanced/client/security_keys.cpp
       - enhanced/direct/profile.cpp
       - tests/direct/game.py
       - tests/direct/startup.py
