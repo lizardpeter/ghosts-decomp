@@ -187,6 +187,36 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
                 values[name] = value.value
         return values
 
+    def renderer_state():
+        # Read-only Store DxGlobals at 0x14A37D620 (records/names.tsv).
+        # Offsets are verified in include/gfx_d3d/r_dx.h against the Store
+        # D3D11CreateDevice / DXGI factory writes. Record whether objects
+        # exist, never raw pointers or process-memory dumps.
+        # A populated swap chain does NOT establish a rendered menu.
+        base = 0x14A37D620
+        layout = (
+            ('device_created', 0x08, 8, True),
+            ('context_created', 0x10, 8, True),
+            ('factory_created', 0x20, 8, True),
+            ('adapter_selected', 0x28, 8, True),
+            ('feature_level', 0x38, 4, False),
+            ('device_lost', 0x7CC8, 1, False),
+            ('window_count', 0x7CD4, 4, False),
+            ('window_created', 0x7CD8, 8, True),
+            ('swap_chain_created', 0x7CE0, 8, True),
+            ('window_width', 0x7CF0, 4, False),
+            ('window_height', 0x7CF4, 4, False),
+        )
+        values = {}
+        for name, offset, count, is_pointer in layout:
+            kind = C.c_uint64 if count == 8 else (C.c_uint32 if count == 4 else C.c_uint8)
+            value = kind()
+            read = SIZE()
+            if (kernel.ReadProcessMemory(process.process, base+offset, C.byref(value),
+                                         count, C.byref(read)) and read.value == count):
+                values[name] = bool(value.value) if is_pointer else value.value
+        return values
+
     startup, process = Startup(), Process()
     startup.cb = C.sizeof(startup)
     command = C.create_unicode_buffer(subprocess.list2cmdline([str(exe),*arguments]))
@@ -199,15 +229,21 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
     next_loader_sample = start_time+5
     if loader_flags:
         result['loader_state'] = []
+        result['graphics_state'] = []
     terminated = False
     try:
         while True:
             now = time.monotonic()
             if loader_flags and not terminated and now >= next_loader_sample:
                 sample = startup_flags()
+                elapsed = round(now-start_time,2)
                 if sample:
-                    result['loader_state'].append({'elapsed_seconds':round(now-start_time,2),
+                    result['loader_state'].append({'elapsed_seconds':elapsed,
                                                    'values':sample})
+                gpu = renderer_state()
+                if gpu:
+                    result['graphics_state'].append({'elapsed_seconds':elapsed,
+                                                     'values':gpu})
                 next_loader_sample = now+5
             if now >= deadline:
                 if terminated:
@@ -215,8 +251,11 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
                 result['timed_out'] = True
                 result['window_text'] = windows()
                 if loader_flags:
-                    result['loader_state'].append({'elapsed_seconds':round(now-start_time,2),
+                    elapsed = round(now-start_time,2)
+                    result['loader_state'].append({'elapsed_seconds':elapsed,
                                                    'values':startup_flags(), 'timeout_sample':True})
+                    result['graphics_state'].append({'elapsed_seconds':elapsed,
+                                                     'values':renderer_state(), 'timeout_sample':True})
                 result['threads']=thread_snapshot()
                 times=[W.FILETIME() for _ in range(4)]
                 kernel.GetProcessTimes.argtypes=[W.HANDLE,*([C.POINTER(W.FILETIME)]*4)]
