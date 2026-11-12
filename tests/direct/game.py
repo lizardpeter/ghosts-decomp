@@ -75,10 +75,20 @@ def main():
             # writes back, while this integration sequence intentionally keeps them.
             for address,value in result[2].items():m.mu.mem_write(address,value)
             return result
-        call(0x14054F200,[],ret_type='void',fakes={0x1404448D0:register})
-        call(0x14054F200,[],ret_type='void',fakes={0x1404448D0:register})
+        # The original NET_Init first registered ordinary net dvars. The
+        # enhanced replacement must retain that *local* initialization,
+        # without opening its original UDP socket or touching vendor services.
+        registered_net_dvars = []
+        def register_net_dvars(mu):
+            registered_net_dvars.append(True)
+            ret(mu, 0)
+        init_hooks = {0x1404448D0: register, 0x14054EFD0: register_net_dvars}
+        call(0x14054F200,[],ret_type='void',fakes=init_hooks)
+        call(0x14054F200,[],ret_type='void',fakes=init_hooks)
+        assert registered_net_dvars == [True], registered_net_dvars
         assert set(commands)=={'connect','direct_listen','direct_stop','direct_player','direct_host'}
-        assert native_markers==[b'IW6D:DIRECT_COMMANDS_REGISTERED'],native_markers
+        assert native_markers==[b'IW6D:LOCAL_NETWORK_DVARS_REGISTERED',
+                                b'IW6D:DIRECT_COMMANDS_REGISTERED'],native_markers
         assert not any(n.startswith('ws2_32.dll!') for n in m.imports_called)
         endpoint=b'127.0.0.1:27016\0'
         # No inactive-client fabrication or mutation on rejected input.
@@ -230,7 +240,7 @@ def main():
             try:package.transform(original.read_bytes(),dll_path.read_bytes(),mode)
             except ValueError:pass
             else:raise AssertionError('profile mismatch accepted')
-    print('PASS: original NET_Init registers connect; real command starts original challenge resend through private UDP; vendor imports remain blocked')
+    print('PASS: enhanced NET_Init restores local net dvars, registers direct commands and uses independent UDP without vendor imports')
 
 
 def socket_port(port):return struct.unpack('<H',struct.pack('>H',port))[0]
