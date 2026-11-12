@@ -103,3 +103,21 @@ This complements—but does not replace—the receive-side MAC, packet-size and
 replay checks. The shared network key must be configured on both parties
 before non-local traffic is exposed; private transport authentication is not
 a substitute for checking in-engine lobby/command authorization.
+
+## P0044: replay history retained on same-host re-selection
+
+Previously `Iw6DirectSelectPeer` cleared the entire client replay bitmap on
+every successful selection, including repeated selection of the **same**
+authenticated server. A captured valid server-to-client datagram could thus
+be accepted again on the same live socket if the peer was re-selected.
+The enhanced transport now remembers the endpoint associated with its
+replay bitmap separately from the currently selected endpoint. A repeated
+selection—or an invalid selection followed by the same server—preserves the
+old bitmap; moving to a different server starts a fresh bitmap.
+
+`tests/direct/reselect_replay.py` compiles the actual enhanced transport,
+constructs valid v3 packets using the compiled directional MAC, and exercises
+normal delivery, replay rejection, same-peer selection, invalid selection,
+and a new endpoint. This protects only the lifetime of an open socket;
+reopening a socket, changing keys and cross-process replay still need an
+explicit fresh session handshake/nonce before network-wide exposure.
