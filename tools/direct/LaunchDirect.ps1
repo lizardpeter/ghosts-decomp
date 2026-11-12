@@ -18,7 +18,7 @@ if (($octets | Where-Object { $_ -gt 255 }).Count -or (!$wildcard -and ($octets[
 $game = (Resolve-Path -LiteralPath $GameDirectory).Path
 $manifest = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'manifest.json') | ConvertFrom-Json
 if ($manifest.mode -ne 'direct') { throw 'This is not a direct-mode package.' }
-foreach ($item in @(@('iw6mp64_offline.exe',$manifest.exe_sha256),@('recon.dll',$manifest.dll_sha256))) {
+foreach ($item in @(@('iw6mp64_enhanced.exe',$manifest.exe_sha256),@('recon.dll',$manifest.dll_sha256))) {
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot $item[0])).Hash
     if ($hash -ne $item[1]) { throw "Package hash mismatch: $($item[0])" }
 }
@@ -43,4 +43,4 @@ if ($game.Contains('"') -or $data.Contains('"')) { throw 'Unsupported quote in p
 $arguments = '+set fs_basepath "' + $game + '" +set fs_homepath "' + $data + '" +direct_player ' + $playerRecord.id + ' "' + $playerRecord.name + '" '
 if ($PSCmdlet.ParameterSetName -eq 'Host') { $arguments += '+direct_host ' + $endpoint + ' ' + $Map + ' ' + $GameType }
 else { $arguments += '+connect ' + $endpoint }
-Start-Process -FilePath (Join-Path $PSScriptRoot 'iw6mp64_offline.exe') -WorkingDirectory $game -ArgumentList $arguments -Wait
+Start-Process -FilePath (Join-Path $PSScriptRoot 'iw6mp64_enhanced.exe') -WorkingDirectory $game -ArgumentList $arguments -Wait

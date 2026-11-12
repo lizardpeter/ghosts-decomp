@@ -1,6 +1,6 @@
 # Direct connect without vendor services
 
-P0012/P0019 add an experimental direct profile for the pinned Store multiplayer build. It builds a DLL and a patched
+The canonical enhanced Store build includes independent direct connection and local game startup. P0012/P0019 originally added an experimental direct profile for the pinned Store multiplayer build. It builds a DLL and a patched
 EXE copy, registers `connect IPv4:port`, and routes the original challenge request through independent UDP.
 **Entering a map and completing a multiplayer join are not yet verified or complete.** This is not a standalone
 source build: unreconstructed engine code still runs from the pinned original EXE. Neither function records nor
@@ -11,22 +11,20 @@ this package claim native integration or whole-process isolation.
 Use the same LLVM toolchain, Python, pefile and Unicorn dependencies as the other reconstruction builds:
 
 ```sh
-IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct
+python3 tools/build_enhanced.py --original .work/originals/iw6mp64_MSStore_ship.exe --output .work/enhanced-package
 python3 tests/direct/transport.py
 python3 tests/direct/profile.py
 IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
 IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
 IW6_ORIGINALS=.work/originals python3 tests/direct/host.py
 IW6_ORIGINALS=.work/originals python3 tests/offline/vendor_tasks.py
-python3 tools/offline/package.py --mode direct \
-  --original .work/originals/iw6mp64_MSStore_ship.exe \
-  --output .work/direct-package
+# build_enhanced.py already packages and audits the same canonical executable.
 ```
 
 The output directory must not already exist. It contains the patched EXE, `recon.dll`, hashes/change manifest,
-and `LaunchDirect.ps1`. Offline and direct DLLs cannot be interchanged by the packager. Faithful sources and the
-ordinary enhanced/offline profiles do not include `enhanced/direct/`. The executable filename remains
-`iw6mp64_offline.exe` for compatibility with the package format; the manifest selects the actual mode.
+and `LaunchDirect.ps1`. The enhanced game DLL always includes vendor detachment, local player identity, direct transport,
+local readiness gates and all ordinary enhancements. The separate offline-only target is a contained
+no-network diagnostic, not a second enhanced game variant. The executable is `iw6mp64_enhanced.exe`.
 
 The Windows launch experiment, with the original complete game installation available, is:
 

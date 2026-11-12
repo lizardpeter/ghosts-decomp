@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/launch-smoke.yml
       - tools/direct/native_smoke.py
+      - tools/build_enhanced.py
       - tools/offline/package.py
       - tools/offline/detachment_audit.py
       - enhanced/offline/egress.cpp
@@ -56,8 +57,7 @@ jobs:
           sudo apt-get install -y -q clang lld llvm >/dev/null
           pip install -q pefile unicorn==2.1.4
           python3 tools/fetch_originals.py iw6mp64_MSStore_ship .work/originals --only exe
-          IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct
-          python3 tools/offline/package.py --original .work/originals/iw6mp64_MSStore_ship.exe --mode direct --output .work/package
+          python3 tools/build_enhanced.py --original .work/originals/iw6mp64_MSStore_ship.exe --output .work/package
           IW6_ORIGINALS=.work/originals python3 tests/direct/startup.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
@@ -67,7 +67,7 @@ jobs:
           python3 - <<'PYTHON'
           import json, pefile
           from pathlib import Path
-          pe=pefile.PE('.work/package/iw6mp64_offline.exe')
+          pe=pefile.PE('.work/package/iw6mp64_enhanced.exe')
           rows=[{'dll':d.dll.decode(), 'symbols':[i.name.decode() if i.name else i.ordinal for i in d.imports]} for d in pe.DIRECTORY_ENTRY_IMPORT]
           Path('.work/package/imports.json').write_text(json.dumps(rows))
           PYTHON
@@ -127,7 +127,7 @@ jobs:
       - name: Install PE audit dependency
         run: python -m pip install --quiet pefile
       - name: Audit staged DLLs before starting the custom game
-        run: python tools/offline/detachment_audit.py --exe package/iw6mp64_offline.exe --manifest package/manifest.json --output diagnostics/vendor-prelaunch-audit.json
+        run: python tools/offline/detachment_audit.py --exe package/iw6mp64_enhanced.exe --manifest package/manifest.json --dll-directory game --output diagnostics/vendor-prelaunch-audit.json
       - name: Observe fixture and custom game with outbound firewall blocks
         # Keep the debug observer but use the normal Windows heap at startup.
         env:
@@ -140,12 +140,12 @@ jobs:
             if (!$profile.Enabled) { throw 'An active firewall profile is disabled' }
           }
           $manifest=Get-Content package/manifest.json -Raw | ConvertFrom-Json
-          foreach ($pair in @(@('iw6mp64_offline.exe',$manifest.exe_sha256),@('recon.dll',$manifest.dll_sha256))) {
+          foreach ($pair in @(@('iw6mp64_enhanced.exe',$manifest.exe_sha256),@('recon.dll',$manifest.dll_sha256))) {
             if ((Get-FileHash (Join-Path package $pair[0])).Hash -ne $pair[1]) { throw 'Package integrity mismatch' }
           }
           $game=(Resolve-Path game).Path
           $profile=(Resolve-Path diagnostics/profile).Path
-          foreach ($binary in @('observer_fixture.exe','iw6mp64_offline.exe')) {
+          foreach ($binary in @('observer_fixture.exe','iw6mp64_enhanced.exe')) {
             $exe=(Resolve-Path (Join-Path package $binary)).Path
             $rule='Iw6CustomSmoke-'+[guid]::NewGuid().ToString('N')
             New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Outbound -Program $exe -Action Block -Profile Any | Out-Null
@@ -158,7 +158,7 @@ jobs:
               } else {
                 python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 90 --output diagnostics/game.json --imports package/imports.json --pending-zones --loader-flags --screenshot diagnostics/game.png -- +set fs_basepath $game +set fs_homepath $profile +set logfile 2 +set r_fullscreen 0 +direct_player 0000000000000001 LocalProbe
                 if ($LASTEXITCODE -ne 0) { throw 'Game observation failed' }
-                python tools/offline/detachment_audit.py --exe package/iw6mp64_offline.exe --manifest package/manifest.json --runtime diagnostics/game.json --output diagnostics/vendor-audit.json
+                python tools/offline/detachment_audit.py --exe package/iw6mp64_enhanced.exe --manifest package/manifest.json --dll-directory game --runtime diagnostics/game.json --output diagnostics/vendor-audit.json
                 if ($LASTEXITCODE -ne 0) { throw 'Custom executable loaded a forbidden GDK/Xbox provider or its package audit failed' }
                 # Diagnostic evidence, not a synthetic gameplay-success flag.
                 # These strings come only from inside the custom game DLL.

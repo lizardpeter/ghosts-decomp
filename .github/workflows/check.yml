@@ -2,6 +2,12 @@
 # reconstruction compiles, every differential test passes and records/ only claims what tests prove.
 name: check
 
+# Keep one verification run for the newest branch revision rather than
+# launching duplicate push and pull_request runs for every successive change.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 on:
   push:
   pull_request:
@@ -49,12 +55,14 @@ jobs:
         run: |
           python3 tests/direct/transport.py
           python3 tests/direct/profile.py
-          IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct
+          # --enhanced above is the single Store gameplay DLL (vendor guards + local direct transport).
           IW6_ORIGINALS=.work/originals python3 tests/direct/startup.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/host.py
           IW6_ORIGINALS=.work/originals python3 tests/offline/vendor_tasks.py
+          python3 tools/build_enhanced.py --skip-compile --original .work/originals/iw6mp64_MSStore_ship.exe --output .work/enhanced-check-package
+          python3 tools/offline/detachment_audit.py --exe .work/enhanced-check-package/iw6mp64_enhanced.exe --manifest .work/enhanced-check-package/manifest.json
       - name: Generated files are current
         run: |
           python3 tools/status.py >/dev/null

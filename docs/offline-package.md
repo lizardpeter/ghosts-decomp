@@ -4,7 +4,7 @@ P0011 adds a startup-only integration experiment for the **pinned Store multipla
 It is not a verified runnable game or a whole-process egress guarantee. Actual direct-profile Windows
 startup attempts and their blockers are recorded in [native-launch.md](native-launch.md). Successful
 asset/graphics/menu startup, full offline-profile launch and outbound traffic capture remain unverified.
-The default faithful and enhanced DLL builds retain their existing behavior. `src/` is unchanged.
+The faithful source remains unchanged. The canonical enhanced game now includes the direct-play, identity and vendor-detachment modules; this `--offline` profile exists only for fully network-disabled containment diagnostics.
 
 ## Build and test
 
@@ -13,7 +13,7 @@ With the normal LLVM toolchain and pinned originals available:
 ```sh
 IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --offline
 IW6_ORIGINALS=.work/originals python3 tests/offline/run.py
-python3 tools/offline/package.py \
+python3 tools/offline/package.py --mode offline \
   --original .work/originals/iw6mp64_MSStore_ship.exe \
   --output .work/offline-package
 ```

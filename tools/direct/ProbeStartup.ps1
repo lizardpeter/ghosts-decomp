@@ -14,13 +14,13 @@ $ErrorActionPreference = 'Stop'
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $PackageDirectory 'local-diagnostics' }
 $game = (Resolve-Path -LiteralPath $GameDirectory).Path
 $package = (Resolve-Path -LiteralPath $PackageDirectory).Path
-$exe = (Resolve-Path -LiteralPath (Join-Path $package 'iw6mp64_offline.exe')).Path
+$exe = (Resolve-Path -LiteralPath (Join-Path $package 'iw6mp64_enhanced.exe')).Path
 $observer = (Resolve-Path -LiteralPath (Join-Path $package 'native_smoke.py')).Path
 $manifest = Get-Content -Raw -LiteralPath (Join-Path $package 'manifest.json') | ConvertFrom-Json
 if ($manifest.mode -ne 'direct' -or $manifest.build -ne 'iw6mp64_MSStore_ship') {
     throw 'Only the pinned custom Store multiplayer direct-mode package is supported.'
 }
-foreach ($name in @('iw6mp64_offline.exe','recon.dll')) {
+foreach ($name in @('iw6mp64_enhanced.exe','recon.dll')) {
     $expected = if ($name -eq 'recon.dll') { $manifest.dll_sha256 } else { $manifest.exe_sha256 }
     $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $package $name)).Hash
     if ($actual -ne $expected) { throw "Package integrity mismatch: $name" }

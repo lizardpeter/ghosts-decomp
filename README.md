@@ -26,6 +26,24 @@ Compilers: Store build VS2019 (x64, LTCG); servers and Steam exes VS2012 (x64).
 - Custom Microsoft Gaming Services detachment, audits, and remaining work: [docs/gaming-services-detachment.md](docs/gaming-services-detachment.md)
 - The renderer's Direct3D 11 boundary, and what a Vulkan backend must provide: [docs/renderer.md](docs/renderer.md)
 
+## One enhanced game path
+
+The pinned Store multiplayer target has **one enhanced game build**, combining all
+enhancements, offline Xbox/GDK/Demonware detachment guards and local/direct-play
+transport in `build/iw6mp64_MSStore_ship/enhanced/recon.dll`:
+
+```sh
+python3 tools/build_enhanced.py --original .work/originals/iw6mp64_MSStore_ship.exe --output .work/enhanced-package
+```
+
+The single command compiles the canonical `--enhanced` DLL and audits/packages the custom EXE.
+The package creates `iw6mp64_enhanced.exe`, `recon.dll`, the manifest and the
+local launcher. The faithful reconstruction is separate; the offline-only
+diagnostic/sandbox remains internal and is not a second enhanced game.
+**Menus, playable maps, completed joins and whole-process vendor isolation are
+not yet established.** See [direct-connect](docs/direct-connect.md) and
+[gaming-services-detachment](docs/gaming-services-detachment.md).
+
 ## Pipeline
 
 1. `tools/unpack/arxan.py` emulates each protected exe's entry stub and writes the decrypted image
