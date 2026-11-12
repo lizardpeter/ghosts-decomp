@@ -36,6 +36,7 @@ unsigned int peerCount;
 unsigned char wireKey[16];
 bool authenticated;
 unsigned long long outboundSequence;
+netadr_s clientReplayPeer; // replay state survives same-endpoint re-selection
 Iw6WireAuth::ReplayWindow clientReplay = {};
 Iw6WireAuth::ReplayWindow peerReplay[MaxPeers] = {};
 #ifdef _WIN32
@@ -94,6 +95,7 @@ void Close()
     peerCount = 0;
     outboundSequence = 0;
     clientReplay = {};
+    clientReplayPeer = {};
     for (unsigned int i = 0; i < MaxPeers; ++i) peerReplay[i] = {};
 }
 bool Permitted(const netadr_s &a)
@@ -220,7 +222,14 @@ extern "C" int Iw6DirectSelectPeer(const char *endpoint)
     selected = {}; // Failed selection revokes the old destination.
     if (!valid || udp == INVALID_SOCKET || hosting ||
         (!authenticated && address.ip[0] != 127)) return 0;
-    clientReplay = {};
+    // Re-selecting the same authenticated endpoint (including after an
+    // invalid intermediate selection) must not reset replay admission.
+    // A genuinely new endpoint starts with a fresh window.
+    if (!Same(clientReplayPeer, address, true))
+    {
+        clientReplay = {};
+        clientReplayPeer = address;
+    }
     selected = address;
     return 1;
 }
