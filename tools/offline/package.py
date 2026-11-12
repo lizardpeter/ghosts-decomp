@@ -94,6 +94,7 @@ def adapter(dll, name, ordinal=None):
         if name == 'getaddrinfo': return 'Iw6DenyAddrInfo'
     if dll == 'kernel32.dll':
         if name in {'LoadLibraryA', 'LoadLibraryW', 'LoadLibraryExA', 'LoadLibraryExW', 'GetProcAddress'}: return 'Iw6Offline' + name
+        if name == 'LoadPackagedLibrary': return 'Iw6DenyNull'
         if name == 'CreateProcessA': return 'Iw6DenyNull'
     if dll == 'ole32.dll' and name == 'CoCreateInstance': return 'Iw6DenyCom'
     if dll == 'shell32.dll' and name == 'ShellExecuteA': return 'Iw6DenyStatus'
