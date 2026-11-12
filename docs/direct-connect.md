@@ -264,10 +264,13 @@ both implemented only by `enhanced/direct/transport.cpp`; faithful `src/` is unc
   authentication mechanism. The listener may still bind `0.0.0.0`, but
   non-loopback datagrams are discarded before the game parser and cannot be
   destinations for replies.
-- **v2 (explicit 128-bit key):** strict framing (4-byte magic, version/flags,
+- **v3 (explicit 128-bit key):** strict framing (4-byte magic, version/flags,
   bounded 2-byte payload length, nonzero 64-bit sequence, at most 1262 bytes of
   payload, 64-bit SipHash-2-4 tag). The tag covers the entire header,
-  sequence, and payload. Packets must have the valid key before a source is
+  sequence, payload, and the implicit sending role (client vs server);
+  reflected packets from the opposite direction are rejected. Old keyed v2
+  packets are intentionally incompatible to prevent a downgrade.
+  Packets must have the valid key before a source is
   admitted; replays are rejected per peer using a 64-packet sliding window.
   The game engine sees only payloads that pass these checks.
 - **Reconfiguration:** `direct_key <32-hex-characters>` invalidates the prior
