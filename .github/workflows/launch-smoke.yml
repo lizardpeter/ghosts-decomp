@@ -146,6 +146,7 @@ jobs:
         # Keep the debug observer but use the normal Windows heap at startup.
         env:
           _NO_DEBUG_HEAP: '1'
+          IW6_TRACE_FASTFILE_IO: '1'
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -177,6 +178,10 @@ jobs:
                 # Diagnostic evidence, not a synthetic gameplay-success flag.
                 # These strings come only from inside the custom game DLL.
                 $gameReport = Get-Content diagnostics/game.json -Raw | ConvertFrom-Json
+                # Original Win32 CreateFileA/ReadFileEx results for ui_mp.ff;
+                # these are pass-through IAT adapters, not I/O overrides.
+                @($gameReport.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6IO:*' } | ForEach-Object { $_.text }) |
+                  ConvertTo-Json -Depth 5 | Set-Content diagnostics/file-io.json
                 $directMessages = @($gameReport.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6D:*' } | ForEach-Object { $_.text })
                 [pscustomobject]@{
                   network_dvars_registered = ($directMessages -contains 'IW6D:LOCAL_NETWORK_DVARS_REGISTERED')
@@ -207,6 +212,8 @@ jobs:
                 python tools/offline/detachment_audit.py --exe package/iw6mp64_enhanced.exe --manifest package/manifest.json --dll-directory game --runtime diagnostics/host-game.json --output diagnostics/vendor-host-audit.json
                 if ($LASTEXITCODE -ne 0) { throw 'Host startup attempted a forbidden vendor module' }
                 $hostReport = Get-Content diagnostics/host-game.json -Raw | ConvertFrom-Json
+                @($hostReport.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6IO:*' } | ForEach-Object { $_.text }) |
+                  ConvertTo-Json -Depth 5 | Set-Content diagnostics/host-file-io.json
                 $hostMessages = @($hostReport.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6D:*' } | ForEach-Object { $_.text })
                 [pscustomobject]@{
                   map = 'mp_prisonbreak'
