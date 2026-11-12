@@ -235,7 +235,7 @@ def transform(original, dll_bytes, mode='direct'):
                 'guards': changes, 'imports': redirected,
                 'native_launch_verified': False, 'whole_process_egress_verified': False,
                 'game_join_verified': False,
-                'wire_protocol': {'tag':'IW6D','version':1,'authenticated_version':2,'remote_requires_key':True} if mode == 'direct' else None}
+                'wire_protocol': {'tag':'IW6D','version':1,'authenticated_version':3,'remote_requires_key':True} if mode == 'direct' else None}
     # Verify the final PE, not only the transformation plan. A missed IAT
     # redirect or lost GDK guard must fail before a package is published.
     from offline.detachment_audit import audit_package
