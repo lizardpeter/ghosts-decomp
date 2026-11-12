@@ -61,3 +61,32 @@ def test_normal_unbind_reaches_binding_write(env):
              fakes={0x140310B30: binding,
                     "?Key_SetBinding@@YAXW4LocalClientNum_t@@HH@Z": binding})
     assert calls == [(0, ord("a"), 0)], calls
+
+def test_normal_bind_uses_store_name_table(env):
+    # Real Windows regression: a source-linked PS4 Key_GetBindingForCmd
+    # dereferenced the unresolved address 0x200000000, causing a native
+    # 0xc0000005 before menu initialization. The enhanced adapter must
+    # route the read-only name lookup to the pinned original Store helper
+    # at 0x140310810 instead, retaining bounds checks around setters.
+    from unicorn.x86_const import (
+        UC_X86_REG_RAX, UC_X86_REG_RCX, UC_X86_REG_RDX, UC_X86_REG_R8
+    )
+    looked_up, writes = [], []
+    def lookup(mu):
+        looked_up.append(mu.reg_read(UC_X86_REG_RCX))
+        mu.reg_write(UC_X86_REG_RAX, 7)
+    def write(mu):
+        writes.append(tuple(mu.reg_read(r) for r in
+                            (UC_X86_REG_RCX, UC_X86_REG_RDX, UC_X86_REG_R8)))
+    result = env.call(
+        "Iw6SecureBind", [],
+        setup=arguments([b"bind", b"a", b"+attack"]),
+        fakes={
+            0x140310810: lookup,  # matched Store name table, not PS4 reconstruction
+            0x140310B30: write,
+            "?Key_SetBinding@@YAXW4LocalClientNum_t@@HH@Z": write,
+        },
+    )
+    assert not (isinstance(result[0], str) and result[0].startswith("fault")), result
+    assert looked_up, "did not use the original Store binding-name lookup"
+    assert writes == [(0, ord("a"), 7)], writes
