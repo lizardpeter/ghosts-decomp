@@ -43,8 +43,14 @@ LOCAL_FILES = {0x140548F90: 'Iw6LocalGameDirectory'}
 DIRECT = {
     # S23/B0036: Store R_EnumDisplayModes trusts oversized DXGI mode counts.
     0x14062FC90: 'Iw6SecureEnumDisplayModes',
-    # Do NOT use PS4 reference client/cl_keys.cpp addresses here for the Store EXE.
-    # S17 remains source-linked only until the Store entrypoints are matched.
+    # S17/B0009: verified cross-build Store match candidates, NOT reference VAs.
+    # Matcher: analysis/iw6mp64_MSStore_ship/match/functions.tsv.
+    # bind_swap and unbind are registered by name (0.89 confidence);
+    # bind is the only unmatched caller of Key_StringToKeynum (0.75).
+    # Native redirect does not use the PS4 reference addresses.
+    0x1403106D0: 'Iw6SecureBind',
+    0x140310D20: 'Iw6SecureSwapBind',
+    0x140310EB0: 'Iw6SecureUnbind',
     # S20/B0025: never enter the original fixed-buffer SOCKS credential parser.
     0x14054F5B0: 'Iw6DirectDisableSocks',
     0x140245440: 'Iw6DirectNoXboxLicenseRefresh',  # Store LUI callback
