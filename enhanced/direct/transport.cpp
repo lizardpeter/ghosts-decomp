@@ -24,7 +24,7 @@ namespace
 {
 constexpr int MaxPayload = 1262;
 constexpr int HeaderSize = 8;
-constexpr int MaxWire = HeaderSize + 8 + MaxPayload + 8; // v2: nonce and keyed tag
+constexpr int MaxWire = HeaderSize + 8 + MaxPayload + 8; // v3: sequence, directional keyed tag
 constexpr unsigned int MaxPeers = 64;
 SOCKET udp = INVALID_SOCKET;
 bool initialized;
@@ -109,7 +109,7 @@ bool Permitted(const netadr_s &a)
 }
 }
 
-extern "C" int Iw6DirectWireVersion() { Lock guard; return authenticated ? 2 : 1; }
+extern "C" int Iw6DirectWireVersion() { Lock guard; return authenticated ? 3 : 1; }
 
 // Exactly 16 bytes of random shared secret, encoded as 32 hexadecimal characters.
 // Reconfiguration closes the socket and clears every replay/admission state.
@@ -224,7 +224,7 @@ extern "C" int Iw6DirectSend(int length, const void *data, const netadr_s *to)
     if (udp == INVALID_SOCKET || !Permitted(*to)) return 0;
     unsigned char packet[MaxWire] = {};
     packet[0] = 'I'; packet[1] = 'W'; packet[2] = '6'; packet[3] = 'D';
-    packet[4] = authenticated ? 2 : 1; packet[5] = 0;
+    packet[4] = authenticated ? 3 : 1; packet[5] = 0;
     packet[6] = (unsigned char)(length >> 8); packet[7] = (unsigned char)length;
     int offset = HeaderSize, wireLength;
     if (authenticated)
@@ -239,7 +239,7 @@ extern "C" int Iw6DirectSend(int length, const void *data, const netadr_s *to)
         packet[offset + i] = ((const unsigned char *)data)[i];
     if (authenticated)
     {
-        const unsigned long long mac = Iw6WireAuth::Mac(wireKey, packet, offset + length);
+        const unsigned long long mac = Iw6WireAuth::MacDirectional(wireKey, packet, offset + length, hosting ? 'S' : 'C');
         for (int i = 0; i < 8; ++i)
             packet[offset + length + i] = (unsigned char)(mac >> (56 - 8 * i));
         wireLength = offset + length + 8;
@@ -280,7 +280,7 @@ extern "C" int Iw6DirectReceive(netadr_s *from, msg_t *message)
         if (size != sizeof(source) || source.sin_family != AF_INET ||
             received < HeaderSize + 2 || received > MaxWire) continue;
         if (packet[0] != 'I' || packet[1] != 'W' || packet[2] != '6' || packet[3] != 'D' ||
-            packet[4] != (authenticated ? 2 : 1) || packet[5] != 0) continue;
+            packet[4] != (authenticated ? 3 : 1) || packet[5] != 0) continue;
         const int length = (packet[6] << 8) | packet[7];
         if (length > MaxPayload || length > message->maxsize) continue;
         unsigned long long sequence = 0;
@@ -293,7 +293,7 @@ extern "C" int Iw6DirectReceive(netadr_s *from, msg_t *message)
                 sequence = (sequence << 8) | packet[HeaderSize + i];
             if (!sequence ||
                 !Iw6WireAuth::EqualTag(
-                    Iw6WireAuth::Mac(wireKey, packet, payloadOffset + length),
+                    Iw6WireAuth::MacDirectional(wireKey, packet, payloadOffset + length, hosting ? 'C' : 'S'),
                     packet + payloadOffset + length)) continue;
         }
         else
