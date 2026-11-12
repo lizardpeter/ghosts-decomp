@@ -17,7 +17,7 @@ from unicorn.x86_const import UC_X86_REG_RAX,UC_X86_REG_RCX,UC_X86_REG_RDX,UC_X8
 
 
 def main():
-    dll_path=ROOT/'build'/package.BUILD/'direct/recon.dll'
+    dll_path=ROOT/'build'/package.BUILD/'enhanced/recon.dll'
     original=original_exe(package.BUILD)
     with tempfile.TemporaryDirectory() as temp:
         directory=Path(temp)/'direct'
@@ -25,7 +25,7 @@ def main():
         assert manifest['mode']=='direct' and not manifest['game_join_verified']
         assert len(manifest['guards'])==31+len(package.VENDOR_TASKS)+len(package.LOCAL_FILES)+len(package.DIRECT) and len(manifest['imports'])==58
         assert (directory/'LaunchDirect.ps1').exists() and not (directory/'ConfigureSandbox.ps1').exists()
-        image=(directory/'iw6mp64_offline.exe').read_bytes()
+        image=(directory/'iw6mp64_enhanced.exe').read_bytes()
         dll_image=(directory/'recon.dll').read_bytes()
         assert not detachment_audit.audit_package(image, manifest, dll_image)
         assert len(detachment_audit.DIRECT_ENTRIES)==len(package.DIRECT)==17
@@ -36,7 +36,7 @@ def main():
                 g for g in manifest['guards'] if int(g['va'],16)!=missing])
             assert any('Missing direct/local-session entry' in e for e in
                        detachment_audit.audit_package(image, partial, dll_image))
-        exe,dll=Image(directory/'iw6mp64_offline.exe'),Image(directory/'recon.dll')
+        exe,dll=Image(directory/'iw6mp64_enhanced.exe'),Image(directory/'recon.dll')
         m=Machine(exe,dll)
         for slot,name in exe.iat.items():
             if name.startswith('recon.dll!'):
