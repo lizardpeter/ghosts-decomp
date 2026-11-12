@@ -200,7 +200,7 @@ A missing package dependency, invalid content, unexpected SDK load or
 different real-GPU behavior is new evidence to investigate, not a
 reason to force `DAT_145CAEDF8` to zero.
 
-P0032 makes the custom offline/direct package fail its static detachment audit if any of the 42 common guards or 17 direct-profile guards disappear. It also rejects known app-local Demonware module names and dynamic packaged-library resolution. These are structural checks, not evidence of a rendered menu, successful offline match or process-wide absence of all vendor code.
+P0032 makes the canonical enhanced/direct game package and isolated offline diagnostic fail their static detachment audit if any of the 42 common guards or 17 direct-profile guards disappear. It also rejects known app-local Demonware module names and dynamic packaged-library resolution. These are structural checks, not evidence of a rendered menu, successful offline match or process-wide absence of all vendor code.
 
 The complete game installation is not yet staged in the diagnostic. Later asset,
 graphics, profile/statistics and connection failures must be addressed from
