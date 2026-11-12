@@ -120,7 +120,18 @@ def main():
         client.Close();server.Close()
         assert not client.Send(0,None,C.byref(address))
         assert not receive(client)[0]
-        assert server.Open(b'0.0.0.0:0',1) # Explicit wildcard bind; never a remote peer.
+        # Unkeyed wildcard syntax is intentionally local-only at bind time,
+        # not merely a post-recv packet filter. A 127.0.0.2 destination
+        # reaches an INADDR_ANY socket but must not reach 127.0.0.1-only.
+        assert not server.Open(b'192.0.2.44:0', 1)
+        assert server.Port() == 0
+        assert server.Open(b'0.0.0.0:0', 1)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.bind(('127.0.0.1', 0))
+            probe.sendto(packet(b'wrong-bound-ip'), ('127.0.0.2', server.Port()))
+            assert not receive(server)[0], "wildcard no-key socket exposed outside 127.0.0.1"
+            probe.sendto(packet(b'bound-loopback'), ('127.0.0.1', server.Port()))
+            assert receive(server)[:2] == (1, b'bound-loopback')
         server.Close()
         # v1 is localhost-only: checksum-valid legacy traffic is never an
         # authorization token for LAN/Internet peers.
