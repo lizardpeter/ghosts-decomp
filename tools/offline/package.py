@@ -41,11 +41,8 @@ VENDOR_TASKS = {
 LOCAL_FILES = {0x140548F90: 'Iw6LocalGameDirectory'}
 # C exports adapt the reviewed Win64 ABI without claiming original source names.
 DIRECT = {
-    # S17/B0009: the original Key_StringToKeynum sign-extends high-ASCII;
-    # reject indexes outside the key table in every bind command entrypoint.
-    0x1400AD720: 'Iw6SecureUnbind',
-    0x1400ACEA0: 'Iw6SecureBind',
-    0x1400AD5F0: 'Iw6SecureSwapBind',
+    # Do NOT use PS4 reference client/cl_keys.cpp addresses here for the Store EXE.
+    # S17 remains source-linked only until the Store entrypoints are matched.
     # S20/B0025: never enter the original fixed-buffer SOCKS credential parser.
     0x14054F5B0: 'Iw6DirectDisableSocks',
     0x140245440: 'Iw6DirectNoXboxLicenseRefresh',  # Store LUI callback
