@@ -88,6 +88,10 @@ $result = Get-Content -Raw -LiteralPath (Join-Path $out 'game.json') | ConvertFr
 $messages = @($result.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6D:*' } | ForEach-Object { $_.text })
 $lastState = @($result.loader_state) | Select-Object -Last 1
 $lastGraphics = @($result.graphics_state) | Select-Object -Last 1
+$lastFastFile = @($result.fastfile_state) | Select-Object -Last 1
+$ioFailures = @($result.events | Where-Object {
+    $_.event -eq 8 -and $_.text -like 'IW6IO:*' -and $_.text -like '*success=0*'
+} | ForEach-Object { $_.text } | Select-Object -First 25)
 $modules = @($result.events | Where-Object { $_.event -eq 6 -and $_.path } |
     ForEach-Object { [System.IO.Path]::GetFileName($_.path).ToLowerInvariant() })
 $forbidden = @('xgameruntime.dll','xcurl.dll','xboxliveapi.dll','xboxservices.dll','gamingservices.dll','demonware.dll','demonwareclient.dll','bdcore.dll','bdsdk.dll')
@@ -103,6 +107,8 @@ $summary = [pscustomobject]@{
     host_start_requested = ($messages -contains 'IW6D:DIRECT_MAP_START_REQUESTED')
     last_loader_state = $lastState
     last_graphics_state = $lastGraphics
+    last_fastfile_state = $lastFastFile
+    sampled_file_io_failures = $ioFailures
     requested_zone_names = $result.pending_zone_names
     unexpected_vendor_modules = $unexpected
     display_adapters = $gpu
