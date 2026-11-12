@@ -138,6 +138,17 @@ jobs:
           # constitute the full game: image/audio PAKs are still omitted.
           python tools/direct/fetch_startup.py --inventory records/native-map-sources.tsv --output game --report diagnostics/map-sources.json
           if ($LASTEXITCODE -ne 0) { throw 'Original prisonbreak map asset staging failed' }
+          # The earlier native trace found a missing original soundfile1.pak.
+          # Its R2 ETag is multipart (not a plain MD5); validate exact
+          # source-reported byte length and record locally computed SHA-256.
+          $pak = Join-Path 'game' 'soundfile1.pak'
+          Invoke-WebRequest -Uri 'https://r2.houseofkublai.com/ghosts/DUMP/soundfile1.pak' -OutFile $pak
+          if ((Get-Item -LiteralPath $pak).Length -ne 228383419) { throw 'Original soundfile1.pak size mismatch' }
+          [pscustomobject]@{
+            source = 'ghosts/DUMP/soundfile1.pak'
+            bytes = 228383419
+            sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $pak).Hash
+          } | ConvertTo-Json | Set-Content diagnostics/soundfile-source.json
       - name: Install PE audit dependency
         run: python -m pip install --quiet pefile
       - name: Audit staged DLLs before starting the custom game
@@ -197,6 +208,7 @@ jobs:
                 # wait from a missing D3D11 device/window/swap chain. Neither
                 # a non-null pointer nor a black screenshot proves gameplay.
                 $gameReport.graphics_state | ConvertTo-Json -Depth 8 | Set-Content diagnostics/graphics-state.json
+                $gameReport.fastfile_state | ConvertTo-Json -Depth 8 | Set-Content diagnostics/fastfile-state.json
                 # Unlike menu/map loading, these two startup checkpoints
                 # must occur in this exact launch with +direct_player.
                 if ($directMessages -notcontains 'IW6D:LOCAL_NETWORK_DVARS_REGISTERED' -or
@@ -204,6 +216,19 @@ jobs:
                     $directMessages -notcontains 'IW6D:LOCAL_PROFILE_PREPARED') {
                   throw 'Native local dvar registration, direct commands or early profile bootstrap did not execute'
                 }
+                # The terminated first diagnostic leaves an original crash
+                # sentinel in the temporary CI game directory. Otherwise the
+                # second launch blocks on the retail "Run In Safe Mode?"
+                # modal before NET_Init. Delete only this ephemeral marker;
+                # never alter actual game files, licence state or a user's PC.
+                $crashMarker = Join-Path $game '__iw6mp64_enhanced'
+                $hadCrashMarker = Test-Path -LiteralPath $crashMarker
+                if ($hadCrashMarker) { Remove-Item -LiteralPath $crashMarker -Force }
+                [pscustomobject]@{
+                  path_basename = '__iw6mp64_enhanced'
+                  existed_before_host = $hadCrashMarker
+                  removed_for_isolated_host_test = $hadCrashMarker
+                } | ConvertTo-Json | Set-Content diagnostics/host-restart-marker.json
                 # Separate bounded *host request* observation, still with
                 # outbound firewall isolation. A map-start marker means only
                 # that SV_StartMap was called, not that a level was loaded.
@@ -221,6 +246,7 @@ jobs:
                   local_profile_prepared = ($hostMessages -contains 'IW6D:LOCAL_PROFILE_PREPARED')
                   graphics_state = @($hostReport.graphics_state) | Select-Object -Last 1
                   asset_state = @($hostReport.loader_state) | Select-Object -Last 1
+                  fastfile_state = @($hostReport.fastfile_state) | Select-Object -Last 1
                   observed_events = $hostMessages
                   playable_game_verified = $false
                 } | ConvertTo-Json -Depth 8 | Set-Content diagnostics/host-milestones.json
