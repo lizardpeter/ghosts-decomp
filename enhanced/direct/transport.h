@@ -12,3 +12,6 @@ extern "C" int Iw6DirectParse(const char *text, netadr_s *address, int allowZero
 extern "C" int Iw6DirectSend(int length, const void *data, const netadr_s *to);
 extern "C" int Iw6DirectReceive(netadr_s *from, msg_t *message);
 extern "C" int Iw6DirectSameAddress(const netadr_s *a, const netadr_s *b, int comparePort);
+
+// Shared-key mode: exactly 32 hexadecimal characters (128 random bits); returns 0 and clears the key on failure.
+extern "C" int Iw6DirectSetKey(const char *hex);
