@@ -26,6 +26,7 @@ on:
       - enhanced/offline/files.cpp
       - tools/direct/fetch_startup.py
       - records/native-startup-sources.tsv
+      - records/native-map-sources.tsv
   workflow_dispatch:
 
 permissions:
@@ -124,6 +125,12 @@ jobs:
           Copy-Item game/*.dll package/
           python tools/direct/fetch_startup.py --output game --report diagnostics/sources.json
           if ($LASTEXITCODE -ne 0) { throw 'Original startup asset staging failed' }
+          # Stage the AUTHENTIC prisonbreak map FastFiles for a separate,
+          # bounded local-host startup diagnostic. R2 contains the original
+          # map named mp_prisonbreak, not mp_prison. These seven files do not
+          # constitute the full game: image/audio PAKs are still omitted.
+          python tools/direct/fetch_startup.py --inventory records/native-map-sources.tsv --output game --report diagnostics/map-sources.json
+          if ($LASTEXITCODE -ne 0) { throw 'Original prisonbreak map asset staging failed' }
       - name: Install PE audit dependency
         run: python -m pip install --quiet pefile
       - name: Audit staged DLLs before starting the custom game
@@ -185,6 +192,24 @@ jobs:
                     $directMessages -notcontains 'IW6D:LOCAL_PROFILE_PREPARED') {
                   throw 'Native local dvar registration, direct commands or early profile bootstrap did not execute'
                 }
+                # Separate bounded *host request* observation, still with
+                # outbound firewall isolation. A map-start marker means only
+                # that SV_StartMap was called, not that a level was loaded.
+                python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 45 --output diagnostics/host-game.json --pending-zones --loader-flags -- +set fs_basepath $game +set fs_homepath $profile +set logfile 2 +set r_fullscreen 0 +direct_player 0000000000000001 LocalProbe +direct_host 0.0.0.0:27016 mp_prisonbreak war
+                if ($LASTEXITCODE -ne 0) { throw 'Host request native observation failed' }
+                python tools/offline/detachment_audit.py --exe package/iw6mp64_enhanced.exe --manifest package/manifest.json --dll-directory game --runtime diagnostics/host-game.json --output diagnostics/vendor-host-audit.json
+                if ($LASTEXITCODE -ne 0) { throw 'Host startup attempted a forbidden vendor module' }
+                $hostReport = Get-Content diagnostics/host-game.json -Raw | ConvertFrom-Json
+                $hostMessages = @($hostReport.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6D:*' } | ForEach-Object { $_.text })
+                [pscustomobject]@{
+                  map = 'mp_prisonbreak'
+                  map_start_requested = ($hostMessages -contains 'IW6D:DIRECT_MAP_START_REQUESTED')
+                  local_profile_prepared = ($hostMessages -contains 'IW6D:LOCAL_PROFILE_PREPARED')
+                  graphics_state = @($hostReport.graphics_state) | Select-Object -Last 1
+                  asset_state = @($hostReport.loader_state) | Select-Object -Last 1
+                  observed_events = $hostMessages
+                  playable_game_verified = $false
+                } | ConvertTo-Json -Depth 8 | Set-Content diagnostics/host-milestones.json
               }
             } finally { Remove-NetFirewallRule -Name $rule }
           }
