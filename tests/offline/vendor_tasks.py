@@ -15,8 +15,8 @@ def main():
     for mode in ('offline','direct'):
         with tempfile.TemporaryDirectory() as temp:
             output=Path(temp)/'package'
-            manifest=package.package(original_exe(package.BUILD),ROOT/'build'/package.BUILD/mode/'recon.dll',output,mode)
-            exe,dll=Image(output/'iw6mp64_offline.exe'),Image(output/'recon.dll')
+            manifest=package.package(original_exe(package.BUILD),ROOT/'build'/package.BUILD/('enhanced' if mode=='direct' else 'offline')/'recon.dll',output,mode)
+            exe,dll=Image(output/('iw6mp64_enhanced.exe' if mode=='direct' else 'iw6mp64_offline.exe')),Image(output/'recon.dll')
             m=Machine(exe,dll)
             for slot,name in exe.iat.items():
                 if name.startswith('recon.dll!'):m.mu.mem_write(slot,struct.pack('<Q',dll.exports[name.split('!',1)[1]]))
