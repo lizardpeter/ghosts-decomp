@@ -150,7 +150,7 @@ def main():
             assert client.SelectPeer(endpoint) and client.Peer(C.byref(address))
             assert client.Send(len(data),data,C.byref(address))
             wire,_=untrusted.recvfrom(1400)
-            assert wire[:6]==b'IW6D\\x02\\x00' and len(wire)==8+8+len(data)+8
+            assert wire[:6]==b'IW6D'+bytes((2,0)) and len(wire)==8+8+len(data)+8
             # A legitimate authenticated packet is delivered once. Replays and
             # modified packets are discarded before peer admission or parsing.
             destination=('127.0.0.1',server.Port())
