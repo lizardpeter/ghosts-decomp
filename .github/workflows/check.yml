@@ -56,6 +56,7 @@ jobs:
           python3 tests/direct/transport.py
           python3 tests/direct/wire_auth.py
           python3 tests/direct/security_socks.py
+          python3 tests/direct/security_bind_native.py
           python3 tests/direct/profile.py
           # --enhanced above is the single Store gameplay DLL (vendor guards + local direct transport).
           IW6_ORIGINALS=.work/originals python3 tests/direct/startup.py
