@@ -38,8 +38,9 @@ VENDOR_INTEGRITY_ENTRIES = {
     0x1405F2280, 0x1405F24F0,
 }
 LOCAL_ASSET_ENTRIES = {0x140548F90}
-# All 17 direct-profile entry redirects, not just the original ten.
+# All 18 direct-profile entry redirects, including the vulnerable SOCKS5 path.
 DIRECT_ENTRIES = {
+    0x14054F5B0,  # B0025/S20: bypass vulnerable SOCKS5 credential parser
     0x140245440,  # original LUI XStore licence-refresh callback
     0x14054B1B0, 0x14054B290,  # local-only readiness gates
     0x14054F200, 0x14054F960, 0x14054FB70,
@@ -201,7 +202,7 @@ def audit_package(image, manifest, dll_image=None):
         errors.append("Cannot inspect packaged function guards: %s" % error)
     # A correct manifest cannot omit one of the documented vendor entry
     # boundaries and still be accepted. Validate all 42 common redirects,
-    # then all 17 additional direct-mode game/local-session redirects.
+    # then all 18 additional direct-mode game/local-session redirects.
     for label, required in (
         ("GDK", GDK_ENTRIES),
         ("Demonware authentication/lobby/telemetry", DEMONWARE_AND_TELEMETRY_ENTRIES),
