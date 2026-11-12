@@ -121,7 +121,7 @@ def guards():
             for name, (addr, kind) in table.items() if addr == va and kind == 'function']
 
 
-def transform(original, dll_bytes, mode='offline'):
+def transform(original, dll_bytes, mode='direct'):
     if mode not in {'offline', 'direct'}: raise ValueError('unknown package mode')
     cfg = tomllib.loads((ROOT / 'target.toml').read_text())
     expected = next(b['exe']['sha256'] for b in cfg['build'] if b['id'] == BUILD)
@@ -213,6 +213,7 @@ def transform(original, dll_bytes, mode='offline'):
     put(pe.OPTIONAL_HEADER.get_field_absolute_offset('CheckSum'), 0)
     put(pe.OPTIONAL_HEADER.get_field_absolute_offset('CheckSum'), pefile.PE(data=bytes(data)).generate_checksum())
     manifest = {'format': 1, 'mode': mode, 'build': BUILD, 'original_sha256': expected,
+                'exe_name': 'iw6mp64_enhanced.exe' if mode == 'direct' else 'iw6mp64_offline.exe',
                 'exe_sha256': sha(data), 'dll_sha256': sha(dll_bytes),
                 'guards': changes, 'imports': redirected,
                 'native_launch_verified': False, 'whole_process_egress_verified': False,
@@ -227,12 +228,12 @@ def transform(original, dll_bytes, mode='offline'):
     return bytes(data), manifest
 
 
-def package(original, dll, output, mode='offline'):
+def package(original, dll, output, mode='direct'):
     dll_bytes = dll.read_bytes()
     patched, manifest = transform(original.read_bytes(), dll_bytes, mode)
     output.mkdir(parents=True, exist_ok=False)
     try:
-        (output / 'iw6mp64_offline.exe').write_bytes(patched)
+        (output / manifest['exe_name']).write_bytes(patched)
         (output / 'recon.dll').write_bytes(dll_bytes)
         (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         for name in (() if mode == 'direct' else ('ConfigureSandbox.ps1', 'LaunchSandbox.ps1')):
@@ -249,9 +250,12 @@ def package(original, dll, output, mode='offline'):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--original', type=Path, required=True)
-    parser.add_argument('--mode', choices=['offline','direct'], default='offline')
+    parser.add_argument('--mode', choices=['offline','direct'], default='direct',
+                        help='direct = canonical enhanced game; offline = isolated diagnostic')
     parser.add_argument('--dll', type=Path)
     parser.add_argument('--output', type=Path, required=True, help='new directory; must not exist')
     args = parser.parse_args()
-    result = package(args.original, args.dll or ROOT / 'build' / BUILD / args.mode / 'recon.dll', args.output, args.mode)
+    result = package(args.original, args.dll or ROOT / 'build' / BUILD /
+                     ('enhanced' if args.mode == 'direct' else 'offline') / 'recon.dll',
+                     args.output, args.mode)
     print(f"Packaged {len(result['guards'])} guard jumps and {len(result['imports'])} import redirects; native verification pending")
