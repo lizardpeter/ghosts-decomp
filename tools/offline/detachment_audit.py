@@ -306,6 +306,8 @@ def main():
     parser.add_argument("--exe", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--dll", type=Path, help="replacement recon.dll (defaults to EXE directory)")
+    parser.add_argument("--dll-directory", type=Path, action="append", default=[],
+                        help="additional game/asset directory searched for local DLLs; repeatable")
     parser.add_argument("--runtime", type=Path, help="optional native_smoke.py JSON trace")
     parser.add_argument("--output", type=Path, help="optional machine-readable audit")
     args = parser.parse_args()
@@ -314,6 +316,13 @@ def main():
     dll_path = args.dll or args.exe.with_name("recon.dll")
     errors = audit_package(image, manifest, dll_path.read_bytes() if dll_path.exists() else None)
     errors.extend(audit_local_dlls(args.exe.resolve().parent, dll_path.resolve()))
+    # The EXE lives in a separate package directory, but its launcher sets the
+    # original game as the working directory. Audit DLLs staged there too.
+    for directory in args.dll_directory:
+        if not directory.is_dir():
+            errors.append("Additional DLL search directory is missing: " + str(directory))
+        elif directory.resolve() != args.exe.resolve().parent:
+            errors.extend(audit_local_dlls(directory.resolve(), dll_path.resolve()))
     runtime = None
     if args.runtime:
         more, runtime = audit_runtime(json.loads(args.runtime.read_text()))
