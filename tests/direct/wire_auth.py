@@ -19,6 +19,17 @@ int main() {
     };
     for (unsigned i = 0; i < 4; ++i)
         assert(Iw6WireAuth::Mac(key, message, i) == reference[i]);
+    // Direction is authenticated but not transmitted as an unauthenticated
+    // field: the sender/receiver role is determined by transport state.
+    unsigned char scoped[5] = {0, 1, 2, 3, 'C'};
+    const auto clientTag = Iw6WireAuth::MacDirectional(key, message, 4, 'C');
+    assert(clientTag == Iw6WireAuth::Mac(key, scoped, 5));
+    scoped[4] = 'S';
+    const auto serverTag = Iw6WireAuth::MacDirectional(key, message, 4, 'S');
+    assert(serverTag == Iw6WireAuth::Mac(key, scoped, 5));
+    assert(clientTag != serverTag);
+    assert(!Iw6WireAuth::MacDirectional(key, message, 4, 'X'));
+    assert(!Iw6WireAuth::MacDirectional(key, message, 1279, 'C'));
     unsigned char tag[8] = {0x72,0x6f,0xdb,0x47,0xdd,0x0e,0x0e,0x31};
     assert(Iw6WireAuth::EqualTag(reference[0], tag));
     tag[7] ^= 1;
