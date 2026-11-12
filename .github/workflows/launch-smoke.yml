@@ -1,5 +1,11 @@
 name: Native custom launch diagnostic
 
+# Run only the latest main revision: each intermediate commit should not
+# download hundreds of megabytes and launch an identical superseded test.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
