@@ -217,6 +217,44 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
                 values[name] = bool(value.value) if is_pointer else value.value
         return values
 
+    def fastfile_state():
+        # P0036, read-only Store addresses verified from the pinned EXE:
+        # 140349A50..140349B7C (DB_WaitXFileStage) and 140348D30
+        # (DB_AuthLoad_Inflate). These describe file reads and compression,
+        # NOT vendor permissions and not a claim that a zone was loaded.
+        fields = (
+            ('outstanding_read', 0x1443A489C, 4),
+            ('read_error', 0x1443A48F0, 4),
+            ('completed_read_bytes', 0x1443A48B8, 8),
+            ('remaining_requested_bytes', 0x1443A48B0, 8),
+            ('file_offset', 0x1443A48C0, 8),
+            ('inflate_avail_in', 0x1443A4900, 4),
+            ('secure_fastfile', 0x14430AB80, 4),
+            ('compressor_type', 0x140992D94, 4),
+        )
+        values = {}
+        for name, address, width in fields:
+            value = C.c_uint64() if width == 8 else W.DWORD()
+            count = SIZE()
+            if kernel.ReadProcessMemory(process.process, address, C.byref(value),
+                                        width, C.byref(count)) and count.value == width:
+                values[name] = 'unbounded' if width == 8 and value.value == (1<<64)-1 else value.value
+        ptr = C.c_uint64()
+        count = SIZE()
+        if (kernel.ReadProcessMemory(process.process, 0x1443A48A0, C.byref(ptr),
+                                     8, C.byref(count)) and count.value == 8 and ptr.value):
+            # DBFile.name is an in-place string at +0x18 in the pinned Store
+            # build; clamp and accept only printable non-sensitive zone names.
+            name = C.create_string_buffer(48)
+            if kernel.ReadProcessMemory(process.process, ptr.value+0x18, name,
+                                        len(name), C.byref(count)) and count.value:
+                candidate = name.raw[:count.value].split(b'\\0',1)[0]
+                if candidate and len(candidate) < 40 and all(
+                    32 <= b < 127 for b in candidate
+                ):
+                    values['active_zone'] = candidate.decode('ascii')
+        return values
+
     startup, process = Startup(), Process()
     startup.cb = C.sizeof(startup)
     command = C.create_unicode_buffer(subprocess.list2cmdline([str(exe),*arguments]))
@@ -230,6 +268,7 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
     if loader_flags:
         result['loader_state'] = []
         result['graphics_state'] = []
+        result['fastfile_state'] = []
     terminated = False
     try:
         while True:
@@ -244,6 +283,9 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
                 if gpu:
                     result['graphics_state'].append({'elapsed_seconds':elapsed,
                                                      'values':gpu})
+                ff = fastfile_state()
+                if ff:
+                    result['fastfile_state'].append({'elapsed_seconds':elapsed, 'values':ff})
                 next_loader_sample = now+5
             if now >= deadline:
                 if terminated:
@@ -256,6 +298,8 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
                                                    'values':startup_flags(), 'timeout_sample':True})
                     result['graphics_state'].append({'elapsed_seconds':elapsed,
                                                      'values':renderer_state(), 'timeout_sample':True})
+                    result['fastfile_state'].append({'elapsed_seconds':elapsed,
+                                                     'values':fastfile_state(), 'timeout_sample':True})
                 result['threads']=thread_snapshot()
                 times=[W.FILETIME() for _ in range(4)]
                 kernel.GetProcessTimes.argtypes=[W.HANDLE,*([C.POINTER(W.FILETIME)]*4)]
