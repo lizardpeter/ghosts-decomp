@@ -95,6 +95,27 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
             read=SIZE()
             if kernel.ReadProcessMemory(process.process,int(values['rsp'],16),stack,len(stack),C.byref(read)):
                 values['stack_qwords']=[hex(int.from_bytes(stack.raw[i:i+8],'little')) for i in range(0,read.value,8)]
+            # A modal Win32 error may push the original engine's error
+            # return address well beyond the initial 512-byte stack sample.
+            # Preserve only addresses inside the pinned executable .text,
+            # not raw deep stack data, names, tokens, arbitrary pointers, etc.
+            # Read-only; no injection or breakpoint changes to the game.
+            pcs=[]
+            base=int(values['rsp'],16)
+            for off in range(0,16384,512):
+                page=C.create_string_buffer(512)
+                amount=SIZE()
+                if not kernel.ReadProcessMemory(process.process,base+off,page,
+                                                len(page),C.byref(amount)) or not amount.value:
+                    break
+                for pos in range(0,amount.value-(amount.value%8),8):
+                    candidate=int.from_bytes(page.raw[pos:pos+8],'little')
+                    if 0x140001000 <= candidate < 0x140800000:
+                        pcs.append({'stack_offset':off+pos,'address':hex(candidate)})
+                if amount.value != len(page):
+                    break
+            if pcs:
+                values['store_stack_candidates']=pcs[:96]
             return values
         finally:
             kernel.CloseHandle(thread)
@@ -231,6 +252,14 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
             ('inflate_avail_in', 0x1443A4900, 4),
             ('secure_fastfile', 0x14430AB80, 4),
             ('compressor_type', 0x140992D94, 4),
+            # These auth state offsets are grounded in the Store
+            # 1403489E0..140348B85 signed block processing, rather than
+            # inferred from the PS4 server pseudocode alone.
+            ('auth_group_count', 0x14430EB80, 4),
+            ('auth_chunk_in_group', 0x14430EB84, 4),
+            ('auth_copy_buffer_bytes', 0x14430EBE0, 4),
+            ('auth_stream_avail_in', 0x14430EB90, 4),
+            ('auth_stream_avail_out', 0x14430EBA0, 4),
         )
         values = {}
         for name, address, width in fields:
