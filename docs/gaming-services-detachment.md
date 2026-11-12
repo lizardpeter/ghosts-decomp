@@ -16,6 +16,7 @@ original behavior; detachment applies only to the opt-in offline/direct package.
 * The direct profile implements private, selected-peer UDP and local
   identifiers. These are NOT authenticated Microsoft/Activision accounts.
   Original game content checks are not fabricated or removed.
+* P0032 hardens the package guard audit against omissions: all **42 common** redirects (31 GDK/auth/lobby/reporting entry patches, ten vendor integrity/reporting guards, and the local asset-root helper) and all **17 direct-only** entry redirects are independently pinned, so losing a vendor or transport guard fails package creation. Known Demonware-named DLLs are also rejected as direct imports, app-local dependencies and observed module loads. Dynamic `LoadPackagedLibrary` resolution is refused. This covers known boundaries only, not every inlined Demonware call or Windows broker.
 * `tools/offline/detachment_audit.py` independently parses the resulting PE,
   checks required GDK and direct-entry redirects, checks every manifest-listed
   import against the *actual final IAT*, and rejects unredirected Xbox/GDK
