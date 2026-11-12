@@ -12,6 +12,7 @@ on:
     paths:
       - .github/workflows/launch-smoke.yml
       - tools/direct/native_smoke.py
+      - tools/direct/ProbeStartup.ps1
       - tools/build_enhanced.py
       - tools/offline/package.py
       - tools/offline/detachment_audit.py
