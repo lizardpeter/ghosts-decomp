@@ -1,7 +1,9 @@
 # Microsoft Gaming Services detachment (custom Store MP profile)
 
 Target: pinned `iw6mp64_MSStore_ship`. The faithful `src/` build preserves
-original behavior; detachment applies only to the opt-in offline/direct package.
+original behavior. The canonical `--enhanced` Store game includes local/direct
+play and all vendor-detachment overrides; the offline-only package is an
+isolated diagnostic. No vendor-detachment code is enabled in faithful builds.
 
 ## What is implemented
 
