@@ -29,6 +29,7 @@ def load(path):
     lib=C.CDLL(str(path))
     for name,args,ret in [
         ('Open',[C.c_char_p,C.c_int],C.c_int),('Close',[],None),
+        ('SetKey',[C.c_char_p],C.c_int),('WireVersion',[],C.c_int),
         ('SelectPeer',[C.c_char_p],C.c_int),('Peer',[C.POINTER(Address)],C.c_int),
         ('Port',[],C.c_ushort),('Parse',[C.c_char_p,C.POINTER(Address),C.c_int],C.c_int),
         ('Send',[C.c_int,C.c_void_p,C.POINTER(Address)],C.c_int),
@@ -120,6 +121,50 @@ def main():
         assert not client.Send(0,None,C.byref(address))
         assert not receive(client)[0]
         assert server.Open(b'0.0.0.0:0',1) # Explicit wildcard bind; never a remote peer.
+        server.Close()
+        # v1 is localhost-only: checksum-valid legacy traffic is never an
+        # authorization token for LAN/Internet peers.
+        assert client.Open(b'127.0.0.1:0',0)
+        assert not client.SelectPeer(b'192.0.2.44:27016')
+        assert client.WireVersion()==1
+        client.Close()
+        # v2 uses a high-entropy 128-bit shared key and a 64-packet replay window.
+        key=b'000102030405060708090a0b0c0d0e0f'
+        assert not client.SetKey(b'invalid') and client.WireVersion()==1
+        assert client.SetKey(key) and server.SetKey(key)
+        assert client.WireVersion()==server.WireVersion()==2
+        assert client.Open(b'127.0.0.1:0',0) and server.Open(b'127.0.0.1:0',1)
+        server_endpoint=f'127.0.0.1:{server.Port()}'.encode()
+        assert client.SelectPeer(server_endpoint)
+        assert client.Peer(C.byref(address))
+        data=b'authenticated direct payload'
+        assert client.Send(len(data),data,C.byref(address))
+        result,payload,source,_=receive(server)
+        assert result and payload==data
+        assert server.Send(len(data),data,C.byref(source))
+        assert receive(client)[:2]==(1,data)
+        with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as untrusted:
+            untrusted.bind(('127.0.0.1',0))
+            untrusted.settimeout(1)
+            endpoint=f'127.0.0.1:{untrusted.getsockname()[1]}'.encode()
+            assert client.SelectPeer(endpoint) and client.Peer(C.byref(address))
+            assert client.Send(len(data),data,C.byref(address))
+            wire,_=untrusted.recvfrom(1400)
+            assert wire[:6]==b'IW6D\\x02\\x00' and len(wire)==8+8+len(data)+8
+            # A legitimate authenticated packet is delivered once. Replays and
+            # modified packets are discarded before peer admission or parsing.
+            destination=('127.0.0.1',server.Port())
+            untrusted.sendto(wire,destination)
+            assert receive(server)[:2]==(1,data)
+            untrusted.sendto(wire,destination)
+            assert not receive(server)[0]
+            changed=bytearray(wire);changed[16]^=1
+            untrusted.sendto(changed,destination)
+            assert not receive(server)[0]
+            untrusted.sendto(packet(b'legacy'),destination)
+            assert not receive(server)[0]
+        assert not client.SetKey(b'bad')
+        assert client.WireVersion()==1 and not client.Peer(C.byref(address))
         server.Close()
     print('PASS: real UDP client/server round trip, framing, peer restrictions, malformed packets, bounds and shutdown')
 
