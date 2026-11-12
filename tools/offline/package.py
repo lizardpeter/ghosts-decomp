@@ -41,6 +41,8 @@ VENDOR_TASKS = {
 LOCAL_FILES = {0x140548F90: 'Iw6LocalGameDirectory'}
 # C exports adapt the reviewed Win64 ABI without claiming original source names.
 DIRECT = {
+    # S23/B0036: Store R_EnumDisplayModes trusts oversized DXGI mode counts.
+    0x14062FC90: 'Iw6SecureEnumDisplayModes',
     # Do NOT use PS4 reference client/cl_keys.cpp addresses here for the Store EXE.
     # S17 remains source-linked only until the Store entrypoints are matched.
     # S20/B0025: never enter the original fixed-buffer SOCKS credential parser.
