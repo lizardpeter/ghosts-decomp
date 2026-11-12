@@ -46,7 +46,7 @@ try {
     & $launcher -GameDirectory $game -Menu -Profile 'one'
     if ($global:Iw6TestLaunches.Count -ne 4) { throw 'Menu-only launch was not invoked.' }
     $menuArgs = $global:Iw6TestLaunches[3].arguments
-    if ($menuArgs -notmatch ('\+direct_player ' + $first.id + ' "LocalPlayer"') -or
+    if ($menuArgs -notmatch ('\+direct_player ' + $first.id + ' "Test Player"') -or
         $menuArgs -match '\+(?:connect|direct_host)') {
         throw 'Menu-only launch added a connection/host command or lost local identity.'
     }
