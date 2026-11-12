@@ -20,8 +20,11 @@ def main():
     # original entrypoint: an unreferenced enhancement is not a game fix.
     assert package.DIRECT[VA] == EXPORT
     assert VA in detachment_audit.DIRECT_ENTRIES
-    assert len(package.DIRECT) == len(detachment_audit.DIRECT_ENTRIES) == 18
-    # Regression: these are PS4 server PDB entrypoints, not verified Store
+    assert len(package.DIRECT) == len(detachment_audit.DIRECT_ENTRIES) == 22
+    # These are PS4 server PDB entrypoints, not Store addresses.
+    assert {0x1403106D0, 0x140310D20, 0x140310EB0} <= package.DIRECT.keys()
+    assert {0x1403106D0, 0x140310D20, 0x140310EB0} <= detachment_audit.DIRECT_ENTRIES
+    # Regression: never reintroduce PS4 reference offsets as native Store hooks.
     # addresses. A cross-build native detour would corrupt unrelated code.
     assert not ({0x1400AD720, 0x1400ACEA0, 0x1400AD5F0} & package.DIRECT.keys())
 
