@@ -29,6 +29,9 @@ no-network diagnostic, not a second enhanced game variant. The executable is `iw
 The Windows launch experiment, with the original complete game installation available, is:
 
 ```powershell
+# First test the AUTHENTIC multiplayer menu without joining or hosting.
+.\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -Menu -PlayerName 'LocalPlayer'
+# Only when the menu is stable, optionally try custom direct networking:
 .\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -Connect '192.168.1.20:27016' -PlayerName 'LocalPlayer'
 # Listen-server map-start experiment, not a verified headless dedicated server:
 .\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -HostEndpoint '0.0.0.0:27016' -Map 'mp_prisonbreak' -GameType 'war'
@@ -47,15 +50,23 @@ Normal `+direct_player` execution remains deferred by the original engine;
 P0029 independently prepares a validated custom local identity during
 `NET_Init`, but does not start a map or bypass incomplete asset loading.
 
-The launcher verifies package hashes, prepares a persistent local profile, then queues `direct_player` and
-`connect` or `direct_host` after engine startup. Use `-Profile one` / `-Profile two` for independent local
+The launcher verifies package hashes and prepares a persistent local profile.
+With `-Menu` it passes only `direct_player` at startup; the normal original
+game UI loads without a custom join/host command. `-Connect` and
+`-HostEndpoint` add the matching deferred network or map-hosting commands.
+The menu-only path is the **same enhanced executable**, not a stub or alternate
+build. A CI screenshot confirms the actual menu was rendered. However, an
+independent fatal `Disc read error 'ui_mp'` has still blocked stable menu
+operation in the partially staged CI installation; the `-Menu` option does
+not pretend to fix that asset loader problem. Use `-Profile one` / `-Profile two` for independent local
 profiles and data folders on one Windows account. Numeric IPv4 and a nonzero explicit
 port are required. In a functioning game console, first configure `direct_player <16-digit-hex-ID> "Player Name"`, then
 use `connect IP:port` or `direct_host bind-IP:port map gametype`. IDs must be nonzero; names are 1–31
 ASCII letters, digits, spaces, underscores or hyphens, without leading/trailing spaces. Profile changes
 are refused while connected or hosting. Windows launcher preparation is tested with process launch intercepted.
 Actual Windows startup attempts use the native debug observer and authentic startup assets; see
-[native-launch.md](native-launch.md). Successful graphics/menu startup and a completed join remain unverified.
+[native-launch.md](native-launch.md). The renderer and authentic menu have been verified visually on Windows CI;
+a fatal UI FastFile read and completed game join remain unresolved.
 
 ## What is connected
 
