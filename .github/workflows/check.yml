@@ -55,6 +55,8 @@ jobs:
           IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/host.py
           IW6_ORIGINALS=.work/originals python3 tests/offline/vendor_tasks.py
+          python3 tools/build_enhanced.py --skip-compile --original .work/originals/iw6mp64_MSStore_ship.exe --output .work/enhanced-check-package
+          python3 tools/offline/detachment_audit.py --exe .work/enhanced-check-package/iw6mp64_enhanced.exe --manifest .work/enhanced-check-package/manifest.json
       - name: Generated files are current
         run: |
           python3 tools/status.py >/dev/null
