@@ -27,7 +27,7 @@ def check():
     dll_path = ROOT / 'build' / package.BUILD / 'offline/recon.dll'
     with tempfile.TemporaryDirectory() as temp:
         output = Path(temp) / 'package'
-        manifest = package.package(original, dll_path, output)
+        manifest = package.package(original, dll_path, output, mode='offline')
         exe, dll = Image(output / 'iw6mp64_offline.exe'), Image(output / 'recon.dll')
         # Independently audit final PE imports and original entry guards.
         image_bytes = (output / 'iw6mp64_offline.exe').read_bytes()
@@ -304,19 +304,19 @@ def check():
         assert m.call(entry,[dll.base,1,0],setup=lambda w:w.write(marker,b'BROKEN!!'))[0] == 0
         # Refuse wrong inputs and overwrites; originals stay byte-identical.
         before = package.sha(original.read_bytes())
-        rebuilt, rebuilt_manifest = package.transform(original.read_bytes(),dll_path.read_bytes())
+        rebuilt, rebuilt_manifest = package.transform(original.read_bytes(),dll_path.read_bytes(),mode='offline')
         assert rebuilt == (output/'iw6mp64_offline.exe').read_bytes()
         assert rebuilt_manifest == manifest
         ordinary = ROOT/'build'/package.BUILD/'enhanced/recon.dll'
         if ordinary.exists():
-            try: package.transform(original.read_bytes(),ordinary.read_bytes())
+            try: package.transform(original.read_bytes(),ordinary.read_bytes(),mode='offline')
             except ValueError: pass
             else: raise AssertionError('ordinary enhanced DLL accepted as offline')
         for bad in (b'', original.read_bytes()[:-1]):
-            try: package.transform(bad,dll_path.read_bytes())
+            try: package.transform(bad,dll_path.read_bytes(),mode='offline')
             except ValueError: pass
             else: raise AssertionError('wrong original accepted')
-        try: package.package(original,dll_path,output)
+        try: package.package(original,dll_path,output,mode='offline')
         except FileExistsError: pass
         else: raise AssertionError('existing package overwritten')
         assert package.sha(original.read_bytes()) == before
