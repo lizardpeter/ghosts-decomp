@@ -1,10 +1,12 @@
 name: Native custom launch diagnostic
 
-# Run only the latest main revision: each intermediate commit should not
-# download hundreds of megabytes and launch an identical superseded test.
+# Keep the first native diagnostic running to completion even while
+# independent reconstruction or security commits land on main. GitHub keeps
+# at most one pending successor per branch, avoiding redundant large downloads
+# without indefinitely canceling the 90s + 45s + 45s UI/mapping experiment.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 on:
   push:
