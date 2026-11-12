@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/launch-smoke.yml
       - tools/direct/native_smoke.py
+      - tools/build_enhanced.py
       - tools/offline/package.py
       - tools/offline/detachment_audit.py
       - enhanced/offline/egress.cpp
@@ -56,8 +57,7 @@ jobs:
           sudo apt-get install -y -q clang lld llvm >/dev/null
           pip install -q pefile unicorn==2.1.4
           python3 tools/fetch_originals.py iw6mp64_MSStore_ship .work/originals --only exe
-          IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --enhanced
-          python3 tools/offline/package.py --original .work/originals/iw6mp64_MSStore_ship.exe --mode direct --output .work/package
+          python3 tools/build_enhanced.py --original .work/originals/iw6mp64_MSStore_ship.exe --output .work/package
           IW6_ORIGINALS=.work/originals python3 tests/direct/startup.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
