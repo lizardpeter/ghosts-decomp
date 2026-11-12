@@ -178,6 +178,16 @@ extern "C" void Iw6DirectInit()
     // NET_Init runs before normal CL initialization; register commands here but
     // defer opening sockets and touching client state until a command executes.
     if (commandsRegistered) return;
+    // NET_Init at 14054F200 originally calls NET_GetDvars (14054EFD0)
+    // before configuring its own UDP sockets. The local replacement must
+    // retain the ordinary networking dvar registration: other original
+    // engine subsystems can read these pointers before gameplay starts.
+    // Only the original dvar-registration function is invoked here; do NOT
+    // call original NET_Config, WSAStartup, NET_OpenIP or vendor networking.
+    // All real sockets remain exclusively under Iw6DirectOpen on explicit
+    // local/direct host or join commands.
+    ((int (*)())0x14054EFD0)();
+    OutputDebugStringA("IW6D:LOCAL_NETWORK_DVARS_REGISTERED");
     Cmd_AddCommandInternal("connect", Connect, &connectCommand);
     Cmd_AddCommandInternal("direct_listen", Listen, &listenCommand);
     Cmd_AddCommandInternal("direct_stop", Stop, &stopCommand);
