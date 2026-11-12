@@ -31,7 +31,7 @@ The Windows launch experiment, with the original complete game installation avai
 ```powershell
 .\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -Connect '192.168.1.20:27016' -PlayerName 'LocalPlayer'
 # Listen-server map-start experiment, not a verified headless dedicated server:
-.\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -HostEndpoint '0.0.0.0:27016' -Map 'mp_prison' -GameType 'war'
+.\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -HostEndpoint '0.0.0.0:27016' -Map 'mp_prisonbreak' -GameType 'war'
 ```
 
 Before attempting a live join, a direct package can instead use its included
