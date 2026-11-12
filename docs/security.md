@@ -64,7 +64,7 @@ the upstream risk inventory, not a completed implementation checklist.
 
 | Surface | Status | Evidence and limits |
 |---|---|---|
-| Custom direct UDP ingress | **Hardened in enhanced** | `enhanced/direct/transport.cpp`: strict payload/frame length bounds (max 1262), drain budget, selected-peer checks, unauthenticated loopback-only v1, keyed SipHash-2-4 v2 with per-peer sequence/replay-window checks. `tests/direct/transport.py` exercises malformed datagrams and replay. |
+| Custom direct UDP ingress | **Hardened in enhanced** | `enhanced/direct/transport.cpp`: strict payload/frame length bounds (max 1262), drain budget, selected-peer checks, unauthenticated loopback-only v1, keyed SipHash-2-4 v3 with per-peer sequence/replay-window checks. `tests/direct/transport.py` exercises malformed datagrams and replay. |
 | Custom direct UDP egress | **Hardened in enhanced** | Only an explicitly selected peer or a previously admitted listener peer may receive. Non-loopback traffic requires the configured shared network key. |
 | Microsoft/GDK/Demonware detachment | **Already partially implemented** | The canonical enhanced package has independent vendor-denial and direct-transport code. This does **not** establish all original native process traffic is absent or safe; see `docs/vendor-disconnection.md` and `docs/native-launch.md`. |
 | S3, S18 and S19 in the original engine | **Not verified fixed** | The private direct transport rejects malformed lengths before it forwards data, but unreconstructed original sockets and packet handlers may still exist and must be audited independently. |
@@ -74,8 +74,16 @@ the upstream risk inventory, not a completed implementation checklist.
 | S23 (display-mode enumeration overflow) | **Native enhanced redirect committed; awaiting validation** | Store 14062FC90 is mapped to `Iw6SecureEnumDisplayModes` in the canonical direct package. `enhanced/gfx_d3d/security_modes.cpp` limits untrusted DXGI mode-list writes, validates refresh denominators, and bounds mode name tables. P0040; `tests/enhanced/test_security_modes.py` and the independent packaged-entry audit are present. CI has not yet passed. |
 | Fastfile, script, mod, and peer identity trust | **Outstanding** | Keep original signature checks; reject untrusted executable scripts. Shared-key authentication is not per-user identity, encryption, or a substitute for a fresh session handshake. |
 
-**Important limitation:** the new v2 wire authenticates possession of one
+**Important limitation:** the new v3 wire authenticates possession of one
 shared 128-bit key, not individuals; its replay state is cleared when a socket
 closes. This is an incremental protective boundary for the experimental
 direct protocol, **not** full protection against hostile participants,
 malicious signed assets or the retained native engine's other RCE surfaces.
+
+
+**2026-11-12 direct-wire hardening:** v3 authenticates the sender role in
+addition to packet bytes, so a captured client datagram cannot be replayed as
+a server datagram (or vice versa). Keyed v2 is rejected outright; v1 remains
+loopback-only and no-key. Tests verify reflection, tampering, replay, and
+downgrade refusal. This is not a per-session handshake or a claim that native
+Store lobby parsers have been hardened.
