@@ -23,7 +23,7 @@ def main():
         directory=Path(temp)/'direct'
         manifest=package.package(original,dll_path,directory,mode='direct')
         assert manifest['mode']=='direct' and not manifest['game_join_verified']
-        assert len(manifest['guards'])==31+len(package.VENDOR_TASKS)+len(package.LOCAL_FILES)+len(package.DIRECT) and len(manifest['imports'])==58
+        assert len(manifest['guards'])==31+len(package.VENDOR_TASKS)+len(package.LOCAL_FILES)+len(package.DIRECT) and len(manifest['imports'])==60
         assert (directory/'LaunchDirect.ps1').exists() and not (directory/'ConfigureSandbox.ps1').exists()
         image=(directory/'iw6mp64_enhanced.exe').read_bytes()
         dll_image=(directory/'recon.dll').read_bytes()
@@ -41,6 +41,14 @@ def main():
         for slot,name in exe.iat.items():
             if name.startswith('recon.dll!'):
                 m.mu.mem_write(slot,struct.pack('<Q',dll.exports[name.split('!',1)[1]]))
+        # Native FastFile diagnostic wrappers are 1:1 Win32 forwards with
+        # optional logging; the patched original must use our enhanced DLL,
+        # not silently bypass these read/error traces.
+        assert 'recon.dll!Iw6TraceCreateFileA' in exe.iat.values()
+        assert 'recon.dll!Iw6TraceReadFileEx' in exe.iat.values()
+        assert not any(imp.lower() in ('kernel32.dll!createfilea',
+                                      'kernel32.dll!readfileex')
+                       for imp in exe.iat.values())
         # Product's private imports are direct OS imports; original egress stays denied.
         assert 'ws2_32.dll!socket' in dll.iat.values()
         for name in ('socket','sendto','WSASocketA','connect','gethostbyname','getaddrinfo'):
