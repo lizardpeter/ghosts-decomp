@@ -248,7 +248,7 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
             name = C.create_string_buffer(48)
             if kernel.ReadProcessMemory(process.process, ptr.value+0x18, name,
                                         len(name), C.byref(count)) and count.value:
-                candidate = name.raw[:count.value].split(b'\\0',1)[0]
+                candidate = name.raw[:count.value].split(b'\0',1)[0]
                 if candidate and len(candidate) < 40 and all(
                     32 <= b < 127 for b in candidate
                 ):
