@@ -18,9 +18,7 @@ IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
 IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
 IW6_ORIGINALS=.work/originals python3 tests/direct/host.py
 IW6_ORIGINALS=.work/originals python3 tests/offline/vendor_tasks.py
-python3 tools/offline/package.py --mode direct \
-  --original .work/originals/iw6mp64_MSStore_ship.exe \
-  --output .work/enhanced-package
+# build_enhanced.py already packages and audits the same canonical executable.
 ```
 
 The output directory must not already exist. It contains the patched EXE, `recon.dll`, hashes/change manifest,
