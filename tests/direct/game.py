@@ -220,8 +220,8 @@ def main():
         assert call(dll.exports['Iw6DirectHost'],[b'0.0.0.0:27016\0',b'mp_test;quit\0',b'war\0'])[0]==-6
         assert not map_calls
         settings.clear()
-        result=call(dll.exports['Iw6DirectHost'],[b'0.0.0.0:27016\0',b'mp_prison\0',b'war\0'],fakes={0x1404BADC0:start_map})
-        assert result[0]==3 and map_calls==[(0,b'mp_prison',1,0)]
+        result=call(dll.exports['Iw6DirectHost'],[b'0.0.0.0:27016\0',b'mp_prisonbreak\0',b'war\0'],fakes={0x1404BADC0:start_map})
+        assert result[0]==3 and map_calls==[(0,b'mp_prisonbreak',1,0)]
         assert native_markers[-1]==b'IW6D:DIRECT_MAP_START_REQUESTED',native_markers
         assert settings==[(b'g_gametype',b'war'),(b'ui_gametype',b'war')]
         # Original LUI CheckGameLicense had unconditionally attempted an
