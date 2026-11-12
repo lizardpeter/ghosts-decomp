@@ -43,14 +43,21 @@ try {
     if ($global:Iw6TestLaunches[2].arguments -notmatch '\+direct_host 0\.0\.0\.0:27016 mp_prisonbreak war$') { throw 'Host argument construction failed.' }
     $second = Get-Content -Raw -LiteralPath (Join-Path $env:LOCALAPPDATA 'GhostsDirect/two/player.json') | ConvertFrom-Json
     if ($second.id -eq $first.id) { throw 'Separate profiles reused an ID.' }
+    & $launcher -GameDirectory $game -Menu -Profile 'one'
+    if ($global:Iw6TestLaunches.Count -ne 4) { throw 'Menu-only launch was not invoked.' }
+    $menuArgs = $global:Iw6TestLaunches[3].arguments
+    if ($menuArgs -notmatch '\\+direct_player ' + $first.id -or
+        $menuArgs -match '\\+connect|\\+direct_host') {
+        throw 'Menu-only launch added a connection/host command or lost local identity.'
+    }
     $refused = $false
     try { & $launcher -GameDirectory $game -Connect '127.0.0.1:27016;quit' -Profile 'one' } catch { $refused = $true }
-    if (!$refused -or $global:Iw6TestLaunches.Count -ne 3) { throw 'Invalid endpoint was launched.' }
+    if (!$refused -or $global:Iw6TestLaunches.Count -ne 4) { throw 'Invalid endpoint was launched.' }
     [System.IO.File]::WriteAllText((Join-Path $bundle 'recon.dll'),'tampered')
     $refused = $false
     try { & $launcher -GameDirectory $game -Connect '127.0.0.1:27016' -Profile 'one' } catch { $refused = $true }
-    if (!$refused -or $global:Iw6TestLaunches.Count -ne 3) { throw 'Tampered package was launched.' }
-    Write-Output 'PASS: Windows launcher profile persistence, separate profiles, host/connect arguments and refusal paths; game process was not executed'
+    if (!$refused -or $global:Iw6TestLaunches.Count -ne 4) { throw 'Tampered package was launched.' }
+    Write-Output 'PASS: Windows launcher profile persistence, menu-only, host/connect arguments and refusal paths; game process was not executed'
 } finally {
     $env:LOCALAPPDATA = $oldLocalAppData
     Remove-Item Function:\Start-Process -ErrorAction SilentlyContinue
