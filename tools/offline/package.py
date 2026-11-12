@@ -71,8 +71,13 @@ def align(n, a):
     return (n + a - 1) // a * a
 
 
-def adapter(dll, name, ordinal=None):
+def adapter(dll, name, ordinal=None, mode='offline'):
     dll = dll.lower()
+    # P0035: two exact Win32 I/O forwards for the enhanced game, used for
+    # opt-in native diagnostics. Offline-only diagnostic remains unchanged.
+    if mode == 'direct' and dll == 'kernel32.dll':
+        if name == 'CreateFileA': return 'Iw6TraceCreateFileA'
+        if name == 'ReadFileEx': return 'Iw6TraceReadFileEx'
     if dll == 'xinput1_3.dll':
         # The pinned EXE imports these by ordinal. The XInput 1.3 export table
         # maps 2=GetState, 3=SetState, 4=GetCapabilities (not 1,2,3).
@@ -163,7 +168,7 @@ def transform(original, dll_bytes, mode='direct'):
         current = None
         for imp in desc.imports:
             name = imp.name.decode('ascii') if imp.name else None
-            replacement = adapter(provider, name, imp.ordinal)
+            replacement = adapter(provider, name, imp.ordinal, mode=mode)
             dest = 'recon.dll' if replacement else provider
             if current is None or current[0] != dest:
                 current = [dest, imp.address - pe.OPTIONAL_HEADER.ImageBase, []]
