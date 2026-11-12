@@ -39,8 +39,8 @@ try {
     & $launcher -GameDirectory $game -Connect '127.0.0.1:27016' -Profile 'one'
     $again = Get-Content -Raw -LiteralPath $profilePath | ConvertFrom-Json
     if ($again.id -ne $first.id) { throw 'Profile ID changed across launches.' }
-    & $launcher -GameDirectory $game -HostEndpoint '0.0.0.0:27016' -Map 'mp_prison' -GameType 'war' -Profile 'two'
-    if ($global:Iw6TestLaunches[2].arguments -notmatch '\+direct_host 0\.0\.0\.0:27016 mp_prison war$') { throw 'Host argument construction failed.' }
+    & $launcher -GameDirectory $game -HostEndpoint '0.0.0.0:27016' -Map 'mp_prisonbreak' -GameType 'war' -Profile 'two'
+    if ($global:Iw6TestLaunches[2].arguments -notmatch '\+direct_host 0\.0\.0\.0:27016 mp_prisonbreak war$') { throw 'Host argument construction failed.' }
     $second = Get-Content -Raw -LiteralPath (Join-Path $env:LOCALAPPDATA 'GhostsDirect/two/player.json') | ConvertFrom-Json
     if ($second.id -eq $first.id) { throw 'Separate profiles reused an ID.' }
     $refused = $false
