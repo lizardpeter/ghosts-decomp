@@ -28,7 +28,7 @@ def main():
         image=(directory/'iw6mp64_enhanced.exe').read_bytes()
         dll_image=(directory/'recon.dll').read_bytes()
         assert not detachment_audit.audit_package(image, manifest, dll_image)
-        assert len(detachment_audit.DIRECT_ENTRIES)==len(package.DIRECT)==19
+        assert len(detachment_audit.DIRECT_ENTRIES)==len(package.DIRECT)==22
         # No direct gameplay entry may quietly revert to its original vendor
         # address-handle, matchmaking or Xbox-dependent implementation.
         for missing in (0x140469E70, 0x1405A8830, 0x1405A9E50, 0x14054B1B0):
