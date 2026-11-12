@@ -67,6 +67,28 @@ def check():
         assert detachment_audit.audit_local_dlls(output, replacement) == [
             "Forbidden provider staged beside executable: XCurl.DLL"]
         (output / 'XCurl.DLL').unlink()
+        # Even a dormant app-local Demonware SDK must not be staged.
+        companion.write_bytes(dll_image)
+        companion.rename(output / 'DemonWare.DLL')
+        assert detachment_audit.audit_local_dlls(output, replacement) == [
+            "Forbidden provider staged beside executable: DemonWare.DLL"]
+        (output / 'DemonWare.DLL').unlink()
+        # Each documented startup subsystem has an independently pinned
+        # entry set. Removing one manifest record must fail, even when the
+        # source packager has also forgotten that guard.
+        assert len(detachment_audit.GDK_ENTRIES) == 8
+        assert len(detachment_audit.DEMONWARE_AND_TELEMETRY_ENTRIES) == 23
+        assert len(detachment_audit.VENDOR_INTEGRITY_ENTRIES) == 10
+        assert len(detachment_audit.LOCAL_ASSET_ENTRIES) == 1
+        for missing, label in (
+            (0x14019ADA0, "Demonware authentication/lobby/telemetry"),
+            (0x1405F0A80, "vendor integrity/reporting"),
+            (0x140548F90, "local asset-root"),
+        ):
+            altered = dict(manifest, guards=[
+                g for g in manifest['guards'] if int(g['va'], 16) != missing])
+            assert any("Missing " + label + " guard" in e for e in
+                       detachment_audit.audit_package(image_bytes, altered, dll_image))
         altered = dict(manifest, guards=[
             g for g in manifest['guards'] if int(g['va'], 16) != 0x1406AEE74])
         assert any('Missing GDK guard' in e for e in
@@ -92,6 +114,9 @@ def check():
         problems, detail = detachment_audit.audit_runtime({
             'events': [{'event': 6, 'path': r'C:\Windows\System32\xgameruntime.dll'}]})
         assert problems and detail['unexpected_vendor_modules'] == ['xgameruntime.dll']
+        problems, detail = detachment_audit.audit_runtime({
+            'events': [{'event': 6, 'path': r'C:\\Ghosts\\DemonWare.dll'}]})
+        assert problems and detail['unexpected_vendor_modules'] == ['demonware.dll']
         m = Machine(exe, dll)
         # Resolve actual recon exports into original IAT slots, like the loader.
         for slot, name in exe.iat.items():
@@ -226,7 +251,8 @@ def check():
             calls = []
             m.on_import('kernel32.dll!'+fn, lambda mu: calls.append(1))
             for path in ('WINHTTP.dll','C:\\Windows\\System32\\XGameRuntime.DLL','xcurl','ws2_32.dll','urlmon.dll','wininet',
-                         'XboxLiveApi.dll','C:\\Windows\\System32\\GamingServices.dll','xboxservices'):
+                         'XboxLiveApi.dll','C:\\Windows\\System32\\GamingServices.dll','xboxservices',
+                         'DemonWare.dll','C:\\Ghosts\\DemonWareClient.dll','bdcore.dll','bdsdk.dll'):
                 encoded = path.encode('utf-16le')+b'\0\0' if fn.endswith('W') else path.encode()+b'\0'
                 assert m.call(dll.exports['Iw6Offline'+fn],[encoded,0,0])[0] == 0
                 assert not calls
@@ -244,7 +270,8 @@ def check():
                            ('combase.dll',b'RoGetActivationFactory\0'),
                            ('combase.dll',b'RoActivateInstance\0'),
                            ('ntdll.dll',b'LdrLoadDll\0'),
-                           ('ntdll.dll',b'LdrGetProcedureAddress\0')]:
+                           ('ntdll.dll',b'LdrGetProcedureAddress\0'),
+                           ('kernel32.dll',b'LoadPackagedLibrary\0')]:
             module_path(path)
             assert m.call(dll.exports['Iw6OfflineGetProcAddress'],[1,name])[0] == 0
             assert not calls
