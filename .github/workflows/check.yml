@@ -61,6 +61,7 @@ jobs:
           # --enhanced above is the single Store gameplay DLL (vendor guards + local direct transport).
           IW6_ORIGINALS=.work/originals python3 tests/direct/startup.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
+          IW6_ORIGINALS=.work/originals python3 tests/direct/security_bind_package.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/host.py
           IW6_ORIGINALS=.work/originals python3 tests/offline/vendor_tasks.py
