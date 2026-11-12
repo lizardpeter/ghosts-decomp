@@ -81,9 +81,10 @@ try {
 $result = Get-Content -Raw -LiteralPath (Join-Path $out 'game.json') | ConvertFrom-Json
 $messages = @($result.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6D:*' } | ForEach-Object { $_.text })
 $lastState = @($result.loader_state) | Select-Object -Last 1
+$lastGraphics = @($result.graphics_state) | Select-Object -Last 1
 $modules = @($result.events | Where-Object { $_.event -eq 6 -and $_.path } |
     ForEach-Object { [System.IO.Path]::GetFileName($_.path).ToLowerInvariant() })
-$forbidden = @('xgameruntime.dll','xcurl.dll','xboxliveapi.dll','xboxservices.dll','gamingservices.dll')
+$forbidden = @('xgameruntime.dll','xcurl.dll','xboxliveapi.dll','xboxservices.dll','gamingservices.dll','demonware.dll','demonwareclient.dll','bdcore.dll','bdsdk.dll')
 $unexpected = @($modules | Where-Object { $forbidden -contains $_ } | Select-Object -Unique)
 $gpu = @(Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,Status)
 $summary = [pscustomobject]@{
@@ -93,6 +94,7 @@ $summary = [pscustomobject]@{
     timed_out = $result.timed_out
     direct_milestones = $messages
     last_loader_state = $lastState
+    last_graphics_state = $lastGraphics
     requested_zone_names = $result.pending_zone_names
     unexpected_vendor_modules = $unexpected
     display_adapters = $gpu
