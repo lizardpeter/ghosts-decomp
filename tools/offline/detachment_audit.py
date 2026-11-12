@@ -79,6 +79,7 @@ REQUIRED_LOADER_WRAPPERS = {"Iw6OfflineGetProcAddress"}
 ORIGINAL_LOADER_IMPORTS = {
     "loadlibrarya", "loadlibraryw", "loadlibraryexa", "loadlibraryexw",
     "getprocaddress", "ldrloaddll", "ldrgetprocedureaddress",
+    "loadpackagedlibrary",
 }
 
 
