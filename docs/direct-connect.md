@@ -11,7 +11,7 @@ this package claim native integration or whole-process isolation.
 Use the same LLVM toolchain, Python, pefile and Unicorn dependencies as the other reconstruction builds:
 
 ```sh
-IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --enhanced
+python3 tools/build_enhanced.py --original .work/originals/iw6mp64_MSStore_ship.exe --output .work/enhanced-package
 python3 tests/direct/transport.py
 python3 tests/direct/profile.py
 IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
