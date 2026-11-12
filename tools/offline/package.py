@@ -41,6 +41,11 @@ VENDOR_TASKS = {
 LOCAL_FILES = {0x140548F90: 'Iw6LocalGameDirectory'}
 # C exports adapt the reviewed Win64 ABI without claiming original source names.
 DIRECT = {
+    # S17/B0009: the original Key_StringToKeynum sign-extends high-ASCII;
+    # reject indexes outside the key table in every bind command entrypoint.
+    0x1400AD720: 'Iw6SecureUnbind',
+    0x1400ACEA0: 'Iw6SecureBind',
+    0x1400AD5F0: 'Iw6SecureSwapBind',
     # S20/B0025: never enter the original fixed-buffer SOCKS credential parser.
     0x14054F5B0: 'Iw6DirectDisableSocks',
     0x140245440: 'Iw6DirectNoXboxLicenseRefresh',  # Store LUI callback
@@ -225,7 +230,7 @@ def transform(original, dll_bytes, mode='direct'):
                 'guards': changes, 'imports': redirected,
                 'native_launch_verified': False, 'whole_process_egress_verified': False,
                 'game_join_verified': False,
-                'wire_protocol': {'tag':'IW6D','version':1} if mode == 'direct' else None}
+                'wire_protocol': {'tag':'IW6D','version':1,'authenticated_version':2,'remote_requires_key':True} if mode == 'direct' else None}
     # Verify the final PE, not only the transformation plan. A missed IAT
     # redirect or lost GDK guard must fail before a package is published.
     from offline.detachment_audit import audit_package
