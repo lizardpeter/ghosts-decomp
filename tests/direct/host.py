@@ -15,8 +15,8 @@ from unicorn.x86_const import UC_X86_REG_RAX,UC_X86_REG_RCX,UC_X86_REG_RDX,UC_X8
 def main():
     with tempfile.TemporaryDirectory() as temp:
         output=Path(temp)/'package'
-        package.package(original_exe(package.BUILD),ROOT/'build'/package.BUILD/'direct/recon.dll',output,'direct')
-        exe,dll=Image(output/'iw6mp64_offline.exe'),Image(output/'recon.dll')
+        package.package(original_exe(package.BUILD),ROOT/'build'/package.BUILD/'enhanced/recon.dll',output,'direct')
+        exe,dll=Image(output/'iw6mp64_enhanced.exe'),Image(output/'recon.dll')
         m=Machine(exe,dll)
         for slot,name in exe.iat.items():
             if name.startswith('recon.dll!'):m.mu.mem_write(slot,struct.pack('<Q',dll.exports[name.split('!',1)[1]]))
