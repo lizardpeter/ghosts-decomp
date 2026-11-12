@@ -33,10 +33,10 @@ enhancements, offline Xbox/GDK/Demonware detachment guards and local/direct-play
 transport in `build/iw6mp64_MSStore_ship/enhanced/recon.dll`:
 
 ```sh
-IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --enhanced
-python3 tools/offline/package.py --original .work/originals/iw6mp64_MSStore_ship.exe --output .work/enhanced-package
+python3 tools/build_enhanced.py --original .work/originals/iw6mp64_MSStore_ship.exe --output .work/enhanced-package
 ```
 
+The single command compiles the canonical `--enhanced` DLL and audits/packages the custom EXE.
 The package creates `iw6mp64_enhanced.exe`, `recon.dll`, the manifest and the
 local launcher. The faithful reconstruction is separate; the offline-only
 diagnostic/sandbox remains internal and is not a second enhanced game.
