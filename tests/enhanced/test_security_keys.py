@@ -1,10 +1,13 @@
 """S17/B0009: high-bit key names must never index before playerKeys."""
 import struct
 
-# The pinned Microsoft Store cmd_args global; see tests/direct/admission.py.
-NESTING = 0x1469CEDA0
-ARGC = 0x1469CEDE4
-ARGV = 0x1469CEE08
+# The pinned Store cmd_args global used by enhanced bindings and the game.
+# See docs/direct-connect.md and tests/direct/game.py. The older
+# 0x1469CEDA0 triplet belongs to a different argument buffer and made the
+# previous negative-only test pass vacuously without invoking the bind code.
+NESTING = 0x1469CECF0
+ARGC = 0x1469CED34
+ARGV = 0x1469CED58
 
 def arguments(args):
     def setup(w):
@@ -45,3 +48,16 @@ def test_reject_unbound_sentinel(env):
         ("Iw6SecureUnbind", [b"unbind", b"unknown_key_name"]),
     ):
         env.call(export, [], setup=arguments(args))
+
+def test_normal_unbind_reaches_binding_write(env):
+    # The negative tests are meaningful only if ordinary commands actually
+    # read the constructed cmd_args and reach their intended handler.
+    calls = []
+    def binding(mu):
+        from unicorn.x86_const import UC_X86_REG_RCX, UC_X86_REG_RDX, UC_X86_REG_R8
+        calls.append(tuple(mu.reg_read(r) for r in
+                           (UC_X86_REG_RCX, UC_X86_REG_RDX, UC_X86_REG_R8)))
+    env.call("Iw6SecureUnbind", [], setup=arguments([b"unbind", b"a"]),
+             fakes={0x140310B30: binding,
+                    "?Key_SetBinding@@YAXW4LocalClientNum_t@@HH@Z": binding})
+    assert calls == [(0, ord("a"), 0)], calls
