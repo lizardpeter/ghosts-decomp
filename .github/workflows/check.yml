@@ -54,6 +54,7 @@ jobs:
         if: steps.recon.outputs.any == '1'
         run: |
           python3 tests/direct/transport.py
+          python3 tests/direct/reselect_replay.py
           python3 tests/direct/wire_auth.py
           python3 tests/direct/security_socks.py
           python3 tests/direct/security_bind_native.py
