@@ -68,7 +68,8 @@ the upstream risk inventory, not a completed implementation checklist.
 | Custom direct UDP egress | **Hardened in enhanced** | Only an explicitly selected peer or a previously admitted listener peer may receive. Non-loopback traffic requires the configured shared network key. |
 | Microsoft/GDK/Demonware detachment | **Already partially implemented** | The canonical enhanced package has independent vendor-denial and direct-transport code. This does **not** establish all original native process traffic is absent or safe; see `docs/vendor-disconnection.md` and `docs/native-launch.md`. |
 | S3, S18 and S19 in the original engine | **Not verified fixed** | The private direct transport rejects malformed lengths before it forwards data, but unreconstructed original sockets and packet handlers may still exist and must be audited independently. |
-| S1, S2, S4–S17, S20–S23 | **Outstanding** | Each needs a Store-build address/function match, correct ABI reconstruction, bounded enhanced replacement, and adversarial tests before it may be marked fixed. |
+| S1, S2, S4–S17, S21–S23 | **Outstanding** | Each needs a Store-build address/function match, correct ABI reconstruction, bounded enhanced replacement, and adversarial tests before it may be marked fixed. |
+| S20 (legacy SOCKS5 credentials) | **Disabled in canonical direct package** | `enhanced/direct/security.cpp` provides a no-op for the vulnerable Store `NET_OpenSocks` entry 14054F5B0. `tools/offline/package.py` redirects that entry only in direct mode; no SOCKS proxy is supported. |
 | Fastfile, script, mod, and peer identity trust | **Outstanding** | Keep original signature checks; reject untrusted executable scripts. Shared-key authentication is not per-user identity, encryption, or a substitute for a fresh session handshake. |
 
 **Important limitation:** the new v2 wire authenticates possession of one
