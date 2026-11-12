@@ -40,6 +40,8 @@ VENDOR_INTEGRITY_ENTRIES = {
 LOCAL_ASSET_ENTRIES = {0x140548F90}
 # Required direct-profile entry redirects, including SOCKS5 and DXGI bounds guards.
 DIRECT_ENTRIES = {
+    # S17/B0009: matched Store address candidates, never PS4 reference VAs.
+    0x1403106D0, 0x140310D20, 0x140310EB0,
     0x14062FC90,  # S23/B0036: bounded GPU mode enumeration
     0x14054F5B0,  # B0025/S20: bypass vulnerable SOCKS5 credential parser
     0x140245440,  # original LUI XStore licence-refresh callback
