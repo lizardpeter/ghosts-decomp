@@ -13,7 +13,7 @@ With the normal LLVM toolchain and pinned originals available:
 ```sh
 IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --offline
 IW6_ORIGINALS=.work/originals python3 tests/offline/run.py
-python3 tools/offline/package.py \
+python3 tools/offline/package.py --mode offline \
   --original .work/originals/iw6mp64_MSStore_ship.exe \
   --output .work/offline-package
 ```
