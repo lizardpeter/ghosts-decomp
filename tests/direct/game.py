@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 sys.path[:0]=[str(ROOT/'tools/offline'),str(ROOT/'tests/differential')]
 import package
+import detachment_audit
 from harness import Image,Machine,original_exe,SCRATCH
 from winsock import Winsock,sockaddr_in
 from unicorn.x86_const import UC_X86_REG_RAX,UC_X86_REG_RCX,UC_X86_REG_RDX,UC_X86_REG_R8,UC_X86_REG_R9
@@ -24,6 +25,17 @@ def main():
         assert manifest['mode']=='direct' and not manifest['game_join_verified']
         assert len(manifest['guards'])==31+len(package.VENDOR_TASKS)+len(package.LOCAL_FILES)+len(package.DIRECT) and len(manifest['imports'])==58
         assert (directory/'LaunchDirect.ps1').exists() and not (directory/'ConfigureSandbox.ps1').exists()
+        image=(directory/'iw6mp64_offline.exe').read_bytes()
+        dll_image=(directory/'recon.dll').read_bytes()
+        assert not detachment_audit.audit_package(image, manifest, dll_image)
+        assert len(detachment_audit.DIRECT_ENTRIES)==len(package.DIRECT)==17
+        # No direct gameplay entry may quietly revert to its original vendor
+        # address-handle, matchmaking or Xbox-dependent implementation.
+        for missing in (0x140469E70, 0x1405A8830, 0x1405A9E50, 0x14054B1B0):
+            partial=dict(manifest,guards=[
+                g for g in manifest['guards'] if int(g['va'],16)!=missing])
+            assert any('Missing direct/local-session entry' in e for e in
+                       detachment_audit.audit_package(image, partial, dll_image))
         exe,dll=Image(directory/'iw6mp64_offline.exe'),Image(directory/'recon.dll')
         m=Machine(exe,dll)
         for slot,name in exe.iat.items():
