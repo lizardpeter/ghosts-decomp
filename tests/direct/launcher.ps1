@@ -27,9 +27,9 @@ try {
     New-Item -ItemType Directory -Force -Path $bundle,$game,$env:LOCALAPPDATA | Out-Null
     $launcher = Join-Path $bundle 'LaunchDirect.ps1'
     Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/direct/LaunchDirect.ps1') -Destination $launcher
-    [System.IO.File]::WriteAllText((Join-Path $bundle 'iw6mp64_offline.exe'),'test-exe')
+    [System.IO.File]::WriteAllText((Join-Path $bundle 'iw6mp64_enhanced.exe'),'test-exe')
     [System.IO.File]::WriteAllText((Join-Path $bundle 'recon.dll'),'test-dll')
-    $manifest = @{ mode='direct'; exe_sha256=(Get-FileHash (Join-Path $bundle 'iw6mp64_offline.exe')).Hash; dll_sha256=(Get-FileHash (Join-Path $bundle 'recon.dll')).Hash }
+    $manifest = @{ mode='direct'; exe_sha256=(Get-FileHash (Join-Path $bundle 'iw6mp64_enhanced.exe')).Hash; dll_sha256=(Get-FileHash (Join-Path $bundle 'recon.dll')).Hash }
     [System.IO.File]::WriteAllText((Join-Path $bundle 'manifest.json'),($manifest | ConvertTo-Json))
     & $launcher -GameDirectory $game -Connect '127.0.0.1:27016' -Profile 'one' -PlayerName 'Test Player'
     $profilePath = Join-Path $env:LOCALAPPDATA 'GhostsDirect/one/player.json'
