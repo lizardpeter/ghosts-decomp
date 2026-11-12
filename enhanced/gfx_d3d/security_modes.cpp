@@ -165,8 +165,26 @@ void R_EnumDisplayModes()
 	modeText = dx.modeText;
 	if (!resolutionCount)
 	{
-		va("No valid resolutions of %i x %i or above found", 640, 480);  // the message is dropped
-		Sys_DirectXFatalError();
+		// A driver may return an empty or all-subminimum list. Do not
+		// register an empty resolution enum or index uninitialized slots.
+		availableResolutions[0][0] = 800;
+		availableResolutions[0][1] = 600;
+		resolutionCount = 1;
+		DXGI_MODE_DESC &fallback = dx.displayModes[0];
+		fallback = {};
+		fallback.Width = 800;
+		fallback.Height = 600;
+		fallback.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		fallback.RefreshRate.Numerator = 60;
+		fallback.RefreshRate.Denominator = 1;
+		dx.displayModeCount = 1;
+	}
+	if (!refreshRateCount)
+	{
+		// All refresh denominators were invalid (or there were no valid
+		// rates). Keep a valid option instead of indexing an empty table.
+		availableRefreshRates[0] = 60;
+		refreshRateCount = 1;
 	}
 	memset(dx.resolutionNameTable, 0, sizeof(dx.resolutionNameTable) + sizeof(dx.refreshRateNameTable));
 	defaultResolutionIndex = 0;
