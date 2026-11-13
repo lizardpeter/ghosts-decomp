@@ -570,3 +570,77 @@ iw6mp64_MSStore_ship	140314FE0	matches	src/client_mp/cl_main_mp.cpp	test_cg_view
 iw6mp64_MSStore_ship	1403165A0	matches	src/client_mp/cl_main_mp.cpp	test_cg_view.py: 40 cases (bool values 0 and 1); mutation-checked
 iw6mp64_MSStore_ship	1402B3140	matches	src/cgame_mp/cg_ents_mp.cpp	test_cg_view.py: 60 cases; mutation-checked
 iw6mp64_MSStore_ship	1403106C0	matches	src/client/cl_keys.cpp	test_cg_view.py: 40 cases; mutation-checked
+iw6mp64_MSStore_ship	1403746E0	matches	src/database/db_stream.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1403748D0	matches	src/database/db_stream.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140374850	matches	src/database/db_stream.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140374750	matches	src/database/db_stream.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1403749E0	matches	src/database/db_stream_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140374960	matches	src/database/db_stream_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1403749A0	matches	src/database/db_stream_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140374AC0	matches	src/database/db_stream_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140374A30	matches	src/database/db_stream_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1401905A0	matches	src/database/db_fastfile_pointer.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	14037AF90	matches	src/database/db_stringtable_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1403488B0	matches	src/database/db_assetnames.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1403488D0	matches	src/database/db_assetnames.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1403488E0	matches	src/database/db_assetnames.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140355E20	matches	src/database/db_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	14035DF80	matches	src/database/db_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	14034A060	matches	src/database/db_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	14035D5F0	matches	src/database/db_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	14035D630	matches	src/database/db_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1403496B0	matches	src/database/db_file_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140349710	matches	src/database/db_file_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140349730	matches	src/database/db_file_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1403497F0	matches	src/database/db_file_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140349820	matches	src/database/db_file_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140349890	matches	src/database/db_file_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1403498A0	matches	src/database/db_file_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140349A50	matches	src/database/db_file_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140349B80	matches	src/database/db_file_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140349C30	matches	src/database/db_file_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140349E20	matches	src/database/db_file_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	14034A000	matches	src/database/db_file_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140348900	matches	src/database/db_auth.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140348960	matches	src/database/db_auth.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140348BA0	matches	src/database/db_auth.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140348C60	matches	src/database/db_auth.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140348C10	matches	src/database/db_auth.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1403489E0	matches	src/database/db_auth.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140348D30	matches	src/database/db_auth.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140348F60	matches	src/database/db_auth.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140349030	matches	src/database/db_auth.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1403692F0	matches	src/database/db_memory.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140369260	matches	src/database/db_memory.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140369230	matches	src/database/db_memory.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	140349300	matches	src/database/db_fastfile_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6mp64_MSStore_ship	1403492E0	matches	src/database/db_fastfile_load.cpp	differential test against the Store build (emulated; file reads, RSA and engine callees scripted where noted in the test)
+iw6_ds_ps4	1400D3AC0	matches	src/database/db_stream.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400D3BF0	matches	src/database/db_stream.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400D3B30	matches	src/database/db_stream.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400D3CF0	matches	src/database/db_stream_load.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400D3C70	matches	src/database/db_stream_load.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400D3CB0	matches	src/database/db_stream_load.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400D3D80	matches	src/database/db_stream_load.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400D3D40	matches	src/database/db_stream_load.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400064B0	matches	src/database/db_fastfile_pointer.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400D3DF0	matches	src/database/db_stringtable_load.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400AE9E0	matches	src/database/db_assetnames.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400AEA00	matches	src/database/db_assetnames.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400AEA10	matches	src/database/db_assetnames.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400B8B10	matches	src/database/db_load.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400C0860	matches	src/database/db_load.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400AFCF0	matches	src/database/db_load.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400BFED0	matches	src/database/db_load.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400BFF10	matches	src/database/db_load.cpp	differential test (emulated, original vs recon); the same code as the Store build's
+iw6_ds_ps4	1400D3B70	compiles	src/database/db_stream.cpp	the empty function the Store build's DB_PopStreamPos calls (sub_140374950) is folded with library destructors in the server and has no name of its own there, so the reconstruction's call traps; src follows the Store build and matches there
+iw6_ds_ps4	1400AF250	compiles	src/database/db_auth.cpp	the server's DB_AuthLoadGlob layout differs (0x6070 bytes in the Store build); src follows the Store build and matches there
+iw6_ds_ps4	1400CB540	compiles	src/database/db_memory.cpp	the Store build also points a callback block allocator at block 5 (two globals the server lacks); src follows the Store build and matches there
+iw6_ds_ps4	1400AF6D0	compiles	src/database/db_file_load.cpp	the server's DB_LoadData is 0xB0 bytes (0xD0 in the Store build) and its stage/wait split differs; the auto inputs cannot build a load state; src follows the Store build and matches there
+iw6_ds_ps4	1400AF760	compiles	src/database/db_file_load.cpp	the server's DB_LoadData is 0xB0 bytes (0xD0 in the Store build) and its stage/wait split differs; the auto inputs cannot build a load state; src follows the Store build and matches there
+iw6_ds_ps4	1400AF800	compiles	src/database/db_file_load.cpp	the server's DB_LoadData is 0xB0 bytes (0xD0 in the Store build) and its stage/wait split differs; the auto inputs cannot build a load state; src follows the Store build and matches there
+iw6_ds_ps4	1400AF8E0	compiles	src/database/db_file_load.cpp	the server's DB_LoadData is 0xB0 bytes (0xD0 in the Store build) and its stage/wait split differs; the auto inputs cannot build a load state; src follows the Store build and matches there
+iw6_ds_ps4	1400AF990	compiles	src/database/db_file_load.cpp	the server's DB_LoadData is 0xB0 bytes (0xD0 in the Store build) and its stage/wait split differs; the auto inputs cannot build a load state; src follows the Store build and matches there
+iw6_ds_ps4	1400AFAC0	compiles	src/database/db_file_load.cpp	the server's DB_LoadData is 0xB0 bytes (0xD0 in the Store build) and its stage/wait split differs; the auto inputs cannot build a load state; src follows the Store build and matches there
+iw6_ds_ps4	1400AFB70	compiles	src/database/db_file_load.cpp	the server's DB_LoadData is 0xB0 bytes (0xD0 in the Store build) and its stage/wait split differs; the auto inputs cannot build a load state; src follows the Store build and matches there
+iw6_ds_ps4	1400AFBD0	compiles	src/database/db_file_load.cpp	the server's DB_LoadData is 0xB0 bytes (0xD0 in the Store build) and its stage/wait split differs; the auto inputs cannot build a load state; src follows the Store build and matches there

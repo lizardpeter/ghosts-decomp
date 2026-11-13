@@ -36,6 +36,9 @@ jobs:
         run: |
           IW6_ORIGINALS=.work/originals python3 tests/differential/run.py --check-records
           IW6_ORIGINALS=.work/originals python3 tests/differential/run.py --build iw6mp64_MSStore_ship --check-records
+      - name: Fastfile reader
+        if: steps.recon.outputs.any == '1'
+        run: IW6_ORIGINALS=.work/originals python3 tests/fastfile/run.py
       - name: Enhanced build tests
         if: steps.recon.outputs.any == '1'
         run: IW6_ORIGINALS=.work/originals python3 tests/enhanced/run.py

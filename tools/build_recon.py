@@ -220,7 +220,11 @@ def main():
     orig_names = {}
     for o in orig:
         orig_names.setdefault(base_name(o), []).append(o)
-    mismatched = [f"{e}  (original: {', '.join(orig_names[base_name(e)])})" for e in stray if base_name(e) in orig_names]
+    # A prototype that records/names.tsv gives some other build (the Store build's DB_LoadXFile has a third
+    # parameter the servers' doesn't) is intended, not a mistake.
+    named_elsewhere = {r["symbol"] for r in symbols.read_tsv(ROOT / "records" / "names.tsv") if r["build"] != build}
+    mismatched = [f"{e}  (original: {', '.join(orig_names[base_name(e)])})" for e in stray
+                  if base_name(e) in orig_names and e not in named_elsewhere]
     if mismatched:
         sys.exit("prototype differs from the original's decorated name:\n  " + "\n  ".join(mismatched))
     if stray and reference:
