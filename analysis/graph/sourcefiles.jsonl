@@ -1081,6 +1081,7 @@
 {"path": "ragdoll/ragdoll.cpp", "subsystem": "ragdoll"}
 {"path": "ragdoll/ragdoll_controller.cpp", "subsystem": "ragdoll"}
 {"path": "ragdoll/ragdoll_update.cpp", "subsystem": "ragdoll"}
+{"path": "renderer/tr_types_load_db.h", "subsystem": "renderer"}
 {"path": "script/scr_animtree.cpp", "subsystem": "script"}
 {"path": "script/scr_compiler.cpp", "subsystem": "script"}
 {"path": "script/scr_main.cpp", "subsystem": "script"}
