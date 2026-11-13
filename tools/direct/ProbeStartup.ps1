@@ -7,20 +7,21 @@ param(
     [string]$PackageDirectory = $PSScriptRoot,
     [string]$OutputDirectory,
     [ValidateRange(10,300)][int]$Seconds = 120,
+    [ValidatePattern('^[A-Za-z0-9_]{3,63}$')][string]$HostMap,
+    [ValidatePattern('^[A-Za-z0-9_]{1,31}$')][string]$GameType = 'war',
     [switch]$Screenshot
 )
-
 $ErrorActionPreference = 'Stop'
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $PackageDirectory 'local-diagnostics' }
 $game = (Resolve-Path -LiteralPath $GameDirectory).Path
 $package = (Resolve-Path -LiteralPath $PackageDirectory).Path
-$exe = (Resolve-Path -LiteralPath (Join-Path $package 'iw6mp64_offline.exe')).Path
+$exe = (Resolve-Path -LiteralPath (Join-Path $package 'iw6mp64_enhanced.exe')).Path
 $observer = (Resolve-Path -LiteralPath (Join-Path $package 'native_smoke.py')).Path
 $manifest = Get-Content -Raw -LiteralPath (Join-Path $package 'manifest.json') | ConvertFrom-Json
 if ($manifest.mode -ne 'direct' -or $manifest.build -ne 'iw6mp64_MSStore_ship') {
     throw 'Only the pinned custom Store multiplayer direct-mode package is supported.'
 }
-foreach ($name in @('iw6mp64_offline.exe','recon.dll')) {
+foreach ($name in @('iw6mp64_enhanced.exe','recon.dll')) {
     $expected = if ($name -eq 'recon.dll') { $manifest.dll_sha256 } else { $manifest.exe_sha256 }
     $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $package $name)).Hash
     if ($actual -ne $expected) { throw "Package integrity mismatch: $name" }
@@ -71,6 +72,11 @@ try {
         '+set', 'logfile', '2', '+set', 'r_fullscreen', '0',
         '+direct_player', '0000000000000001', 'LocalProbe'
     )
+    if ($HostMap) {
+        # Localhost-only host request, no external endpoint or multiplayer
+        # traffic. The engine still decides when to execute deferred commands.
+        $argsForObserver += @('+direct_host', '127.0.0.1:27016', $HostMap, $GameType)
+    }
     & $python.Source @argsForObserver | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Native process observation failed.' }
 } finally {
@@ -81,9 +87,14 @@ try {
 $result = Get-Content -Raw -LiteralPath (Join-Path $out 'game.json') | ConvertFrom-Json
 $messages = @($result.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6D:*' } | ForEach-Object { $_.text })
 $lastState = @($result.loader_state) | Select-Object -Last 1
+$lastGraphics = @($result.graphics_state) | Select-Object -Last 1
+$lastFastFile = @($result.fastfile_state) | Select-Object -Last 1
+$ioFailures = @($result.events | Where-Object {
+    $_.event -eq 8 -and $_.text -like 'IW6IO:*' -and $_.text -like '*success=0*'
+} | ForEach-Object { $_.text } | Select-Object -First 25)
 $modules = @($result.events | Where-Object { $_.event -eq 6 -and $_.path } |
     ForEach-Object { [System.IO.Path]::GetFileName($_.path).ToLowerInvariant() })
-$forbidden = @('xgameruntime.dll','xcurl.dll','xboxliveapi.dll','xboxservices.dll','gamingservices.dll')
+$forbidden = @('xgameruntime.dll','xcurl.dll','xboxliveapi.dll','xboxservices.dll','gamingservices.dll','demonware.dll','demonwareclient.dll','bdcore.dll','bdsdk.dll')
 $unexpected = @($modules | Where-Object { $forbidden -contains $_ } | Select-Object -Unique)
 $gpu = @(Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,Status)
 $summary = [pscustomobject]@{
@@ -92,7 +103,12 @@ $summary = [pscustomobject]@{
     observation_seconds = $Seconds
     timed_out = $result.timed_out
     direct_milestones = $messages
+    requested_host_map = $HostMap
+    host_start_requested = ($messages -contains 'IW6D:DIRECT_MAP_START_REQUESTED')
     last_loader_state = $lastState
+    last_graphics_state = $lastGraphics
+    last_fastfile_state = $lastFastFile
+    sampled_file_io_failures = $ioFailures
     requested_zone_names = $result.pending_zone_names
     unexpected_vendor_modules = $unexpected
     display_adapters = $gpu

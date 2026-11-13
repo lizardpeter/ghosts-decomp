@@ -1,7 +1,9 @@
 # Microsoft Gaming Services detachment (custom Store MP profile)
 
 Target: pinned `iw6mp64_MSStore_ship`. The faithful `src/` build preserves
-original behavior; detachment applies only to the opt-in offline/direct package.
+original behavior. The canonical `--enhanced` Store game includes local/direct
+play and all vendor-detachment overrides; the offline-only package is an
+isolated diagnostic. No vendor-detachment code is enabled in faithful builds.
 
 ## What is implemented
 
@@ -16,6 +18,7 @@ original behavior; detachment applies only to the opt-in offline/direct package.
 * The direct profile implements private, selected-peer UDP and local
   identifiers. These are NOT authenticated Microsoft/Activision accounts.
   Original game content checks are not fabricated or removed.
+* P0032 hardens the package guard audit against omissions: all **42 common** redirects (31 GDK/auth/lobby/reporting entry patches, ten vendor integrity/reporting guards, and the local asset-root helper) and all **17 direct-only** entry redirects are independently pinned, so losing a vendor or transport guard fails package creation. Known Demonware-named DLLs are also rejected as direct imports, app-local dependencies and observed module loads. Dynamic `LoadPackagedLibrary` resolution is refused. This covers known boundaries only, not every inlined Demonware call or Windows broker.
 * `tools/offline/detachment_audit.py` independently parses the resulting PE,
   checks required GDK and direct-entry redirects, checks every manifest-listed
   import against the *actual final IAT*, and rejects unredirected Xbox/GDK
@@ -23,7 +26,13 @@ original behavior; detachment applies only to the opt-in offline/direct package.
   `recon.dll`**: package SHA-256, the named exports at the exact jump targets,
   its selected offline/direct profile and its own static SDK imports. Package
   creation fails closed if any of these known boundaries regress.
-* Native Windows CI now applies the same audit to the package and checks the
+* Native Windows CI audits the staged game directory before startup. It
+  rejects forbidden DLL filenames, regular and delay imports from local
+  companion DLLs, and export forwarders to forbidden providers. The game
+  executable cannot retain direct imports of the guarded loader APIs, and its
+  procedure adapter refuses the native `LdrLoadDll` and
+  `LdrGetProcedureAddress` entry points.
+* Native Windows CI also checks the
   bounded debugger module-load trace for `xgameruntime.dll`,
   `xcurl.dll` and `xboxliveapi.dll`. The result is uploaded to
   `native-launch-diagnostics/vendor-audit.json`.

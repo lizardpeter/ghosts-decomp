@@ -20,18 +20,44 @@ GDK_ENTRIES = {
     0x1406AF4BC, 0x1406AF52C, 0x1401A1930,
     0x1401A1760, 0x1406AF274,
 }
+# These are the other 23 P0005/P0006/P0008/P0010 entry redirects.
+# Keep this independent of package.py and the patch manifest: otherwise a
+# deleted entry in the packager could silently disappear from both sides.
+DEMONWARE_AND_TELEMETRY_ENTRIES = {
+    0x14019ADA0, 0x14019A9A0, 0x14019A930, 0x14019A960,
+    0x1405DA070, 0x1405D3D40,  # auth and login/frame
+    0x1405D9FD0, 0x1405DA470, 0x1405DA130, 0x1405DA150,
+    0x1405DA190, 0x1405DA1D0, 0x1405DBF40,  # lobby services
+    0x14019F390, 0x1401A1320, 0x1401A1CA0, 0x1405D6A90,
+    0x140199DA0, 0x140199300, 0x140199D70,
+    0x140199ED0, 0x140199CC0, 0x140199480,  # reporting
+}
+VENDOR_INTEGRITY_ENTRIES = {
+    0x1405F0A80, 0x1405EFD60, 0x1405F0AB0, 0x1405EFAC0,
+    0x1405F0D50, 0x1405F10E0, 0x1405F1AB0, 0x1405F2230,
+    0x1405F2280, 0x1405F24F0,
+}
+LOCAL_ASSET_ENTRIES = {0x140548F90}
+# Required direct-profile entry redirects, including SOCKS5 and DXGI bounds guards.
 DIRECT_ENTRIES = {
+    # S17/B0009: matched Store address candidates, never PS4 reference VAs.
+    0x1403106D0, 0x140310D20, 0x140310EB0,
+    0x14062FC90,  # S23/B0036: bounded GPU mode enumeration
+    0x14054F5B0,  # B0025/S20: bypass vulnerable SOCKS5 credential parser
     0x140245440,  # original LUI XStore licence-refresh callback
     0x14054B1B0, 0x14054B290,  # local-only readiness gates
     0x14054F200, 0x14054F960, 0x14054FB70,
     0x1401A7DB0, 0x1401A7E10, 0x14054C360, 0x14054C0F0,
+    0x140469E70, 0x140469EC0, 0x140469F20,
+    0x1405A8830, 0x1405A8980, 0x1405A9E50, 0x1405A87E0,
 }
 # An unexpected direct import from one of these SDK/HTTP providers is a build
 # error. Windows itself may load other providers for unrelated local features.
 FORBIDDEN_IMPORT_DLLS = {
     "xgameruntime.dll", "xcurl.dll", "winhttp.dll", "wininet.dll",
     "urlmon.dll", "xboxliveapi.dll", "xboxservices.dll",
-    "gamingservices.dll",
+    "gamingservices.dll", "demonware.dll", "demonwareclient.dll",
+    "bdcore.dll", "bdsdk.dll",
 }
 # The original executable can retain non-egress Winsock utilities, but not a
 # way to create/send/connect through its unguarded original import table.
@@ -46,11 +72,19 @@ ORIGINAL_WINSOCK_EGRESS = {
 UNEXPECTED_RUNTIME_DLLS = {
     "xgameruntime.dll", "xcurl.dll", "xboxliveapi.dll",
     "xboxservices.dll", "gamingservices.dll",
+    "demonware.dll", "demonwareclient.dll", "bdcore.dll", "bdsdk.dll",
 }
 # The pinned original may statically import only a subset of LoadLibrary*
 # functions. GetProcAddress is required, and its returned loader pointers are
 # separately wrapped/tested even when they are not static imports.
 REQUIRED_LOADER_WRAPPERS = {"Iw6OfflineGetProcAddress"}
+
+
+ORIGINAL_LOADER_IMPORTS = {
+    "loadlibrarya", "loadlibraryw", "loadlibraryexa", "loadlibraryexw",
+    "getprocaddress", "ldrloaddll", "ldrgetprocedureaddress",
+    "loadpackagedlibrary",
+}
 
 
 def _name(value):
@@ -169,8 +203,17 @@ def audit_package(image, manifest, dll_image=None):
                 errors.append("Invalid guard entry metadata")
     except (pefile.PEFormatError, AttributeError) as error:
         errors.append("Cannot inspect packaged function guards: %s" % error)
-    for va in sorted(GDK_ENTRIES - guards.keys()):
-        errors.append("Missing GDK guard at %09X" % va)
+    # A correct manifest cannot omit one of the documented vendor entry
+    # boundaries and still be accepted. Validate all 42 common redirects,
+    # then all 22 additional direct-mode game/local-session redirects.
+    for label, required in (
+        ("GDK", GDK_ENTRIES),
+        ("Demonware authentication/lobby/telemetry", DEMONWARE_AND_TELEMETRY_ENTRIES),
+        ("vendor integrity/reporting", VENDOR_INTEGRITY_ENTRIES),
+        ("local asset-root", LOCAL_ASSET_ENTRIES),
+    ):
+        for va in sorted(required - guards.keys()):
+            errors.append("Missing %s guard at %09X" % (label, va))
     if mode == "direct":
         for va in sorted(DIRECT_ENTRIES - guards.keys()):
             errors.append("Missing direct/local-session entry at %09X" % va)
@@ -182,6 +225,8 @@ def audit_package(image, manifest, dll_image=None):
     for rva, (provider, name) in sorted(imports.items()):
         if provider in FORBIDDEN_IMPORT_DLLS:
             errors.append("Forbidden provider import %s!%s at IAT %X" % (provider, name, rva))
+        if name in ORIGINAL_LOADER_IMPORTS:
+            errors.append("Unguarded loader import %s!%s at IAT %X" % (provider, name, rva))
         if provider == "ws2_32.dll" and name in ORIGINAL_WINSOCK_EGRESS:
             errors.append("Original network egress import %s at IAT %X" % (name, rva))
 
@@ -212,6 +257,35 @@ def audit_package(image, manifest, dll_image=None):
     return errors
 
 
+def audit_local_dlls(directory, replacement):
+    """Inspect app-local DLLs before launch, including delay imports and forwarders."""
+    errors = []
+    for path in sorted(directory.iterdir()):
+        if not path.is_file() or path.suffix.lower() != ".dll" or path == replacement:
+            continue
+        if path.name.lower() in FORBIDDEN_IMPORT_DLLS:
+            errors.append(f"Forbidden provider staged beside executable: {path.name}")
+            continue
+        try:
+            with pefile.PE(str(path)) as dll:
+                for table in ("DIRECTORY_ENTRY_IMPORT", "DIRECTORY_ENTRY_DELAY_IMPORT"):
+                    for entry in getattr(dll, table, []):
+                        provider = _name(entry.dll)
+                        if provider in FORBIDDEN_IMPORT_DLLS:
+                            errors.append(f"{path.name} imports forbidden provider: {provider}")
+                exports = getattr(dll, "DIRECTORY_ENTRY_EXPORT", None)
+                for symbol in exports.symbols if exports else ():
+                    if symbol.forwarder:
+                        provider = _name(symbol.forwarder).rsplit(".", 1)[0]
+                        if not provider.endswith(".dll"):
+                            provider += ".dll"
+                        if provider in FORBIDDEN_IMPORT_DLLS:
+                            errors.append(f"{path.name} forwards to forbidden provider: {provider}")
+        except (OSError, pefile.PEFormatError, UnicodeError) as error:
+            errors.append(f"Cannot inspect local DLL {path.name}: {error}")
+    return errors
+
+
 def audit_runtime(report):
     """Review a bounded native debug trace for direct GDK client DLL loads."""
     errors = []
@@ -236,6 +310,8 @@ def main():
     parser.add_argument("--exe", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--dll", type=Path, help="replacement recon.dll (defaults to EXE directory)")
+    parser.add_argument("--dll-directory", type=Path, action="append", default=[],
+                        help="additional game/asset directory searched for local DLLs; repeatable")
     parser.add_argument("--runtime", type=Path, help="optional native_smoke.py JSON trace")
     parser.add_argument("--output", type=Path, help="optional machine-readable audit")
     args = parser.parse_args()
@@ -243,6 +319,14 @@ def main():
     manifest = json.loads(args.manifest.read_text())
     dll_path = args.dll or args.exe.with_name("recon.dll")
     errors = audit_package(image, manifest, dll_path.read_bytes() if dll_path.exists() else None)
+    errors.extend(audit_local_dlls(args.exe.resolve().parent, dll_path.resolve()))
+    # The EXE lives in a separate package directory, but its launcher sets the
+    # original game as the working directory. Audit DLLs staged there too.
+    for directory in args.dll_directory:
+        if not directory.is_dir():
+            errors.append("Additional DLL search directory is missing: " + str(directory))
+        elif directory.resolve() != args.exe.resolve().parent:
+            errors.extend(audit_local_dlls(directory.resolve(), dll_path.resolve()))
     runtime = None
     if args.runtime:
         more, runtime = audit_runtime(json.loads(args.runtime.read_text()))

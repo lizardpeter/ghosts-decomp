@@ -16,3 +16,8 @@ TerminateProcess
 OutputDebugStringA
 AcquireSRWLockExclusive
 ReleaseSRWLockExclusive
+CreateFileA
+ReadFileEx
+GetLastError
+GetEnvironmentVariableA
+GetFinalPathNameByHandleA

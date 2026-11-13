@@ -1,11 +1,21 @@
 name: Native custom launch diagnostic
 
+# Keep the first native diagnostic running to completion even while
+# independent reconstruction or security commits land on main. GitHub keeps
+# at most one pending successor per branch, avoiding redundant large downloads
+# without indefinitely canceling the 90s + 45s + 45s UI/mapping experiment.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/launch-smoke.yml
       - tools/direct/native_smoke.py
+      - tools/direct/ProbeStartup.ps1
+      - tools/build_enhanced.py
       - tools/offline/package.py
       - tools/offline/detachment_audit.py
       - enhanced/offline/egress.cpp
@@ -13,6 +23,7 @@ on:
       - enhanced/win32/gdk.cpp
       - enhanced/direct/transport.cpp
       - enhanced/direct/game.cpp
+      - enhanced/client/security_keys.cpp
       - enhanced/direct/profile.cpp
       - tests/direct/game.py
       - tests/direct/startup.py
@@ -25,6 +36,7 @@ on:
       - enhanced/offline/files.cpp
       - tools/direct/fetch_startup.py
       - records/native-startup-sources.tsv
+      - records/native-map-sources.tsv
   workflow_dispatch:
 
 permissions:
@@ -56,8 +68,7 @@ jobs:
           sudo apt-get install -y -q clang lld llvm >/dev/null
           pip install -q pefile unicorn==2.1.4
           python3 tools/fetch_originals.py iw6mp64_MSStore_ship .work/originals --only exe
-          IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct
-          python3 tools/offline/package.py --original .work/originals/iw6mp64_MSStore_ship.exe --mode direct --output .work/package
+          python3 tools/build_enhanced.py --original .work/originals/iw6mp64_MSStore_ship.exe --output .work/package
           IW6_ORIGINALS=.work/originals python3 tests/direct/startup.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
           IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
@@ -67,7 +78,7 @@ jobs:
           python3 - <<'PYTHON'
           import json, pefile
           from pathlib import Path
-          pe=pefile.PE('.work/package/iw6mp64_offline.exe')
+          pe=pefile.PE('.work/package/iw6mp64_enhanced.exe')
           rows=[{'dll':d.dll.decode(), 'symbols':[i.name.decode() if i.name else i.ordinal for i in d.imports]} for d in pe.DIRECTORY_ENTRY_IMPORT]
           Path('.work/package/imports.json').write_text(json.dumps(rows))
           PYTHON
@@ -124,9 +135,32 @@ jobs:
           Copy-Item game/*.dll package/
           python tools/direct/fetch_startup.py --output game --report diagnostics/sources.json
           if ($LASTEXITCODE -ne 0) { throw 'Original startup asset staging failed' }
+          # Stage the AUTHENTIC prisonbreak map FastFiles for a separate,
+          # bounded local-host startup diagnostic. R2 contains the original
+          # map named mp_prisonbreak, not mp_prison. These seven files do not
+          # constitute the full game: image/audio PAKs are still omitted.
+          python tools/direct/fetch_startup.py --inventory records/native-map-sources.tsv --output game --report diagnostics/map-sources.json
+          if ($LASTEXITCODE -ne 0) { throw 'Original prisonbreak map asset staging failed' }
+          # The earlier native trace found a missing original soundfile1.pak.
+          # Its R2 ETag is multipart (not a plain MD5); validate exact
+          # source-reported byte length and record locally computed SHA-256.
+          $pak = Join-Path 'game' 'soundfile1.pak'
+          Invoke-WebRequest -Uri 'https://r2.houseofkublai.com/ghosts/DUMP/soundfile1.pak' -OutFile $pak
+          if ((Get-Item -LiteralPath $pak).Length -ne 228383419) { throw 'Original soundfile1.pak size mismatch' }
+          [pscustomobject]@{
+            source = 'ghosts/DUMP/soundfile1.pak'
+            bytes = 228383419
+            sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $pak).Hash
+          } | ConvertTo-Json | Set-Content diagnostics/soundfile-source.json
       - name: Install PE audit dependency
         run: python -m pip install --quiet pefile
+      - name: Audit staged DLLs before starting the custom game
+        run: python tools/offline/detachment_audit.py --exe package/iw6mp64_enhanced.exe --manifest package/manifest.json --dll-directory game --output diagnostics/vendor-prelaunch-audit.json
       - name: Observe fixture and custom game with outbound firewall blocks
+        # Keep the debug observer but use the normal Windows heap at startup.
+        env:
+          _NO_DEBUG_HEAP: '1'
+          IW6_TRACE_FASTFILE_IO: '1'
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -135,12 +169,12 @@ jobs:
             if (!$profile.Enabled) { throw 'An active firewall profile is disabled' }
           }
           $manifest=Get-Content package/manifest.json -Raw | ConvertFrom-Json
-          foreach ($pair in @(@('iw6mp64_offline.exe',$manifest.exe_sha256),@('recon.dll',$manifest.dll_sha256))) {
+          foreach ($pair in @(@('iw6mp64_enhanced.exe',$manifest.exe_sha256),@('recon.dll',$manifest.dll_sha256))) {
             if ((Get-FileHash (Join-Path package $pair[0])).Hash -ne $pair[1]) { throw 'Package integrity mismatch' }
           }
           $game=(Resolve-Path game).Path
           $profile=(Resolve-Path diagnostics/profile).Path
-          foreach ($binary in @('observer_fixture.exe','iw6mp64_offline.exe')) {
+          foreach ($binary in @('observer_fixture.exe','iw6mp64_enhanced.exe')) {
             $exe=(Resolve-Path (Join-Path package $binary)).Path
             $rule='Iw6CustomSmoke-'+[guid]::NewGuid().ToString('N')
             New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Outbound -Program $exe -Action Block -Profile Any | Out-Null
@@ -153,13 +187,18 @@ jobs:
               } else {
                 python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 90 --output diagnostics/game.json --imports package/imports.json --pending-zones --loader-flags --screenshot diagnostics/game.png -- +set fs_basepath $game +set fs_homepath $profile +set logfile 2 +set r_fullscreen 0 +direct_player 0000000000000001 LocalProbe
                 if ($LASTEXITCODE -ne 0) { throw 'Game observation failed' }
-                python tools/offline/detachment_audit.py --exe package/iw6mp64_offline.exe --manifest package/manifest.json --runtime diagnostics/game.json --output diagnostics/vendor-audit.json
+                python tools/offline/detachment_audit.py --exe package/iw6mp64_enhanced.exe --manifest package/manifest.json --dll-directory game --runtime diagnostics/game.json --output diagnostics/vendor-audit.json
                 if ($LASTEXITCODE -ne 0) { throw 'Custom executable loaded a forbidden GDK/Xbox provider or its package audit failed' }
                 # Diagnostic evidence, not a synthetic gameplay-success flag.
                 # These strings come only from inside the custom game DLL.
                 $gameReport = Get-Content diagnostics/game.json -Raw | ConvertFrom-Json
+                # Original Win32 CreateFileA/ReadFileEx results for ui_mp.ff;
+                # these are pass-through IAT adapters, not I/O overrides.
+                @($gameReport.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6IO:*' } | ForEach-Object { $_.text }) |
+                  ConvertTo-Json -Depth 5 | Set-Content diagnostics/file-io.json
                 $directMessages = @($gameReport.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6D:*' } | ForEach-Object { $_.text })
                 [pscustomobject]@{
+                  network_dvars_registered = ($directMessages -contains 'IW6D:LOCAL_NETWORK_DVARS_REGISTERED')
                   commands_registered = ($directMessages -contains 'IW6D:DIRECT_COMMANDS_REGISTERED')
                   local_profile_prepared = ($directMessages -contains 'IW6D:LOCAL_PROFILE_PREPARED')
                   local_profile_configured = ($directMessages -contains 'IW6D:LOCAL_PROFILE_CONFIGURED')
@@ -168,11 +207,98 @@ jobs:
                   observed_events = $directMessages
                   game_join_verified = $false
                 } | ConvertTo-Json -Depth 8 | Set-Content diagnostics/direct-milestones.json
+                # These read-only Store DX globals distinguish an asset worker
+                # wait from a missing D3D11 device/window/swap chain. Neither
+                # a non-null pointer nor a black screenshot proves gameplay.
+                $gameReport.graphics_state | ConvertTo-Json -Depth 8 | Set-Content diagnostics/graphics-state.json
+                $gameReport.fastfile_state | ConvertTo-Json -Depth 8 | Set-Content diagnostics/fastfile-state.json
                 # Unlike menu/map loading, these two startup checkpoints
                 # must occur in this exact launch with +direct_player.
-                if ($directMessages -notcontains 'IW6D:DIRECT_COMMANDS_REGISTERED' -or
+                if ($directMessages -notcontains 'IW6D:LOCAL_NETWORK_DVARS_REGISTERED' -or
+                    $directMessages -notcontains 'IW6D:DIRECT_COMMANDS_REGISTERED' -or
                     $directMessages -notcontains 'IW6D:LOCAL_PROFILE_PREPARED') {
-                  throw 'Native direct commands or early local profile bootstrap did not execute'
+                  throw 'Native local dvar registration, direct commands or early profile bootstrap did not execute'
+                }
+                # The terminated first diagnostic leaves an original crash
+                # sentinel in the temporary CI game directory. Otherwise the
+                # second launch blocks on the retail "Run In Safe Mode?"
+                # modal before NET_Init. Delete only this ephemeral marker;
+                # never alter actual game files, licence state or a user's PC.
+                $crashMarker = Join-Path $game '__iw6mp64_enhanced'
+                $hadCrashMarker = Test-Path -LiteralPath $crashMarker
+                if ($hadCrashMarker) { Remove-Item -LiteralPath $crashMarker -Force }
+                [pscustomobject]@{
+                  path_basename = '__iw6mp64_enhanced'
+                  existed_before_host = $hadCrashMarker
+                  removed_for_isolated_host_test = $hadCrashMarker
+                } | ConvertTo-Json | Set-Content diagnostics/host-restart-marker.json
+                # Separate bounded *host request* observation, still with
+                # outbound firewall isolation. A map-start marker means only
+                # that SV_StartMap was called, not that a level was loaded.
+                python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 45 --output diagnostics/host-game.json --pending-zones --loader-flags -- +set fs_basepath $game +set fs_homepath $profile +set logfile 2 +set r_fullscreen 0 +direct_player 0000000000000001 LocalProbe +direct_host 0.0.0.0:27016 mp_prisonbreak war
+                if ($LASTEXITCODE -ne 0) { throw 'Host request native observation failed' }
+                python tools/offline/detachment_audit.py --exe package/iw6mp64_enhanced.exe --manifest package/manifest.json --dll-directory game --runtime diagnostics/host-game.json --output diagnostics/vendor-host-audit.json
+                if ($LASTEXITCODE -ne 0) { throw 'Host startup attempted a forbidden vendor module' }
+                $hostReport = Get-Content diagnostics/host-game.json -Raw | ConvertFrom-Json
+                @($hostReport.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6IO:*' } | ForEach-Object { $_.text }) |
+                  ConvertTo-Json -Depth 5 | Set-Content diagnostics/host-file-io.json
+                $hostMessages = @($hostReport.events | Where-Object { $_.event -eq 8 -and $_.text -like 'IW6D:*' } | ForEach-Object { $_.text })
+                [pscustomobject]@{
+                  map = 'mp_prisonbreak'
+                  map_start_requested = ($hostMessages -contains 'IW6D:DIRECT_MAP_START_REQUESTED')
+                  local_profile_prepared = ($hostMessages -contains 'IW6D:LOCAL_PROFILE_PREPARED')
+                  graphics_state = @($hostReport.graphics_state) | Select-Object -Last 1
+                  asset_state = @($hostReport.loader_state) | Select-Object -Last 1
+                  fastfile_state = @($hostReport.fastfile_state) | Select-Object -Last 1
+                  observed_events = $hostMessages
+                  playable_game_verified = $false
+                } | ConvertTo-Json -Depth 8 | Set-Content diagnostics/host-milestones.json
+
+                # P0038 controlled read-only original-asset selection:
+                # Compare the real signed base ui_mp.ff without the OPTIONAL
+                # patch_ui_mp.ff zone. The original files are only moved
+                # within a disposable CI staging directory and ALWAYS put
+                # back in finally. Never rewrite, resign, or bypass FF checks.
+                $hold = Join-Path 'diagnostics' 'held-ui-patch'
+                New-Item -ItemType Directory -Force -Path (Join-Path $hold 'english') | Out-Null
+                $held = @()
+                try {
+                  foreach ($relative in @('patch_ui_mp.ff','english/eng_patch_ui_mp.ff')) {
+                    $source = Join-Path $game $relative
+                    if (Test-Path -LiteralPath $source) {
+                      $destination = Join-Path $hold $relative
+                      Move-Item -LiteralPath $source -Destination $destination
+                      $held += $relative
+                    }
+                  }
+                  # Reset only the previous forced-timeout crash sentinel,
+                  # so the UI experiment can actually execute native code.
+                  if (Test-Path -LiteralPath $crashMarker) {
+                    Remove-Item -LiteralPath $crashMarker -Force
+                  }
+                  python tools/direct/native_smoke.py --exe $exe --cwd $game --firewall-rule $rule --seconds 45 --output diagnostics/base-ui-game.json --pending-zones --loader-flags --screenshot diagnostics/base-ui.png -- +set fs_basepath $game +set fs_homepath $profile +set logfile 2 +set r_fullscreen 0 +direct_player 0000000000000001 LocalProbe
+                  if ($LASTEXITCODE -ne 0) { throw 'Base UI selection observation failed' }
+                  python tools/offline/detachment_audit.py --exe package/iw6mp64_enhanced.exe --manifest package/manifest.json --dll-directory game --runtime diagnostics/base-ui-game.json --output diagnostics/base-ui-vendor-audit.json
+                  if ($LASTEXITCODE -ne 0) { throw 'Base UI startup attempted forbidden vendor DLL' }
+                  $baseReport = Get-Content diagnostics/base-ui-game.json -Raw | ConvertFrom-Json
+                  $baseFatal = @($baseReport.window_text | Where-Object { $_ -like "*Disc read error*" -or $_ -eq 'Fatal Error' })
+                  $originalFatal = @($gameReport.window_text | Where-Object { $_ -like "*Disc read error*" -or $_ -eq 'Fatal Error' })
+                  [pscustomobject]@{
+                    experiment = 'signed base ui_mp without optional patch_ui_mp'
+                    held_original_files = $held
+                    full_ui_fatal_dialog = ($originalFatal.Count -gt 0)
+                    base_ui_fatal_dialog = ($baseFatal.Count -gt 0)
+                    base_ui_window_titles = @($baseReport.window_text)
+                    base_ui_renderer = @($baseReport.graphics_state) | Select-Object -Last 1
+                    base_ui_fastfile = @($baseReport.fastfile_state) | Select-Object -Last 1
+                    vendor_audit_passed = $true
+                    menu_input_verified = $false
+                    gameplay_verified = $false
+                  } | ConvertTo-Json -Depth 9 | Set-Content diagnostics/base-ui-comparison.json
+                } finally {
+                  foreach ($relative in $held) {
+                    Move-Item -LiteralPath (Join-Path $hold $relative) -Destination (Join-Path $game $relative) -Force
+                  }
                 }
               }
             } finally { Remove-NetFirewallRule -Name $rule }

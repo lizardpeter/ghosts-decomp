@@ -41,6 +41,18 @@ VENDOR_TASKS = {
 LOCAL_FILES = {0x140548F90: 'Iw6LocalGameDirectory'}
 # C exports adapt the reviewed Win64 ABI without claiming original source names.
 DIRECT = {
+    # S23/B0036: Store R_EnumDisplayModes trusts oversized DXGI mode counts.
+    0x14062FC90: 'Iw6SecureEnumDisplayModes',
+    # S17/B0009: verified cross-build Store match candidates, NOT reference VAs.
+    # Matcher: analysis/iw6mp64_MSStore_ship/match/functions.tsv.
+    # bind_swap and unbind are registered by name (0.89 confidence);
+    # bind is the only unmatched caller of Key_StringToKeynum (0.75).
+    # Native redirect does not use the PS4 reference addresses.
+    0x1403106D0: 'Iw6SecureBind',
+    0x140310D20: 'Iw6SecureSwapBind',
+    0x140310EB0: 'Iw6SecureUnbind',
+    # S20/B0025: never enter the original fixed-buffer SOCKS credential parser.
+    0x14054F5B0: 'Iw6DirectDisableSocks',
     0x140245440: 'Iw6DirectNoXboxLicenseRefresh',  # Store LUI callback
     # P0024: local-session eligibility, not Xbox account/licence eligibility.
     0x14054B1B0: 'Iw6DirectLocalPlayReady',
@@ -71,8 +83,13 @@ def align(n, a):
     return (n + a - 1) // a * a
 
 
-def adapter(dll, name, ordinal=None):
+def adapter(dll, name, ordinal=None, mode='offline'):
     dll = dll.lower()
+    # P0035: two exact Win32 I/O forwards for the enhanced game, used for
+    # opt-in native diagnostics. Offline-only diagnostic remains unchanged.
+    if mode == 'direct' and dll == 'kernel32.dll':
+        if name == 'CreateFileA': return 'Iw6TraceCreateFileA'
+        if name == 'ReadFileEx': return 'Iw6TraceReadFileEx'
     if dll == 'xinput1_3.dll':
         # The pinned EXE imports these by ordinal. The XInput 1.3 export table
         # maps 2=GetState, 3=SetState, 4=GetCapabilities (not 1,2,3).
@@ -94,6 +111,7 @@ def adapter(dll, name, ordinal=None):
         if name == 'getaddrinfo': return 'Iw6DenyAddrInfo'
     if dll == 'kernel32.dll':
         if name in {'LoadLibraryA', 'LoadLibraryW', 'LoadLibraryExA', 'LoadLibraryExW', 'GetProcAddress'}: return 'Iw6Offline' + name
+        if name == 'LoadPackagedLibrary': return 'Iw6DenyNull'
         if name == 'CreateProcessA': return 'Iw6DenyNull'
     if dll == 'ole32.dll' and name == 'CoCreateInstance': return 'Iw6DenyCom'
     if dll == 'shell32.dll' and name == 'ShellExecuteA': return 'Iw6DenyStatus'
@@ -120,7 +138,7 @@ def guards():
             for name, (addr, kind) in table.items() if addr == va and kind == 'function']
 
 
-def transform(original, dll_bytes, mode='offline'):
+def transform(original, dll_bytes, mode='direct'):
     if mode not in {'offline', 'direct'}: raise ValueError('unknown package mode')
     cfg = tomllib.loads((ROOT / 'target.toml').read_text())
     expected = next(b['exe']['sha256'] for b in cfg['build'] if b['id'] == BUILD)
@@ -162,7 +180,7 @@ def transform(original, dll_bytes, mode='offline'):
         current = None
         for imp in desc.imports:
             name = imp.name.decode('ascii') if imp.name else None
-            replacement = adapter(provider, name, imp.ordinal)
+            replacement = adapter(provider, name, imp.ordinal, mode=mode)
             dest = 'recon.dll' if replacement else provider
             if current is None or current[0] != dest:
                 current = [dest, imp.address - pe.OPTIONAL_HEADER.ImageBase, []]
@@ -212,11 +230,12 @@ def transform(original, dll_bytes, mode='offline'):
     put(pe.OPTIONAL_HEADER.get_field_absolute_offset('CheckSum'), 0)
     put(pe.OPTIONAL_HEADER.get_field_absolute_offset('CheckSum'), pefile.PE(data=bytes(data)).generate_checksum())
     manifest = {'format': 1, 'mode': mode, 'build': BUILD, 'original_sha256': expected,
+                'exe_name': 'iw6mp64_enhanced.exe' if mode == 'direct' else 'iw6mp64_offline.exe',
                 'exe_sha256': sha(data), 'dll_sha256': sha(dll_bytes),
                 'guards': changes, 'imports': redirected,
                 'native_launch_verified': False, 'whole_process_egress_verified': False,
                 'game_join_verified': False,
-                'wire_protocol': {'tag':'IW6D','version':1} if mode == 'direct' else None}
+                'wire_protocol': {'tag':'IW6D','version':1,'authenticated_version':3,'remote_requires_key':True} if mode == 'direct' else None}
     # Verify the final PE, not only the transformation plan. A missed IAT
     # redirect or lost GDK guard must fail before a package is published.
     from offline.detachment_audit import audit_package
@@ -226,12 +245,12 @@ def transform(original, dll_bytes, mode='offline'):
     return bytes(data), manifest
 
 
-def package(original, dll, output, mode='offline'):
+def package(original, dll, output, mode='direct'):
     dll_bytes = dll.read_bytes()
     patched, manifest = transform(original.read_bytes(), dll_bytes, mode)
     output.mkdir(parents=True, exist_ok=False)
     try:
-        (output / 'iw6mp64_offline.exe').write_bytes(patched)
+        (output / manifest['exe_name']).write_bytes(patched)
         (output / 'recon.dll').write_bytes(dll_bytes)
         (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         for name in (() if mode == 'direct' else ('ConfigureSandbox.ps1', 'LaunchSandbox.ps1')):
@@ -248,9 +267,12 @@ def package(original, dll, output, mode='offline'):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--original', type=Path, required=True)
-    parser.add_argument('--mode', choices=['offline','direct'], default='offline')
+    parser.add_argument('--mode', choices=['offline','direct'], default='direct',
+                        help='direct = canonical enhanced game; offline = isolated diagnostic')
     parser.add_argument('--dll', type=Path)
     parser.add_argument('--output', type=Path, required=True, help='new directory; must not exist')
     args = parser.parse_args()
-    result = package(args.original, args.dll or ROOT / 'build' / BUILD / args.mode / 'recon.dll', args.output, args.mode)
+    result = package(args.original, args.dll or ROOT / 'build' / BUILD /
+                     ('enhanced' if args.mode == 'direct' else 'offline') / 'recon.dll',
+                     args.output, args.mode)
     print(f"Packaged {len(result['guards'])} guard jumps and {len(result['imports'])} import redirects; native verification pending")

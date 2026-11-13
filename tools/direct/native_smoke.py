@@ -95,6 +95,27 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
             read=SIZE()
             if kernel.ReadProcessMemory(process.process,int(values['rsp'],16),stack,len(stack),C.byref(read)):
                 values['stack_qwords']=[hex(int.from_bytes(stack.raw[i:i+8],'little')) for i in range(0,read.value,8)]
+            # A modal Win32 error may push the original engine's error
+            # return address well beyond the initial 512-byte stack sample.
+            # Preserve only addresses inside the pinned executable .text,
+            # not raw deep stack data, names, tokens, arbitrary pointers, etc.
+            # Read-only; no injection or breakpoint changes to the game.
+            pcs=[]
+            base=int(values['rsp'],16)
+            for off in range(0,16384,512):
+                page=C.create_string_buffer(512)
+                amount=SIZE()
+                if not kernel.ReadProcessMemory(process.process,base+off,page,
+                                                len(page),C.byref(amount)) or not amount.value:
+                    break
+                for pos in range(0,amount.value-(amount.value%8),8):
+                    candidate=int.from_bytes(page.raw[pos:pos+8],'little')
+                    if 0x140001000 <= candidate < 0x140800000:
+                        pcs.append({'stack_offset':off+pos,'address':hex(candidate)})
+                if amount.value != len(page):
+                    break
+            if pcs:
+                values['store_stack_candidates']=pcs[:96]
             return values
         finally:
             kernel.CloseHandle(thread)
@@ -187,6 +208,82 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
                 values[name] = value.value
         return values
 
+    def renderer_state():
+        # Read-only Store DxGlobals at 0x14A37D620 (records/names.tsv).
+        # Offsets are verified in include/gfx_d3d/r_dx.h against the Store
+        # D3D11CreateDevice / DXGI factory writes. Record whether objects
+        # exist, never raw pointers or process-memory dumps.
+        # A populated swap chain does NOT establish a rendered menu.
+        base = 0x14A37D620
+        layout = (
+            ('device_created', 0x08, 8, True),
+            ('context_created', 0x10, 8, True),
+            ('factory_created', 0x20, 8, True),
+            ('adapter_selected', 0x28, 8, True),
+            ('feature_level', 0x38, 4, False),
+            ('device_lost', 0x7CC8, 1, False),
+            ('window_count', 0x7CD4, 4, False),
+            ('window_created', 0x7CD8, 8, True),
+            ('swap_chain_created', 0x7CE0, 8, True),
+            ('window_width', 0x7CF0, 4, False),
+            ('window_height', 0x7CF4, 4, False),
+        )
+        values = {}
+        for name, offset, count, is_pointer in layout:
+            kind = C.c_uint64 if count == 8 else (C.c_uint32 if count == 4 else C.c_uint8)
+            value = kind()
+            read = SIZE()
+            if (kernel.ReadProcessMemory(process.process, base+offset, C.byref(value),
+                                         count, C.byref(read)) and read.value == count):
+                values[name] = bool(value.value) if is_pointer else value.value
+        return values
+
+    def fastfile_state():
+        # P0036, read-only Store addresses verified from the pinned EXE:
+        # 140349A50..140349B7C (DB_WaitXFileStage) and 140348D30
+        # (DB_AuthLoad_Inflate). These describe file reads and compression,
+        # NOT vendor permissions and not a claim that a zone was loaded.
+        fields = (
+            ('outstanding_read', 0x1443A489C, 4),
+            ('read_error', 0x1443A48F0, 4),
+            ('completed_read_bytes', 0x1443A48B8, 8),
+            ('remaining_requested_bytes', 0x1443A48B0, 8),
+            ('file_offset', 0x1443A48C0, 8),
+            ('inflate_avail_in', 0x1443A4900, 4),
+            ('secure_fastfile', 0x14430AB80, 4),
+            ('compressor_type', 0x140992D94, 4),
+            # These auth state offsets are grounded in the Store
+            # 1403489E0..140348B85 signed block processing, rather than
+            # inferred from the PS4 server pseudocode alone.
+            ('auth_group_count', 0x14430EB80, 4),
+            ('auth_chunk_in_group', 0x14430EB84, 4),
+            ('auth_copy_buffer_bytes', 0x14430EBE0, 4),
+            ('auth_stream_avail_in', 0x14430EB90, 4),
+            ('auth_stream_avail_out', 0x14430EBA0, 4),
+        )
+        values = {}
+        for name, address, width in fields:
+            value = C.c_uint64() if width == 8 else W.DWORD()
+            count = SIZE()
+            if kernel.ReadProcessMemory(process.process, address, C.byref(value),
+                                        width, C.byref(count)) and count.value == width:
+                values[name] = 'unbounded' if width == 8 and value.value == (1<<64)-1 else value.value
+        ptr = C.c_uint64()
+        count = SIZE()
+        if (kernel.ReadProcessMemory(process.process, 0x1443A48A0, C.byref(ptr),
+                                     8, C.byref(count)) and count.value == 8 and ptr.value):
+            # DBFile.name is an in-place string at +0x18 in the pinned Store
+            # build; clamp and accept only printable non-sensitive zone names.
+            name = C.create_string_buffer(48)
+            if kernel.ReadProcessMemory(process.process, ptr.value+0x18, name,
+                                        len(name), C.byref(count)) and count.value:
+                candidate = name.raw[:count.value].split(b'\0',1)[0]
+                if candidate and len(candidate) < 40 and all(
+                    32 <= b < 127 for b in candidate
+                ):
+                    values['active_zone'] = candidate.decode('ascii')
+        return values
+
     startup, process = Startup(), Process()
     startup.cb = C.sizeof(startup)
     command = C.create_unicode_buffer(subprocess.list2cmdline([str(exe),*arguments]))
@@ -199,15 +296,25 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
     next_loader_sample = start_time+5
     if loader_flags:
         result['loader_state'] = []
+        result['graphics_state'] = []
+        result['fastfile_state'] = []
     terminated = False
     try:
         while True:
             now = time.monotonic()
             if loader_flags and not terminated and now >= next_loader_sample:
                 sample = startup_flags()
+                elapsed = round(now-start_time,2)
                 if sample:
-                    result['loader_state'].append({'elapsed_seconds':round(now-start_time,2),
+                    result['loader_state'].append({'elapsed_seconds':elapsed,
                                                    'values':sample})
+                gpu = renderer_state()
+                if gpu:
+                    result['graphics_state'].append({'elapsed_seconds':elapsed,
+                                                     'values':gpu})
+                ff = fastfile_state()
+                if ff:
+                    result['fastfile_state'].append({'elapsed_seconds':elapsed, 'values':ff})
                 next_loader_sample = now+5
             if now >= deadline:
                 if terminated:
@@ -215,8 +322,13 @@ def observe(exe, cwd, arguments, seconds, pending_zones=False, screenshot=None, 
                 result['timed_out'] = True
                 result['window_text'] = windows()
                 if loader_flags:
-                    result['loader_state'].append({'elapsed_seconds':round(now-start_time,2),
+                    elapsed = round(now-start_time,2)
+                    result['loader_state'].append({'elapsed_seconds':elapsed,
                                                    'values':startup_flags(), 'timeout_sample':True})
+                    result['graphics_state'].append({'elapsed_seconds':elapsed,
+                                                     'values':renderer_state(), 'timeout_sample':True})
+                    result['fastfile_state'].append({'elapsed_seconds':elapsed,
+                                                     'values':fastfile_state(), 'timeout_sample':True})
                 result['threads']=thread_snapshot()
                 times=[W.FILETIME() for _ in range(4)]
                 kernel.GetProcessTimes.argtypes=[W.HANDLE,*([C.POINTER(W.FILETIME)]*4)]

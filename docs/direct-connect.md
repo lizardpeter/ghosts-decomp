@@ -1,6 +1,6 @@
 # Direct connect without vendor services
 
-P0012/P0019 add an experimental direct profile for the pinned Store multiplayer build. It builds a DLL and a patched
+The canonical enhanced Store build includes independent direct connection and local game startup. P0012/P0019 originally added an experimental direct profile for the pinned Store multiplayer build. It builds a DLL and a patched
 EXE copy, registers `connect IPv4:port`, and routes the original challenge request through independent UDP.
 **Entering a map and completing a multiplayer join are not yet verified or complete.** This is not a standalone
 source build: unreconstructed engine code still runs from the pinned original EXE. Neither function records nor
@@ -11,29 +11,30 @@ this package claim native integration or whole-process isolation.
 Use the same LLVM toolchain, Python, pefile and Unicorn dependencies as the other reconstruction builds:
 
 ```sh
-IW6_ORIGINALS=.work/originals python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct
+python3 tools/build_enhanced.py --original .work/originals/iw6mp64_MSStore_ship.exe --output .work/enhanced-package
 python3 tests/direct/transport.py
 python3 tests/direct/profile.py
 IW6_ORIGINALS=.work/originals python3 tests/direct/game.py
 IW6_ORIGINALS=.work/originals python3 tests/direct/admission.py
 IW6_ORIGINALS=.work/originals python3 tests/direct/host.py
 IW6_ORIGINALS=.work/originals python3 tests/offline/vendor_tasks.py
-python3 tools/offline/package.py --mode direct \
-  --original .work/originals/iw6mp64_MSStore_ship.exe \
-  --output .work/direct-package
+# build_enhanced.py already packages and audits the same canonical executable.
 ```
 
 The output directory must not already exist. It contains the patched EXE, `recon.dll`, hashes/change manifest,
-and `LaunchDirect.ps1`. Offline and direct DLLs cannot be interchanged by the packager. Faithful sources and the
-ordinary enhanced/offline profiles do not include `enhanced/direct/`. The executable filename remains
-`iw6mp64_offline.exe` for compatibility with the package format; the manifest selects the actual mode.
+and `LaunchDirect.ps1`. The enhanced game DLL always includes vendor detachment, local player identity, direct transport,
+local readiness gates and all ordinary enhancements. The separate offline-only target is a contained
+no-network diagnostic, not a second enhanced game variant. The executable is `iw6mp64_enhanced.exe`.
 
 The Windows launch experiment, with the original complete game installation available, is:
 
 ```powershell
+# First test the AUTHENTIC multiplayer menu without joining or hosting.
+.\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -Menu -PlayerName 'LocalPlayer'
+# Only when the menu is stable, optionally try custom direct networking:
 .\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -Connect '192.168.1.20:27016' -PlayerName 'LocalPlayer'
 # Listen-server map-start experiment, not a verified headless dedicated server:
-.\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -HostEndpoint '0.0.0.0:27016' -Map 'mp_prison' -GameType 'war'
+.\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -HostEndpoint '0.0.0.0:27016' -Map 'mp_prisonbreak' -GameType 'war'
 ```
 
 Before attempting a live join, a direct package can instead use its included
@@ -49,15 +50,23 @@ Normal `+direct_player` execution remains deferred by the original engine;
 P0029 independently prepares a validated custom local identity during
 `NET_Init`, but does not start a map or bypass incomplete asset loading.
 
-The launcher verifies package hashes, prepares a persistent local profile, then queues `direct_player` and
-`connect` or `direct_host` after engine startup. Use `-Profile one` / `-Profile two` for independent local
+The launcher verifies package hashes and prepares a persistent local profile.
+With `-Menu` it passes only `direct_player` at startup; the normal original
+game UI loads without a custom join/host command. `-Connect` and
+`-HostEndpoint` add the matching deferred network or map-hosting commands.
+The menu-only path is the **same enhanced executable**, not a stub or alternate
+build. A CI screenshot confirms the actual menu was rendered. However, an
+independent fatal `Disc read error 'ui_mp'` has still blocked stable menu
+operation in the partially staged CI installation; the `-Menu` option does
+not pretend to fix that asset loader problem. Use `-Profile one` / `-Profile two` for independent local
 profiles and data folders on one Windows account. Numeric IPv4 and a nonzero explicit
 port are required. In a functioning game console, first configure `direct_player <16-digit-hex-ID> "Player Name"`, then
 use `connect IP:port` or `direct_host bind-IP:port map gametype`. IDs must be nonzero; names are 1–31
 ASCII letters, digits, spaces, underscores or hyphens, without leading/trailing spaces. Profile changes
 are refused while connected or hosting. Windows launcher preparation is tested with process launch intercepted.
 Actual Windows startup attempts use the native debug observer and authentic startup assets; see
-[native-launch.md](native-launch.md). Successful graphics/menu startup and a completed join remain unverified.
+[native-launch.md](native-launch.md). The renderer and authentic menu have been verified visually on Windows CI;
+a fatal UI FastFile read and completed game join remain unresolved.
 
 ## What is connected
 
@@ -184,6 +193,9 @@ retail servers, or authenticated network identity. Other original LUI licence
 and profile paths remain to be disentangled, and no vendor capability/permission
 check is bypassed for retail or Xbox-network mode.
 
+See [player identity and presence](player-identity.md) for the original
+controller record, cached display name, and multiplayer wire ID.
+
 ## Remaining path to a playable game
 
 - **Local identity and session ownership:** 140311570 still fills xuid/xnaddr, stats versions and related fields.
@@ -241,3 +253,51 @@ launch the EXE. Neither test substitutes for a native game with full assets.
 `tests/direct/transport.py` also rejects checksum-valid retail-format packets, unsupported envelope
 versions/flags and length mismatches. The package records IW6D/version 1 and refuses a direct DLL
 without the wire-version export. Earlier experimental unwrapped packets are no longer compatible.
+
+## Enhanced direct transport: authenticated peer protection (2026-11-12)
+
+The canonical enhanced build now supports two **incompatible** private wire formats,
+both implemented only by `enhanced/direct/transport.cpp`; faithful `src/` is unchanged.
+
+- **v1 (no key):** accepts and transmits **only 127.0.0.0/8 loopback** datagrams.
+  The original 16-bit checksum detects accidental corruption but is not an
+  authentication mechanism. The listener may still bind `0.0.0.0`, but
+  non-loopback datagrams are discarded before the game parser and cannot be
+  destinations for replies.
+- **v3 (explicit 128-bit key):** strict framing (4-byte magic, version/flags,
+  bounded 2-byte payload length, nonzero 64-bit sequence, at most 1262 bytes of
+  payload, 64-bit SipHash-2-4 tag). The tag covers the entire header,
+  sequence, payload, and the implicit sending role (client vs server);
+  reflected packets from the opposite direction are rejected. Old keyed v2
+  packets are intentionally incompatible to prevent a downgrade.
+  Packets must have the valid key before a source is
+  admitted; replays are rejected per peer using a 64-packet sliding window.
+  The game engine sees only payloads that pass these checks.
+- **Reconfiguration:** `direct_key <32-hex-characters>` invalidates the prior
+  socket/admission state. Invalid values fail closed and clear a previously
+  configured secret. Keys can only be changed before connecting/hosting.
+
+Use **the same uniformly random 32-hex key on host and client**:
+
+```powershell
+$bytes = [byte[]]::new(16)
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+$key = [Convert]::ToHexString($bytes).ToLowerInvariant()
+.\LaunchDirect.ps1 -GameDirectory 'D:\Games\Ghosts' -HostEndpoint '0.0.0.0:27016' -Map mp_prisonbreak -GameType war -NetworkKey $key
+# On another machine, use the same key with -Connect <host-IP>:27016.
+```
+
+**Limitations:** SipHash here authenticates possession of the **shared network key**;
+it does **not** encrypt game traffic, authenticate an individual user's identity,
+or prevent one participant who knows the key from impersonating another. Replay
+state is per socket lifetime, not across game restarts. Command-line arguments
+can expose a key to local process-inspection tools. A challenge handshake with
+per-session keys, authenticated individual peers, and mature authenticated
+encryption are needed before advertising production internet-safe multiplayer.
+This change hardens the experimental direct transport; it does not prove the
+unreconstructed native game's other packet handlers are secure.
+
+Regression: `python3 tests/direct/transport.py` checks real UDP round trips,
+legacy localhost restrictions, authenticated framing, corrupted tags,
+duplicate sequences, and downgrade rejection. The Windows launcher and
+enhanced integration tests also run in CI.

@@ -34,7 +34,11 @@ Arxan and DRM are in neither build: they aren't game source.
     python3 tools/build_recon.py --build iw6mp64_MSStore_ship --enhanced   # -> build/iw6mp64_MSStore_ship/enhanced/
     python3 tests/enhanced/run.py
 
-- The enhanced DLL compiles `src/` and `enhanced/` together. Enhanced objects link first and the linker keeps the
+- The canonical Store enhanced DLL compiles `src/` and **all** `enhanced/` components together, including
+`enhanced/offline/` vendor-detachment boundaries and `enhanced/direct/` local identity, custom UDP,
+local-match readiness and host/join commands. `--direct` is a compatibility alias, not a separate
+build product. `--offline` remains an isolated network-disabled diagnostic, **not** another enhanced game.
+The enhanced DLL compiles `src/` and `enhanced/` together. Enhanced objects link first and the linker keeps the
   first definition, so a function in `enhanced/` replaces the faithful one everywhere, calls from `src/`
   included. A function the original inlines (no address of its own) can be replaced too, as long as `src/`
   reconstructs it as a function.

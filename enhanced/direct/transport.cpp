@@ -1,5 +1,6 @@
 // P0012: direct IPv4 UDP transport. Never calls the original network IAT or DW.
 #include "transport.h"
+#include "wire_auth.h"
 #ifdef _WIN32
 #define IW6_PRIVATE_WINSOCK
 #include <winsock2.h>
@@ -23,7 +24,7 @@ namespace
 {
 constexpr int MaxPayload = 1262;
 constexpr int HeaderSize = 8;
-constexpr int MaxWire = HeaderSize + MaxPayload + 2;
+constexpr int MaxWire = HeaderSize + 8 + MaxPayload + 8; // v3: sequence, directional keyed tag
 constexpr unsigned int MaxPeers = 64;
 SOCKET udp = INVALID_SOCKET;
 bool initialized;
@@ -32,6 +33,12 @@ unsigned short boundPort;
 netadr_s selected;
 netadr_s peers[MaxPeers];
 unsigned int peerCount;
+unsigned char wireKey[16];
+bool authenticated;
+unsigned long long outboundSequence;
+netadr_s clientReplayPeer; // replay state survives same-endpoint re-selection
+Iw6WireAuth::ReplayWindow clientReplay = {};
+Iw6WireAuth::ReplayWindow peerReplay[MaxPeers] = {};
 #ifdef _WIN32
 unsigned long long lockStorage;
 struct Lock
@@ -86,10 +93,17 @@ void Close()
     boundPort = 0;
     selected = {};
     peerCount = 0;
+    outboundSequence = 0;
+    clientReplay = {};
+    clientReplayPeer = {};
+    for (unsigned int i = 0; i < MaxPeers; ++i) peerReplay[i] = {};
 }
 bool Permitted(const netadr_s &a)
 {
     if (!Unicast(a.ip) || a.type != NA_IP || !a.port) return false;
+    // The original checksum is not authentication. Without a shared key,
+    // the wire accepts loopback only; remote and LAN peers need v2.
+    if (!authenticated && a.ip[0] != 127) return false;
     if (!hosting) return Same(selected, a, true);
     // A listener may reply only to peers from which a checksum-valid packet arrived.
     for (unsigned int i = 0; i < peerCount; ++i) if (Same(peers[i], a, true)) return true;
@@ -97,7 +111,24 @@ bool Permitted(const netadr_s &a)
 }
 }
 
-extern "C" int Iw6DirectWireVersion() { return 1; }
+extern "C" int Iw6DirectWireVersion() { Lock guard; return authenticated ? 3 : 1; }
+
+// Exactly 16 bytes of random shared secret, encoded as 32 hexadecimal characters.
+// Reconfiguration closes the socket and clears every replay/admission state.
+// Refuse an invalid key, never silently retaining the previous one.
+extern "C" int Iw6DirectSetKey(const char *hex)
+{
+    unsigned char candidate[16] = {};
+    const bool valid = Iw6WireAuth::ParseHexKey(hex, candidate);
+    Lock guard;
+    Close();
+    authenticated = false;
+    for (unsigned i = 0; i < 16; ++i) wireKey[i] = 0;
+    if (!valid) return 0;
+    for (unsigned i = 0; i < 16; ++i) wireKey[i] = candidate[i];
+    authenticated = true;
+    return 1;
+}
 
 extern "C" int Iw6DirectParse(const char *text, netadr_s *address, int allowZeroPort)
 {
@@ -138,6 +169,24 @@ extern "C" int Iw6DirectOpen(const char *bindEndpoint, int server)
     Close();
     netadr_s address;
     if (!Iw6DirectParse(bindEndpoint, &address, 1)) return 0;
+    // No-key v1 is loopback-only. Binding INADDR_ANY would still expose a
+    // socket on every network interface despite dropping remote payloads.
+    // Preserve the familiar wildcard syntax for local development, but
+    // actually bind 127.0.0.1. Other non-loopback bind addresses fail closed.
+    if (!authenticated)
+    {
+        const bool wildcard = !(address.ip[0] | address.ip[1] |
+                                address.ip[2] | address.ip[3]);
+        if (wildcard)
+        {
+            address.ip[0] = 127; address.ip[1] = 0;
+            address.ip[2] = 0; address.ip[3] = 1;
+        }
+        else if (address.ip[0] != 127)
+        {
+            return 0;
+        }
+    }
 #ifdef _WIN32
     WSADATA data;
     if (WSAStartup(0x202, &data)) return 0;
@@ -171,7 +220,16 @@ extern "C" int Iw6DirectSelectPeer(const char *endpoint)
     const bool valid = Iw6DirectParse(endpoint, &address, 0) != 0;
     Lock guard;
     selected = {}; // Failed selection revokes the old destination.
-    if (!valid || udp == INVALID_SOCKET || hosting) return 0;
+    if (!valid || udp == INVALID_SOCKET || hosting ||
+        (!authenticated && address.ip[0] != 127)) return 0;
+    // Re-selecting the same authenticated endpoint (including after an
+    // invalid intermediate selection) must not reset replay admission.
+    // A genuinely new endpoint starts with a fresh window.
+    if (!Same(clientReplayPeer, address, true))
+    {
+        clientReplay = {};
+        clientReplayPeer = address;
+    }
     selected = address;
     return 1;
 }
@@ -191,17 +249,38 @@ extern "C" int Iw6DirectSend(int length, const void *data, const netadr_s *to)
     if (!to || length < 0 || length > MaxPayload || (length && !data)) return 0;
     Lock guard;
     if (udp == INVALID_SOCKET || !Permitted(*to)) return 0;
-    unsigned char packet[MaxWire];
+    unsigned char packet[MaxWire] = {};
     packet[0] = 'I'; packet[1] = 'W'; packet[2] = '6'; packet[3] = 'D';
-    packet[4] = 1; packet[5] = 0; // version and reserved flags
+    packet[4] = authenticated ? 3 : 1; packet[5] = 0;
     packet[6] = (unsigned char)(length >> 8); packet[7] = (unsigned char)length;
-    for (int i = 0; i < length; ++i) packet[HeaderSize + i] = ((const unsigned char *)data)[i];
-    const unsigned short checksum = Checksum(packet + HeaderSize, length);
-    packet[HeaderSize + length] = (unsigned char)(checksum >> 8);
-    packet[HeaderSize + length + 1] = (unsigned char)checksum;
+    int offset = HeaderSize, wireLength;
+    if (authenticated)
+    {
+        if (outboundSequence == ~0ULL) return 0; // fail closed instead of wrapping
+        const unsigned long long sequence = ++outboundSequence;
+        for (int i = 0; i < 8; ++i)
+            packet[offset + i] = (unsigned char)(sequence >> (56 - 8 * i));
+        offset += 8;
+    }
+    for (int i = 0; i < length; ++i)
+        packet[offset + i] = ((const unsigned char *)data)[i];
+    if (authenticated)
+    {
+        const unsigned long long mac = Iw6WireAuth::MacDirectional(wireKey, packet, offset + length, hosting ? 'S' : 'C');
+        for (int i = 0; i < 8; ++i)
+            packet[offset + length + i] = (unsigned char)(mac >> (56 - 8 * i));
+        wireLength = offset + length + 8;
+    }
+    else
+    {
+        const unsigned short checksum = Checksum(packet + offset, length);
+        packet[offset + length] = (unsigned char)(checksum >> 8);
+        packet[offset + length + 1] = (unsigned char)checksum;
+        wireLength = offset + length + 2;
+    }
     sockaddr_in destination = Sockaddr(*to);
-    return sendto(udp, (const char *)packet, HeaderSize + length + 2, 0,
-                  (const sockaddr *)&destination, sizeof(destination)) == HeaderSize + length + 2;
+    return sendto(udp, (const char *)packet, wireLength, 0,
+                  (const sockaddr *)&destination, sizeof(destination)) == wireLength;
 }
 extern "C" int Iw6DirectReceive(netadr_s *from, msg_t *message)
 {
@@ -211,7 +290,8 @@ extern "C" int Iw6DirectReceive(netadr_s *from, msg_t *message)
     if (!message->data || message->maxsize < 1) return 0;
     Lock guard;
     if (udp == INVALID_SOCKET) return 0;
-    // Bounded drain: malformed traffic cannot keep one game frame spinning forever.
+    // Drain at most 64 datagrams per frame. Reject malformed/oversized datagrams
+    // before forwarding a single byte to original engine parsers.
     for (int count = 0; count < 64; ++count)
     {
         unsigned char packet[MaxWire + 1];
@@ -224,31 +304,62 @@ extern "C" int Iw6DirectReceive(netadr_s *from, msg_t *message)
         const int received = (int)recvfrom(udp, (char *)packet, sizeof(packet), 0,
                                           (sockaddr *)&source, &size);
         if (received == SOCKET_ERROR) return 0;
-        if (size != sizeof(source) || source.sin_family != AF_INET || received < HeaderSize + 2 || received > MaxWire) continue;
+        if (size != sizeof(source) || source.sin_family != AF_INET ||
+            received < HeaderSize + 2 || received > MaxWire) continue;
         if (packet[0] != 'I' || packet[1] != 'W' || packet[2] != '6' || packet[3] != 'D' ||
-            packet[4] != 1 || packet[5] != 0) continue;
-        const int length = received - HeaderSize - 2;
-        if (length != ((packet[6] << 8) | packet[7]) || length > message->maxsize ||
-            Checksum(packet + HeaderSize, length) != ((packet[HeaderSize + length] << 8) | packet[HeaderSize + length + 1])) continue;
+            packet[4] != (authenticated ? 3 : 1) || packet[5] != 0) continue;
+        const int length = (packet[6] << 8) | packet[7];
+        if (length > MaxPayload || length > message->maxsize) continue;
+        unsigned long long sequence = 0;
+        int payloadOffset = HeaderSize;
+        if (authenticated)
+        {
+            payloadOffset += 8;
+            if (received != payloadOffset + length + 8) continue;
+            for (int i = 0; i < 8; ++i)
+                sequence = (sequence << 8) | packet[HeaderSize + i];
+            if (!sequence ||
+                !Iw6WireAuth::EqualTag(
+                    Iw6WireAuth::MacDirectional(wireKey, packet, payloadOffset + length, hosting ? 'C' : 'S'),
+                    packet + payloadOffset + length)) continue;
+        }
+        else
+        {
+            if (received != payloadOffset + length + 2 ||
+                Checksum(packet + payloadOffset, length) !=
+                ((packet[payloadOffset + length] << 8) | packet[payloadOffset + length + 1]))
+                continue;
+        }
         netadr_s address = {};
         address.type = NA_IP;
         address.port = source.sin_port;
         address.addrHandleIndex = 0xFFFFFFFF;
-        for (int i = 0; i < 4; ++i) address.ip[i] = ((const unsigned char *)&source.sin_addr)[i];
-        if (!Unicast(address.ip) || !address.port) continue;
+        for (int i = 0; i < 4; ++i)
+            address.ip[i] = ((const unsigned char *)&source.sin_addr)[i];
+        if (!Unicast(address.ip) || !address.port ||
+            (!authenticated && address.ip[0] != 127)) continue;
         if (hosting)
         {
             unsigned int index = 0;
-            for (; index < peerCount; ++index) if (Same(peers[index], address, true)) break;
-            if (index == peerCount)
-            {
-                if (peerCount == MaxPeers) continue;
-                peers[peerCount++] = address;
-            }
+            for (; index < peerCount; ++index)
+                if (Same(peers[index], address, true)) break;
+            if (index == peerCount && peerCount == MaxPeers) continue;
+            // Do not admit a new source until its keyed MAC (or local-only
+            // legacy checksum) and replay sequence are validated.
+            Iw6WireAuth::ReplayWindow window = index == peerCount ?
+                Iw6WireAuth::ReplayWindow{} : peerReplay[index];
+            if (authenticated && !Iw6WireAuth::Accept(window, sequence)) continue;
+            if (index == peerCount) peers[peerCount++] = address;
+            if (authenticated) peerReplay[index] = window;
         }
-        else if (!Same(address, selected, true)) continue;
+        else
+        {
+            if (!Same(address, selected, true)) continue;
+            if (authenticated && !Iw6WireAuth::Accept(clientReplay, sequence)) continue;
+        }
         *from = address;
-        for (int i = 0; i < length; ++i) message->data[i] = packet[HeaderSize + i];
+        for (int i = 0; i < length; ++i)
+            message->data[i] = packet[payloadOffset + i];
         message->cursize = length;
         return 1;
     }

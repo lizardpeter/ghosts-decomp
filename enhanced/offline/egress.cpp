@@ -23,7 +23,8 @@ template<class C> bool Blocked(const C *path)
     const C *base = path;
     for (const C *p = path; *p; ++p) if (*p == '/' || *p == '\\') base = p + 1;
     const char *names[] = {"xgameruntime", "xcurl", "winhttp", "wininet", "urlmon", "ws2_32",
-                           "xboxliveapi", "xboxservices", "gamingservices"};
+                           "xboxliveapi", "xboxservices", "gamingservices",
+                           "demonware", "demonwareclient", "bdcore", "bdsdk"};
     for (const char *name : names)
     {
         const C *p = base; const char *q = name;
@@ -86,7 +87,9 @@ extern "C" void *Iw6OfflineGetProcAddress(void *module, const char *name)
     const unsigned int count = GetModuleFileNameW(module, path, 512);
     if (!count || count >= 512 || Blocked(path) ||
         ((unsigned long long)name > 0xFFFF &&
-         (Same(name, "RoGetActivationFactory") || Same(name, "RoActivateInstance"))))
+         (Same(name, "RoGetActivationFactory") || Same(name, "RoActivateInstance") ||
+          Same(name, "LdrLoadDll") || Same(name, "LdrGetProcedureAddress") ||
+          Same(name, "LoadPackagedLibrary"))))
     { Denied(); return nullptr; }
     // Keep a second dynamic lookup of the loader/procedure APIs inside the
     // same boundary instead of handing back an unguarded OS entry point.

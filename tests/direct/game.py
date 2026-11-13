@@ -10,25 +10,45 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 sys.path[:0]=[str(ROOT/'tools/offline'),str(ROOT/'tests/differential')]
 import package
+import detachment_audit
 from harness import Image,Machine,original_exe,SCRATCH
 from winsock import Winsock,sockaddr_in
 from unicorn.x86_const import UC_X86_REG_RAX,UC_X86_REG_RCX,UC_X86_REG_RDX,UC_X86_REG_R8,UC_X86_REG_R9
 
 
 def main():
-    dll_path=ROOT/'build'/package.BUILD/'direct/recon.dll'
+    dll_path=ROOT/'build'/package.BUILD/'enhanced/recon.dll'
     original=original_exe(package.BUILD)
     with tempfile.TemporaryDirectory() as temp:
         directory=Path(temp)/'direct'
         manifest=package.package(original,dll_path,directory,mode='direct')
         assert manifest['mode']=='direct' and not manifest['game_join_verified']
-        assert len(manifest['guards'])==31+len(package.VENDOR_TASKS)+len(package.LOCAL_FILES)+len(package.DIRECT) and len(manifest['imports'])==58
+        assert len(manifest['guards'])==31+len(package.VENDOR_TASKS)+len(package.LOCAL_FILES)+len(package.DIRECT) and len(manifest['imports'])==60
         assert (directory/'LaunchDirect.ps1').exists() and not (directory/'ConfigureSandbox.ps1').exists()
-        exe,dll=Image(directory/'iw6mp64_offline.exe'),Image(directory/'recon.dll')
+        image=(directory/'iw6mp64_enhanced.exe').read_bytes()
+        dll_image=(directory/'recon.dll').read_bytes()
+        assert not detachment_audit.audit_package(image, manifest, dll_image)
+        assert len(detachment_audit.DIRECT_ENTRIES)==len(package.DIRECT)==22
+        # No direct gameplay entry may quietly revert to its original vendor
+        # address-handle, matchmaking or Xbox-dependent implementation.
+        for missing in (0x140469E70, 0x1405A8830, 0x1405A9E50, 0x14054B1B0):
+            partial=dict(manifest,guards=[
+                g for g in manifest['guards'] if int(g['va'],16)!=missing])
+            assert any('Missing direct/local-session entry' in e for e in
+                       detachment_audit.audit_package(image, partial, dll_image))
+        exe,dll=Image(directory/'iw6mp64_enhanced.exe'),Image(directory/'recon.dll')
         m=Machine(exe,dll)
         for slot,name in exe.iat.items():
             if name.startswith('recon.dll!'):
                 m.mu.mem_write(slot,struct.pack('<Q',dll.exports[name.split('!',1)[1]]))
+        # Native FastFile diagnostic wrappers are 1:1 Win32 forwards with
+        # optional logging; the patched original must use our enhanced DLL,
+        # not silently bypass these read/error traces.
+        assert 'recon.dll!Iw6TraceCreateFileA' in exe.iat.values()
+        assert 'recon.dll!Iw6TraceReadFileEx' in exe.iat.values()
+        assert not any(imp.lower() in ('kernel32.dll!createfilea',
+                                      'kernel32.dll!readfileex')
+                       for imp in exe.iat.values())
         # Product's private imports are direct OS imports; original egress stays denied.
         assert 'ws2_32.dll!socket' in dll.iat.values()
         for name in ('socket','sendto','WSASocketA','connect','gethostbyname','getaddrinfo'):
@@ -63,10 +83,20 @@ def main():
             # writes back, while this integration sequence intentionally keeps them.
             for address,value in result[2].items():m.mu.mem_write(address,value)
             return result
-        call(0x14054F200,[],ret_type='void',fakes={0x1404448D0:register})
-        call(0x14054F200,[],ret_type='void',fakes={0x1404448D0:register})
-        assert set(commands)=={'connect','direct_listen','direct_stop','direct_player','direct_host'}
-        assert native_markers==[b'IW6D:DIRECT_COMMANDS_REGISTERED'],native_markers
+        # The original NET_Init first registered ordinary net dvars. The
+        # enhanced replacement must retain that *local* initialization,
+        # without opening its original UDP socket or touching vendor services.
+        registered_net_dvars = []
+        def register_net_dvars(mu):
+            registered_net_dvars.append(True)
+            ret(mu, 0)
+        init_hooks = {0x1404448D0: register, 0x14054EFD0: register_net_dvars}
+        call(0x14054F200,[],ret_type='void',fakes=init_hooks)
+        call(0x14054F200,[],ret_type='void',fakes=init_hooks)
+        assert registered_net_dvars == [True], registered_net_dvars
+        assert set(commands)=={'connect','direct_listen','direct_stop','direct_player','direct_host','direct_key'}
+        assert native_markers==[b'IW6D:LOCAL_NETWORK_DVARS_REGISTERED',
+                                b'IW6D:DIRECT_COMMANDS_REGISTERED'],native_markers
         assert not any(n.startswith('ws2_32.dll!') for n in m.imports_called)
         endpoint=b'127.0.0.1:27016\0'
         # No inactive-client fabrication or mutation on rejected input.
@@ -198,8 +228,8 @@ def main():
         assert call(dll.exports['Iw6DirectHost'],[b'0.0.0.0:27016\0',b'mp_test;quit\0',b'war\0'])[0]==-6
         assert not map_calls
         settings.clear()
-        result=call(dll.exports['Iw6DirectHost'],[b'0.0.0.0:27016\0',b'mp_prison\0',b'war\0'],fakes={0x1404BADC0:start_map})
-        assert result[0]==3 and map_calls==[(0,b'mp_prison',1,0)]
+        result=call(dll.exports['Iw6DirectHost'],[b'0.0.0.0:27016\0',b'mp_prisonbreak\0',b'war\0'],fakes={0x1404BADC0:start_map})
+        assert result[0]==3 and map_calls==[(0,b'mp_prisonbreak',1,0)]
         assert native_markers[-1]==b'IW6D:DIRECT_MAP_START_REQUESTED',native_markers
         assert settings==[(b'g_gametype',b'war'),(b'ui_gametype',b'war')]
         # Original LUI CheckGameLicense had unconditionally attempted an
@@ -218,7 +248,7 @@ def main():
             try:package.transform(original.read_bytes(),dll_path.read_bytes(),mode)
             except ValueError:pass
             else:raise AssertionError('profile mismatch accepted')
-    print('PASS: original NET_Init registers connect; real command starts original challenge resend through private UDP; vendor imports remain blocked')
+    print('PASS: enhanced NET_Init restores local net dvars, registers direct commands and uses independent UDP without vendor imports')
 
 
 def socket_port(port):return struct.unpack('<H',struct.pack('>H',port))[0]

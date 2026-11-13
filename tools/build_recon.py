@@ -5,9 +5,9 @@
     python3 tools/build_recon.py --build <id>    # the same against another build -> build/<id>/
     python3 tools/build_recon.py --build <id> --enhanced   # the enhanced build -> build/<id>/enhanced/
 
-    python3 tools/build_recon.py --build iw6mp64_MSStore_ship --offline  # experimental offline adapters + DLL attach guard
+    python3 tools/build_recon.py --build iw6mp64_MSStore_ship --offline  # isolated no-network diagnostic (not a game build)
 
-    python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct   # vendor guards plus independent game UDP
+    python3 tools/build_recon.py --build iw6mp64_MSStore_ship --direct   # legacy alias for --enhanced
 
   The default links against the reference build (MAP + PDB). Another build (the Store build) resolves names
   through tools/symbols.py: records/names.tsv and the matcher's identifications.
@@ -25,7 +25,7 @@
   TLS variable is placed in the DLL's own .tls section at the same offset it has in the original's, so the
   offsets the compiler emits are the original's. Nothing else in the reconstruction may use TLS.
 
-The enhanced build (--enhanced) compiles src/ and enhanced/ together. A function defined in enhanced/ replaces the
+The enhanced Store build (--enhanced) compiles src/ and ALL enhanced/ sources together, including offline service detachment and independent local/direct gameplay. No alternate enhanced game DLL is produced. A function defined in enhanced/ replaces the
 src/ function of the same decorated name everywhere, calls from src/ included: enhanced objects link first and
 the linker keeps the first definition (/force:multiple; any other duplicate is caught by the faithful build,
 which links without it). enhanced/ functions are exported whether or not the original has them, for
@@ -129,13 +129,22 @@ def import_slots(build):
 
 def main():
     build = sys.argv[sys.argv.index("--build") + 1] if "--build" in sys.argv else symbols.reference_build()
-    direct = "--direct" in sys.argv
-    offline = "--offline" in sys.argv or direct
-    enhanced = "--enhanced" in sys.argv or offline
+    # One production enhanced Store build: local profile, independent UDP,
+    # vendor detachment and all regular enhancement overrides together.
+    # --direct remains an alias for older scripts, not a second build variant.
+    offline_only = "--offline" in sys.argv
+    canonical = "--enhanced" in sys.argv or "--direct" in sys.argv
+    if offline_only and canonical:
+        sys.exit("--offline is an isolated diagnostic build; use --enhanced for the game")
+    if "--direct" in sys.argv and build != "iw6mp64_MSStore_ship":
+        sys.exit("--direct supports only the pinned Store build")
+    direct = canonical and build == "iw6mp64_MSStore_ship"
+    offline = offline_only or direct
+    enhanced = canonical or offline
     if offline and build != "iw6mp64_MSStore_ship":
-        sys.exit("--offline supports only the pinned Store build")
+        sys.exit("offline/vendor-detached builds support only the pinned Store build")
     reference = symbols.has_map(build)
-    BUILD = out_dir(build) / ("direct" if direct else "offline" if offline else "enhanced") if enhanced else out_dir(build)
+    BUILD = out_dir(build) / ("offline" if offline_only else "enhanced") if enhanced else out_dir(build)
     BUILD.mkdir(parents=True, exist_ok=True)
     objs, sources = [], []
     for src in sorted((ROOT / "src").rglob("*.cpp")):

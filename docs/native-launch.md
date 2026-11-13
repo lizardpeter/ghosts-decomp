@@ -200,6 +200,59 @@ A missing package dependency, invalid content, unexpected SDK load or
 different real-GPU behavior is new evidence to investigate, not a
 reason to force `DAT_145CAEDF8` to zero.
 
+P0032 makes the canonical enhanced/direct game package and isolated offline diagnostic fail their static detachment audit if any of the 42 common guards or 17 direct-profile guards disappear. It also rejects known app-local Demonware module names and dynamic packaged-library resolution. These are structural checks, not evidence of a rendered menu, successful offline match or process-wide absence of all vendor code.
+
+
+### P0033: restored local net dvars and observable graphics state
+
+The enhanced local `NET_Init` at `14054F200` previously replaced the entire
+original routine with direct-command registration. This omitted the original
+`NET_GetDvars` at `14054EFD0`, leaving the engine's ordinary networking
+dvar pointers potentially unset. P0033 now calls **only** that verified
+original dvar-registration function once, before registering direct commands.
+It deliberately **does not** invoke original `NET_Config`, `NET_OpenIP`,
+`WSAStartup`, Xbox account or Demonware task startup. Custom UDP still
+initializes its own Winsock state on explicit host/join. The native marker
+`IW6D:LOCAL_NETWORK_DVARS_REGISTERED` demonstrates that this call returned;
+it is not a complete game-init marker.
+
+The read-only debug observer now samples the pinned Store `DxGlobals` base
+`14A37D620`, reporting D3D11 device/context/factory/adapter, window and
+swap-chain presence, feature level, device-lost flag and window size every
+five seconds as `graphics_state` in `game.json`. The CI also publishes
+`graphics-state.json` for comparison with the asset handshake samples.
+These measurements distinguish **no initialized renderer** from **renderer
+objects exist but no visible game frame** on Hyper-V video. They do not
+fabricate a present, menu or map, and the initial run with this patch is
+not yet verified.
+
+### Native prisonbreak map-content experiment
+
+Direct inventory of the owner's original R2 installation found
+`mp_prisonbreak.ff` (not `mp_prison.ff`), associated
+`_load`/`_path`/patch/techsets FastFiles and English language zones.
+`records/native-map-sources.tsv` pins seven original objects with
+source-reported sizes and plain MD5 ETags, verified again on download.
+The native runner now adds these to the startup subset and executes a
+**separate 45-second**, firewall-blocked `+direct_host 0.0.0.0:27016
+mp_prisonbreak war` diagnostic. `host-milestones.json` reports whether
+the original map-start function was requested and the observed renderer,
+asset-worker and DLL state. It does **not** claim the full installation is
+staged: the source R2 installation includes substantial image/audio PAKs
+and further game files. No map-ready or game-join pass condition is invented.
+
+On a real supported GPU with the **complete original game installation**,
+the bundled `ProbeStartup.ps1` can also request a bounded, localhost-only
+host test:
+
+```powershell
+.\ProbeStartup.ps1 -GameDirectory 'D:\Games\Ghosts' -Seconds 120 -HostMap mp_prisonbreak -GameType war
+```
+
+The firewall block is still mandatory, and the script does not open
+external sessions. A reported map-start *request* does not mean
+`SV_StartMap` completed or a player entered the level.
+
 The complete game installation is not yet staged in the diagnostic. Later asset,
 graphics, profile/statistics and connection failures must be addressed from
 their own observed evidence. Native map loading, a completed join and full

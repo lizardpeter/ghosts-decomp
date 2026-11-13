@@ -18,6 +18,7 @@ cmd_function_s listenCommand;
 cmd_function_s stopCommand;
 cmd_function_s playerCommand;
 cmd_function_s hostCommand;
+cmd_function_s keyCommand;
 bool commandsRegistered;
 int lastResult;
 bool Identifier(const char *text, unsigned int maximum, unsigned int minimum)
@@ -165,6 +166,13 @@ void Listen()
     if (!LocalNetworkMode()) { lastResult = -5; return; }
     lastResult = Iw6DirectOpen(Cmd_Argv(1), 1) ? 2 : -4;
 }
+void SetDirectKey()
+{
+    if (Cmd_Argc() != 2) { lastResult = -10; return; }
+    // Key changes invalidate admission and replay state; never rekey mid-match.
+    if (State<int>(0x143E96890) >= 3 || ServerRunning()) { lastResult = -3; return; }
+    lastResult = Iw6DirectSetKey(Cmd_Argv(1)) ? 5 : -10;
+}
 void Stop()
 {
     Iw6DirectClose();
@@ -178,11 +186,22 @@ extern "C" void Iw6DirectInit()
     // NET_Init runs before normal CL initialization; register commands here but
     // defer opening sockets and touching client state until a command executes.
     if (commandsRegistered) return;
+    // NET_Init at 14054F200 originally calls NET_GetDvars (14054EFD0)
+    // before configuring its own UDP sockets. The local replacement must
+    // retain the ordinary networking dvar registration: other original
+    // engine subsystems can read these pointers before gameplay starts.
+    // Only the original dvar-registration function is invoked here; do NOT
+    // call original NET_Config, WSAStartup, NET_OpenIP or vendor networking.
+    // All real sockets remain exclusively under Iw6DirectOpen on explicit
+    // local/direct host or join commands.
+    ((int (*)())0x14054EFD0)();
+    OutputDebugStringA("IW6D:LOCAL_NETWORK_DVARS_REGISTERED");
     Cmd_AddCommandInternal("connect", Connect, &connectCommand);
     Cmd_AddCommandInternal("direct_listen", Listen, &listenCommand);
     Cmd_AddCommandInternal("direct_stop", Stop, &stopCommand);
     Cmd_AddCommandInternal("direct_player", ConfigurePlayer, &playerCommand);
     Cmd_AddCommandInternal("direct_host", Host, &hostCommand);
+    Cmd_AddCommandInternal("direct_key", SetDirectKey, &keyCommand);
     commandsRegistered = true;
     OutputDebugStringA("IW6D:DIRECT_COMMANDS_REGISTERED");
     // Normal +commands can be held while assets/UI initialise. Read only the

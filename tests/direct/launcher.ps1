@@ -27,9 +27,17 @@ try {
     New-Item -ItemType Directory -Force -Path $bundle,$game,$env:LOCALAPPDATA | Out-Null
     $launcher = Join-Path $bundle 'LaunchDirect.ps1'
     Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/direct/LaunchDirect.ps1') -Destination $launcher
-    [System.IO.File]::WriteAllText((Join-Path $bundle 'iw6mp64_offline.exe'),'test-exe')
+    $launcherTokens = $null
+    $launcherErrors = $null
+    [System.Management.Automation.Language.Parser]::ParseFile(
+        $launcher, [ref]$launcherTokens, [ref]$launcherErrors) | Out-Null
+    if ($launcherErrors.Count) {
+        throw ('Enhanced launcher PowerShell syntax error: ' +
+               ($launcherErrors | ForEach-Object { $_.Message } | Out-String))
+    }
+    [System.IO.File]::WriteAllText((Join-Path $bundle 'iw6mp64_enhanced.exe'),'test-exe')
     [System.IO.File]::WriteAllText((Join-Path $bundle 'recon.dll'),'test-dll')
-    $manifest = @{ mode='direct'; exe_sha256=(Get-FileHash (Join-Path $bundle 'iw6mp64_offline.exe')).Hash; dll_sha256=(Get-FileHash (Join-Path $bundle 'recon.dll')).Hash }
+    $manifest = @{ mode='direct'; exe_sha256=(Get-FileHash (Join-Path $bundle 'iw6mp64_enhanced.exe')).Hash; dll_sha256=(Get-FileHash (Join-Path $bundle 'recon.dll')).Hash }
     [System.IO.File]::WriteAllText((Join-Path $bundle 'manifest.json'),($manifest | ConvertTo-Json))
     & $launcher -GameDirectory $game -Connect '127.0.0.1:27016' -Profile 'one' -PlayerName 'Test Player'
     $profilePath = Join-Path $env:LOCALAPPDATA 'GhostsDirect/one/player.json'
@@ -39,18 +47,36 @@ try {
     & $launcher -GameDirectory $game -Connect '127.0.0.1:27016' -Profile 'one'
     $again = Get-Content -Raw -LiteralPath $profilePath | ConvertFrom-Json
     if ($again.id -ne $first.id) { throw 'Profile ID changed across launches.' }
-    & $launcher -GameDirectory $game -HostEndpoint '0.0.0.0:27016' -Map 'mp_prison' -GameType 'war' -Profile 'two'
-    if ($global:Iw6TestLaunches[2].arguments -notmatch '\+direct_host 0\.0\.0\.0:27016 mp_prison war$') { throw 'Host argument construction failed.' }
+    & $launcher -GameDirectory $game -HostEndpoint '0.0.0.0:27016' -Map 'mp_prisonbreak' -GameType 'war' -Profile 'two'
+    if ($global:Iw6TestLaunches[2].arguments -notmatch '\+direct_host 0\.0\.0\.0:27016 mp_prisonbreak war$') { throw 'Host argument construction failed.' }
     $second = Get-Content -Raw -LiteralPath (Join-Path $env:LOCALAPPDATA 'GhostsDirect/two/player.json') | ConvertFrom-Json
     if ($second.id -eq $first.id) { throw 'Separate profiles reused an ID.' }
+    & $launcher -GameDirectory $game -Menu -Profile 'one'
+    if ($global:Iw6TestLaunches.Count -ne 4) { throw 'Menu-only launch was not invoked.' }
+    $menuArgs = $global:Iw6TestLaunches[3].arguments
+    if ($menuArgs -notmatch ('\+direct_player ' + $first.id + ' "Test Player"') -or
+        $menuArgs -match '\+(?:connect|direct_host)') {
+        throw 'Menu-only launch added a connection/host command or lost local identity.'
+    }
+    $sharedKey = '00112233445566778899aabbccddeeff'
+    & $launcher -GameDirectory $game -Connect '10.0.0.2:27016' -NetworkKey $sharedKey -Profile 'one'
+    if ($global:Iw6TestLaunches.Count -ne 5 -or
+        $global:Iw6TestLaunches[4].arguments -notmatch ('\+direct_key ' + $sharedKey + ' \+connect 10\.0\.0\.2:27016$')) {
+        throw 'Authenticated direct session did not set network key before connect.'
+    }
+    $refused = $false
+    try { & $launcher -GameDirectory $game -Connect '10.0.0.2:27016' -Profile 'one' } catch { $refused = $true }
+    if (!$refused -or $global:Iw6TestLaunches.Count -ne 5) {
+        throw 'Unauthenticated non-loopback connection was launched.'
+    }
     $refused = $false
     try { & $launcher -GameDirectory $game -Connect '127.0.0.1:27016;quit' -Profile 'one' } catch { $refused = $true }
-    if (!$refused -or $global:Iw6TestLaunches.Count -ne 3) { throw 'Invalid endpoint was launched.' }
+    if (!$refused -or $global:Iw6TestLaunches.Count -ne 5) { throw 'Invalid endpoint was launched.' }
     [System.IO.File]::WriteAllText((Join-Path $bundle 'recon.dll'),'tampered')
     $refused = $false
     try { & $launcher -GameDirectory $game -Connect '127.0.0.1:27016' -Profile 'one' } catch { $refused = $true }
-    if (!$refused -or $global:Iw6TestLaunches.Count -ne 3) { throw 'Tampered package was launched.' }
-    Write-Output 'PASS: Windows launcher profile persistence, separate profiles, host/connect arguments and refusal paths; game process was not executed'
+    if (!$refused -or $global:Iw6TestLaunches.Count -ne 5) { throw 'Tampered package was launched.' }
+    Write-Output 'PASS: Windows launcher profile persistence, menu-only, keyed direct-connect, host/connect arguments and refusal paths; game process was not executed'
 } finally {
     $env:LOCALAPPDATA = $oldLocalAppData
     Remove-Item Function:\Start-Process -ErrorAction SilentlyContinue

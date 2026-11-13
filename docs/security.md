@@ -56,3 +56,68 @@ bounds review as it is decompiled: `MSG_Read*` (e.g. `MSG_ReadData` 14019D1B0 `q
 decoding, gamestate/configstring/snapshot parsing, `SV_DirectConnect` (1401F25B0), `SV_PacketEvent` (1401FA920),
 party/lobby messages, voice packets, stats/PlayerData, fastfile and asset parsing. Findings are recorded here with
 a test that demonstrates the original behaviour.
+
+## Enhanced build implementation status (2026-11-12)
+
+This is **not** a claim that S1–S23 are all resolved. The list above is
+the upstream risk inventory, not a completed implementation checklist.
+
+| Surface | Status | Evidence and limits |
+|---|---|---|
+| Custom direct UDP ingress | **Hardened in enhanced** | `enhanced/direct/transport.cpp`: strict payload/frame length bounds (max 1262), drain budget, selected-peer checks, unauthenticated loopback-only v1, keyed SipHash-2-4 v3 with per-peer sequence/replay-window checks. `tests/direct/transport.py` exercises malformed datagrams and replay. |
+| Custom direct UDP egress | **Hardened in enhanced** | Only an explicitly selected peer or a previously admitted listener peer may receive. Non-loopback traffic requires the configured shared network key. |
+| Microsoft/GDK/Demonware detachment | **Already partially implemented** | The canonical enhanced package has independent vendor-denial and direct-transport code. This does **not** establish all original native process traffic is absent or safe; see `docs/vendor-disconnection.md` and `docs/native-launch.md`. |
+| S3, S18 and S19 in the original engine | **Not verified fixed** | The private direct transport rejects malformed lengths before it forwards data, but unreconstructed original sockets and packet handlers may still exist and must be audited independently. |
+| S1, S2, S4–S16, S21–S22 | **Outstanding** | Each needs a Store-build address/function match, correct ABI reconstruction, bounded enhanced replacement, and adversarial tests before it may be marked fixed. |
+| S17 (signed keyname / bind OOB write) | **Store-match guards now integrated; native gameplay validation pending** | Three Store-specific candidate entrypoints from `analysis/iw6mp64_MSStore_ship/match/functions.tsv`: `1403106D0` (bind, 0.75 caller evidence), `140310D20` (bind_swap, 0.89 named registration), `140310EB0` (unbind, 0.89 named registration). The enhanced package now redirects all three to `enhanced/client/security_keys.cpp`, which rejects indices outside 0..255; `enhanced/client/cl_keys.cpp` also protects source-linked accessors. `tests/direct/security_bind_native.py` checks the cross-build evidence and package guard list; `tests/enhanced/test_security_keys.py` exercises invalid inputs and a valid unbind using the actual Store `cmd_args`. Independent native disassembly/launch checks are still outstanding. PS4 reference addresses must never be used as Store hooks. |
+| S20 (legacy SOCKS5 credentials) | **Disabled in canonical direct package** | `enhanced/direct/security.cpp` provides a no-op for the vulnerable Store `NET_OpenSocks` entry 14054F5B0. `tools/offline/package.py` redirects that entry only in direct mode; no SOCKS proxy is supported. |
+| S23 (display-mode enumeration overflow) | **Native enhanced redirect committed; awaiting validation** | Store 14062FC90 is mapped to `Iw6SecureEnumDisplayModes` in the canonical direct package. `enhanced/gfx_d3d/security_modes.cpp` limits untrusted DXGI mode-list writes, validates refresh denominators, and bounds mode name tables. P0040; `tests/enhanced/test_security_modes.py` and the independent packaged-entry audit are present. CI has not yet passed. |
+| Fastfile, script, mod, and peer identity trust | **Outstanding** | Keep original signature checks; reject untrusted executable scripts. Shared-key authentication is not per-user identity, encryption, or a substitute for a fresh session handshake. |
+
+**Important limitation:** the new v3 wire authenticates possession of one
+shared 128-bit key, not individuals; its replay state is cleared when a socket
+closes. This is an incremental protective boundary for the experimental
+direct protocol, **not** full protection against hostile participants,
+malicious signed assets or the retained native engine's other RCE surfaces.
+
+
+**2026-11-12 direct-wire hardening:** v3 authenticates the sender role in
+addition to packet bytes, so a captured client datagram cannot be replayed as
+a server datagram (or vice versa). Keyed v2 is rejected outright; v1 remains
+loopback-only and no-key. Tests verify reflection, tampering, replay, and
+downgrade refusal. This is not a per-session handshake or a claim that native
+Store lobby parsers have been hardened.
+
+## P0043: socket-level loopback enforcement for no-key direct sessions
+
+The original local-only v1 transport rejected non-loopback datagrams after
+`recvfrom`, but still allowed a listener to bind `0.0.0.0` (all network
+interfaces). P0043 moves the boundary to the OS socket: an unkeyed wildcard
+bind is implemented as `127.0.0.1`, and any explicitly non-loopback bind
+address without a key fails. Only configured shared-key v3 sessions can
+listen on all interfaces. `tests/direct/transport.py` sends an otherwise
+valid v1 packet to a second loopback destination (`127.0.0.2`) and asserts
+it is not delivered, while `127.0.0.1` continues to work.
+
+This complements—but does not replace—the receive-side MAC, packet-size and
+replay checks. The shared network key must be configured on both parties
+before non-local traffic is exposed; private transport authentication is not
+a substitute for checking in-engine lobby/command authorization.
+
+## P0044: replay history retained on same-host re-selection
+
+Previously `Iw6DirectSelectPeer` cleared the entire client replay bitmap on
+every successful selection, including repeated selection of the **same**
+authenticated server. A captured valid server-to-client datagram could thus
+be accepted again on the same live socket if the peer was re-selected.
+The enhanced transport now remembers the endpoint associated with its
+replay bitmap separately from the currently selected endpoint. A repeated
+selection—or an invalid selection followed by the same server—preserves the
+old bitmap; moving to a different server starts a fresh bitmap.
+
+`tests/direct/reselect_replay.py` compiles the actual enhanced transport,
+constructs valid v3 packets using the compiled directional MAC, and exercises
+normal delivery, replay rejection, same-peer selection, invalid selection,
+and a new endpoint. This protects only the lifetime of an open socket;
+reopening a socket, changing keys and cross-process replay still need an
+explicit fresh session handshake/nonce before network-wide exposure.
