@@ -644,3 +644,44 @@ iw6_ds_ps4	1400AF990	compiles	src/database/db_file_load.cpp	the server's DB_Load
 iw6_ds_ps4	1400AFAC0	compiles	src/database/db_file_load.cpp	the server's DB_LoadData is 0xB0 bytes (0xD0 in the Store build) and its stage/wait split differs; the auto inputs cannot build a load state; src follows the Store build and matches there
 iw6_ds_ps4	1400AFB70	compiles	src/database/db_file_load.cpp	the server's DB_LoadData is 0xB0 bytes (0xD0 in the Store build) and its stage/wait split differs; the auto inputs cannot build a load state; src follows the Store build and matches there
 iw6_ds_ps4	1400AFBD0	compiles	src/database/db_file_load.cpp	the server's DB_LoadData is 0xB0 bytes (0xD0 in the Store build) and its stage/wait split differs; the auto inputs cannot build a load state; src follows the Store build and matches there
+iw6mp64_MSStore_ship	14035E020	matches	src/xanim/xmodel_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14035E530	matches	src/xanim/xmodel_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14035E620	matches	src/xanim/xmodel_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14035E750	matches	src/xanim/xmodel_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14035E860	matches	src/xanim/xmodel_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	140374250	matches	src/xanim/xmodel_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	1403712F0	matches	src/xanim/xmodel_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14035EAF0	matches	src/gfx_d3d/r_xsurface_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14035F2E0	matches	src/gfx_d3d/r_xsurface_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14034FAC0	matches	src/gfx_d3d/r_xsurface_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14034FA50	matches	src/gfx_d3d/r_xsurface_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14035F3A0	matches	src/gfx_d3d/r_xsurface_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14035F430	matches	src/gfx_d3d/r_xsurface_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14066CD30	matches	src/gfx_d3d/r_xsurface_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	140355500	matches	src/physics/physpreset_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	1403555F0	matches	src/physics/physpreset_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	1403552B0	matches	src/physics/physpreset_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	140355410	matches	src/physics/physpreset_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14034AF80	matches	src/qcommon/cm_brush_related_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14035F860	matches	src/qcommon/cm_brush_related_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14035FA50	matches	src/qcommon/cm_brush_related_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	1401B4100	matches	src/gfx_d3d/r_subdiv.cpp	differential test against the Store build (emulated; buffer creators as logged fakes)
+iw6mp64_MSStore_ship	1401B3DC0	matches	src/gfx_d3d/r_subdiv.cpp	differential test against the Store build (emulated; buffer creators as logged fakes)
+iw6mp64_MSStore_ship	1401B3D60	matches	src/gfx_d3d/r_subdiv.cpp	differential test against the Store build (emulated; buffer creators as logged fakes)
+iw6mp64_MSStore_ship	1401AC5B0	matches	src/gfx_d3d/r_subdiv.cpp	differential test against the Store build (emulated; buffer creators as logged fakes)
+iw6_ds_ps4	1400C0900	compiles	src/xanim/xmodel_load_db.cpp	the server's XModel/XSurface layout differs from the Store build's (XModel 0x228 vs 0x258); src follows the Store build and matches there
+iw6_ds_ps4	1400C0DD0	compiles	src/xanim/xmodel_load_db.cpp	the server's XModel/XSurface layout differs from the Store build's (XModel 0x228 vs 0x258); src follows the Store build and matches there
+iw6_ds_ps4	1400C0EA0	compiles	src/xanim/xmodel_load_db.cpp	the server's XModel/XSurface layout differs from the Store build's (XModel 0x228 vs 0x258); src follows the Store build and matches there
+iw6_ds_ps4	1400C0FC0	compiles	src/xanim/xmodel_load_db.cpp	the server's XModel/XSurface layout differs from the Store build's (XSurface 0xC8 vs 0xE8); src follows the Store build and matches there
+iw6_ds_ps4	1400C10E0	compiles	src/xanim/xmodel_load_db.cpp	the server's XModel/XSurface layout differs from the Store build's (XModelSurfs loads XSurfaces of 0xC8 vs 0xE8); src follows the Store build and matches there
+iw6_ds_ps4	1400C1410	compiles	src/gfx_d3d/r_xsurface_load_db.cpp	the server's XModel/XSurface layout differs from the Store build's (XSurface 0xC8 vs 0xE8); src follows the Store build and matches there
+iw6_ds_ps4	1400C11B0	compiles	src/gfx_d3d/r_xsurface_load_db.cpp	inlined into Load_XSurface in the Store build, a function of its own in the server; untested on its own
+iw6_ds_ps4	1400C1A90	compiles	src/gfx_d3d/r_xsurface_load_db.cpp	same layout in the server; kept below matches until a PS4 case is written (the Store case passes)
+iw6_ds_ps4	1400B0CC0	matches	src/qcommon/cm_brush_related_load_db.cpp	differential test (emulated, original vs recon; zone stream functions as logged fakes); same layout as the Store build
+iw6_ds_ps4	1400C1D80	matches	src/qcommon/cm_brush_related_load_db.cpp	differential test (emulated, original vs recon; zone stream functions as logged fakes); same layout as the Store build
+iw6_ds_ps4	1400C1FE0	matches	src/qcommon/cm_brush_related_load_db.cpp	differential test (emulated, original vs recon; zone stream functions as logged fakes); same layout as the Store build
+iw6_ds_ps4	1400B8050	matches	src/physics/physpreset_load_db.cpp	differential test (emulated, original vs recon; zone stream functions as logged fakes); same layout as the Store build
+iw6_ds_ps4	1400B8120	matches	src/physics/physpreset_load_db.cpp	differential test (emulated, original vs recon; zone stream functions as logged fakes); same layout as the Store build
+iw6_ds_ps4	1400B81F0	matches	src/physics/physpreset_load_db.cpp	differential test (emulated, original vs recon; zone stream functions as logged fakes); same layout as the Store build
+iw6_ds_ps4	1400B8290	matches	src/physics/physpreset_load_db.cpp	differential test (emulated, original vs recon; zone stream functions as logged fakes); same layout as the Store build
+iw6_ds_ps4	1400B8380	matches	src/physics/physpreset_load_db.cpp	differential test (emulated, original vs recon; zone stream functions as logged fakes); same layout as the Store build
