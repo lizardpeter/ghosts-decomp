@@ -599,3 +599,55 @@ static_assert(sizeof(D3D11_SHADER_RESOURCE_VIEW_DESC) == 0x18, "D3D11_SHADER_RES
 static_assert(sizeof(D3D11_RENDER_TARGET_VIEW_DESC) == 0x14, "D3D11_RENDER_TARGET_VIEW_DESC");
 static_assert(sizeof(D3D11_DEPTH_STENCIL_VIEW_DESC) == 0x18, "D3D11_DEPTH_STENCIL_VIEW_DESC");
 static_assert(sizeof(D3D11_SUBRESOURCE_DATA) == 0x10, "D3D11_SUBRESOURCE_DATA");
+
+IW6_STATIC int unk_14A2E2968 IW6_AT("", "unk_14A2E2968");  // picmip of colour maps (Black Ops' imageGlobals.picmip)
+IW6_STATIC int unk_14A2E296C IW6_AT("", "unk_14A2E296C");  // picmip of normal maps (imageGlobals.picmipBump)
+IW6_STATIC int unk_14A2E2970 IW6_AT("", "unk_14A2E2970");  // picmip of specular maps (imageGlobals.picmipSpec)
+
+// Store 14062B3C0 (Black Ops' Image_GetPicmip, by semantic): the picmip a texture of this kind gets, 0-3; the
+// second platform byte is 2. Kinds the picmip settings don't cover get 0, 0.
+void Image_GetPicmip(unsigned char semantic, Picmip *picmip)
+{
+	int value;
+
+	switch (semantic)
+	{
+	case TS_COLOR_MAP:
+	case TS_DETAIL_MAP:
+	case TS_OCEANFLOW_DISPLACEMENT_MAP:
+	case TS_WATER_MAP:
+	case TS_OCEAN_DISPLACEMENT_MAP:
+	case TS_PARALLAX_MAP:
+		value = unk_14A2E2968;
+		break;
+	case TS_NORMAL_MAP:
+	case TS_DISPLACEMENT_MAP:
+		value = unk_14A2E296C;
+		break;
+	case TS_SPECULAR_MAP:
+		value = unk_14A2E2970;
+		break;
+	default:
+		picmip->platform[0] = 0;
+		picmip->platform[1] = 0;
+		return;
+	}
+	picmip->platform[1] = 2;
+	if (value < 0)
+		picmip->platform[0] = 0;
+	else
+		picmip->platform[0] = value > 3 ? 3 : (unsigned char)value;
+}
+
+// Store 14062D6A0 (name unknown): the number of stream levels the image has (the first with width 0 ends them)
+unsigned int sub_14062D6A0(const GfxImage *image)
+{
+	unsigned int count = 0;
+	do
+	{
+		if (!image->streamLevels[count].width)
+			return count;
+		count++;
+	} while (count < 4);
+	return count;
+}

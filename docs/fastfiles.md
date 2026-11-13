@@ -294,8 +294,8 @@ height +0x42) diagonal. Rows with offset and end 0 are unused levels.
 
 Measured on mp_alien_town.ff: 8160 rows (2040 images, every image's first row used, 5438 rows in all), all in
 imagefile1-63 (none localized, none in the fastfile); the 9593 bytes of a row's range in imagefile1.pak are one
-zlib stream (16384 bytes inflated). How the renderer reads and inflates a level is the GfxImage work's (*unverified*
-here beyond the zlib measurement).
+zlib stream (16384 bytes inflated). What a level holds and how the game reads it: docs/assets/images.md (level 0 is the whole mip chain at the
+smallest size, each higher level only its top mip).
 
 **Image pak index** (`sub_140375350`, called at the end of `DB_LoadXFile`): for every pak opened for the zone and
 not indexed yet, it reads the pak's own header: magic `IWff0100`/`IWffu100`, a version dword, 16 bytes decrypted
@@ -303,7 +303,7 @@ by 140349200 (AES-ECB through libtomcrypt with a key schedule at 140992BB0) givi
 and a 256-byte signature checked by `DBX_AuthLoad_ValidateSignature`, then count × 16 encrypted entries, whose
 SHA-256 must verify against the same signature. Measured with the game's own decryption on imagefile1.pak: 1977
 entries, each an increasing u64 offset into the pak and 8 more bytes (meaning *unverified*). The decrypted index is
-kept per pak (+0x58 count, +0x60 entries); how it is used is the GfxImage work's.
+kept per pak (+0x58 count, +0x60 entries); how it is used is *unverified* (docs/assets/images.md 4).
 
 ## 12. The reference reader and how it is checked
 

@@ -13,6 +13,6 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 if __name__ == "__main__":
-    suite = unittest.defaultTestLoader.loadTestsFromNames(["test_reader", "test_store", "test_xmodel", "test_material"])
+    suite = unittest.defaultTestLoader.loadTestsFromNames(["test_reader", "test_store", "test_xmodel", "test_material", "test_image"])
     result = unittest.TextTestRunner(verbosity=2 if "-v" in sys.argv else 1).run(suite)
     sys.exit(0 if result.wasSuccessful() else 1)

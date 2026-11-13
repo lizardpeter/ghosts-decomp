@@ -204,3 +204,42 @@ DXGI_FORMAT sub_14062E8A0(DXGI_FORMAT format)
 		return DXGI_FORMAT_BC3_UNORM_SRGB;
 	return format;
 }
+
+void Image_GetPicmip(unsigned char semantic, Picmip *picmip);
+unsigned int sub_14062D6A0(const GfxImage *image);
+
+// Store 14062E430 (name unknown): how many stream levels to leave off the top of a streamed image. The picmip
+// setting for its kind (Image_GetPicmip) is at most the number of levels - 1; levels are only left off while the
+// top level remaining is larger than 1024 >> picmip in both width and height. IMG_FLAG_NOPICMIP images keep every
+// level.
+void sub_14062E430(GfxImage *image, Picmip *picmip)
+{
+	if (image->flags & IMG_FLAG_NOPICMIP)
+	{
+		picmip->platform[0] = 0;
+		picmip->platform[1] = 0;
+		return;
+	}
+	Image_GetPicmip(image->semantic, picmip);
+	int maxSize = 0x400 >> (picmip->platform[0] & 0x1f);
+	int top = (int)sub_14062D6A0(image) - 1;
+	if (top > 0)
+	{
+		unsigned int limit = top & 0xff;
+		if ((int)picmip->platform[0] <= top)
+			limit = picmip->platform[0];
+		picmip->platform[0] = (unsigned char)limit;
+		if (limit)
+		{
+			int dropped = 0;
+			while (maxSize < image->streamLevels[top].width && maxSize < image->streamLevels[top].height)
+			{
+				dropped++;
+				top--;
+				if (dropped >= (int)limit)
+					return;
+			}
+			picmip->platform[0] = (unsigned char)dropped;
+		}
+	}
+}

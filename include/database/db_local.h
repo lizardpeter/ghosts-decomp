@@ -167,6 +167,38 @@ struct DBFile  // 0x58
 	char name[64];
 };
 
+// A streamed image row of the fastfile header (docs/fastfiles.md 11): where one stream level of an image is.
+struct StreamImageRow  // 0x18
+{
+	unsigned short localized;  // the pak is <language>_imagefile<N>.pak
+	unsigned short fileIndex;  // N; 0: the fastfile itself (sub_1403497F0)
+	unsigned int pad;
+	unsigned long long offset;  // the level's zlib stream: [offset, end) of the file
+	unsigned long long end;     // 0: no such level
+};
+
+// An image pak opened for streamed images (Load_ImageStream; the index is read by sub_140375350)
+struct DBImageFile  // 0x70
+{
+	DBFile file;                // handle, and name "imagefile<N>"
+	unsigned int indexCount;    // +0x58: the pak's decrypted index (sub_140375350)
+	unsigned int pad5C;
+	void *index;                // +0x60
+	bool used;                  // +0x68: a zone being loaded has rows in it
+	unsigned char pad69;
+	unsigned short localized;   // +0x6A
+	unsigned short fileIndex;   // +0x6C
+	unsigned short pad6E;
+};
+
+// Load_ImageStream's per-image entry: one per stream level
+struct DBImageStreamLevel  // 0x18
+{
+	unsigned long long offset;
+	unsigned long long end;
+	DBFile *file;  // null when the level has no row
+};
+
 // stream (db_stream.cpp, db_stream_load.cpp, db_fastfile_pointer.cpp)
 extern unsigned char *g_streamPos;
 extern unsigned char *g_streamPosArray[MAX_XFILE_COUNT];

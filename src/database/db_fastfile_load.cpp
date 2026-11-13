@@ -13,15 +13,6 @@
 
 #define IW6_SOURCE "database/db_fastfile_load.cpp"
 
-struct StreamImageRow  // 0x18 (docs/fastfiles.md)
-{
-	unsigned short localized;
-	unsigned short fileIndex;
-	unsigned int pad;
-	unsigned long long offset;
-	unsigned long long end;
-};
-
 IW6_STATIC XAssetList g_varXAssetList IW6_AT("", "g_varXAssetList");
 IW6_STATIC unsigned int unk_1443A4820 IW6_AT("", "unk_1443A4820");                // streamed image row count
 IW6_STATIC StreamImageRow unk_144310C20[0x6280] IW6_AT("", "unk_144310C20");      // the rows

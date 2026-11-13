@@ -685,6 +685,26 @@ def load_rawfile(s: Stream, at: int):
     s.pop()
 
 
+def load_netconststrings(s: Stream, at: int):
+    """Load_NetConstStrings (140354A70): name, stringType (+8), sourceType (+0xC), entryCount (+0x10), stringList
+    (+0x18): inline only (aligned to 8), entryCount XStrings (Load_XStringArray 14035E9C0)."""
+    s.load(True, at, 0x20)
+    s.push(XFILE_BLOCK_VIRTUAL)
+    s.xstring_ptr(at)
+    v = s.u64(at + 0x18)
+    if v:
+        if v == PTR_INLINE:
+            p = s.align(8)
+            s.put_u64(at + 0x18, p)
+            count = s.i32(at + 0x10)
+            s.load(True, p, 8 * count)
+            for i in range(count):
+                s.xstring_ptr(p + 8 * i)
+        else:
+            s.put_u64(at + 0x18, s.offset_to_pointer(v))
+    s.pop()
+
+
 def load_pathdata(s: Stream, at: int):
     """Load_PathData (140354DD0)."""
     s.load(True, at, 0x88)
@@ -811,6 +831,7 @@ ASSET_LOADERS[0x00] = asset_ptr(0x00, load_physpreset)  # physpreset: Load_PhysP
 ASSET_LOADERS[0x2D] = asset_ptr(0x2D, load_scriptfile)  # scriptfile: Load_ScriptFilePtr 140355D30
 ASSET_LOADERS[0x16] = asset_ptr(0x16, load_pathdata)   # aipaths: Load_PathDataPtr 1403551C0
 ASSET_LOADERS[0x2C] = asset_ptr(0x2C, load_rawfile)    # rawfile: Load_RawFilePtr 140355820
+ASSET_LOADERS[0x34] = asset_ptr(0x34, load_netconststrings)  # netconststrings: Load_NetConstStringsPtr 140354B60
 
 
 def read_fastfile(data: bytes, zone_name: str | None = None, key=None, bases=None, max_assets=None,

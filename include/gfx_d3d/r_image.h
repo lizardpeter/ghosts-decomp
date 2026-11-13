@@ -155,6 +155,26 @@ enum
 	MAPTYPE_ARRAY = 6,  // Store build: 2D texture array (numElements slices)
 };
 
+// GfxImage::semantic (TextureSemantic, the servers' PDBs)
+enum
+{
+	TS_2D = 0,
+	TS_FUNCTION = 1,
+	TS_COLOR_MAP = 2,
+	TS_DETAIL_MAP = 3,
+	TS_NORMAL_MAP = 5,
+	TS_SPECULAR_MAP = 8,
+	TS_OCEANFLOW_DISPLACEMENT_MAP = 10,
+	TS_WATER_MAP = 11,
+	TS_OCEAN_DISPLACEMENT_MAP = 12,
+	TS_DISPLACEMENT_MAP = 13,
+	TS_PARALLAX_MAP = 14,
+};
+
+// GfxImage::flags bits the Store image code tests
+#define IMG_FLAG_NOPICMIP 0x02     // Image_SetStreamPicmip leaves every stream level (load screens, UI)
+#define IMG_FLAG_STREAM_HINT 0x10  // copied into Load_ImageStream's per-image bit set (14604C200)
+
 // GfxImage::category: IMG_CATEGORY_WATER is the only one the Store image code tests
 #define IMG_CATEGORY_WATER 5
 #define IMG_CATEGORY_RENDERTARGET 6
@@ -229,8 +249,10 @@ struct GfxImage
 	unsigned short depth;
 	unsigned short numElements;
 	unsigned char levelCount;
-	unsigned char unknown35[11];
-	GfxImageStreamLevel streamLevels[4];
+	unsigned char streaming;              // the data is in imagefile paks: Load_ImageStream takes 4 rows for it
+	unsigned char unknown36[2];
+	GfxImageLoadDef *loadDef;             // in a zone: the pixels of an image that isn't streamed (Load_GfxTextureLoad)
+	GfxImageStreamLevel streamLevels[4];  // smallest first; unused levels are 0 (docs/assets/images.md)
 	const char *name;
 };
 
