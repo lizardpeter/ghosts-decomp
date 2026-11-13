@@ -655,7 +655,8 @@ CASES = [
       for (kind, reload), sym in SHADER_SYMBOLS.items()],
     _case("?Material_BuildVertexDecl@@YAPEAUID3D11InputLayout@@PEBUMaterialStreamRouting@@IPEBUGfxVertexDeclSources@@"
           "PEBUMaterialVertexShader@@@Z", "int64", _inputs(_build_decl_input, 0x5180, 200)),
-    _case("?sub_1406650E0@@YAXPEAUMaterialVertexStreamRouting@@IPEBUMaterialVertexShader@@@Z", "void",
+    _case("?Load_MaterialVertexStreamRouting@@YAXPEAUMaterialVertexStreamRouting@@IPEAUMaterialVertexShader@@@Z",
+          "void",
           _inputs(_build_decls_input, 0x50E0, 30),
           observe={"?Material_BuildVertexDecl@@YAPEAUID3D11InputLayout@@PEBUMaterialStreamRouting@@IPEBU"
                    "GfxVertexDeclSources@@PEBUMaterialVertexShader@@@Z": "qiqq"}),

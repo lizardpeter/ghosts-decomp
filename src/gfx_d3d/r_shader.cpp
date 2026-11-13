@@ -17,77 +17,19 @@
 
 #include "gfx_d3d/com_call.h"
 #include "gfx_d3d/r_dx.h"
+#include "gfx_d3d/r_material.h"
 #include "gfx_d3d/r_state_d3d11.h"
 #include "qcommon/dvar.h"
 
 #define IW6_SOURCE "gfx_d3d/r_shader.cpp"
 
-// ---- assets (xb3 PDB types; the Store build reads the same offsets) -------------------------------------------
+// ---- assets (gfx_d3d/r_material.h: the Store build's layouts) --------------------------------------------------
 
-struct GfxShaderLoadDef  // GfxPixelShaderLoadDef, GfxVertexShaderLoadDef, GfxHullShaderLoadDef, ...
-{
-	unsigned char *program;
-	unsigned int programSize;
-	unsigned short loadForRenderer;  // not in the compute shader's
-};
-
-struct MaterialPixelShader
-{
-	const char *name;
-	ID3D11PixelShader *ps;
-	GfxShaderLoadDef loadDef;
-};
-
-struct MaterialVertexShader
-{
-	const char *name;
-	ID3D11VertexShader *vs;
-	GfxShaderLoadDef loadDef;
-};
-
-struct MaterialHullShader
-{
-	const char *name;
-	ID3D11HullShader *hs;
-	GfxShaderLoadDef loadDef;
-};
-
-struct MaterialDomainShader
-{
-	const char *name;
-	ID3D11DomainShader *ds;
-	GfxShaderLoadDef loadDef;
-};
-
-struct ComputeShader
+struct ComputeShader  // xb3 PDB ComputeShader; the loadDef has no loadForRenderer check here
 {
 	const char *name;
 	ID3D11ComputeShader *cs;
-	GfxShaderLoadDef loadDef;
-};
-
-union XAssetHeader
-{
-	ComputeShader *computeShader;
-	MaterialVertexShader *vertexShader;
-	MaterialHullShader *hullShader;
-	MaterialDomainShader *domainShader;
-	MaterialPixelShader *pixelShader;
-};
-
-struct MaterialStreamRouting
-{
-	unsigned char source;
-	unsigned char dest;
-	unsigned char mask;
-};
-
-#define VERTEXDECL_TYPE_COUNT 249  // 242 in the xb3 server
-
-struct MaterialVertexStreamRouting
-{
-	MaterialStreamRouting data[31];
-	ID3D11InputLayout *decl[VERTEXDECL_TYPE_COUNT];
+	GfxHullShaderLoadDef loadDef;
 };
 
 // Where a stream source lives in a vertex declaration type's buffers; Stream 0xFF: the type lacks it.
@@ -117,11 +59,6 @@ struct TempPriority
 	int oldPriority;
 };
 
-static_assert(__builtin_offsetof(MaterialPixelShader, loadDef) == 0x10, "MaterialPixelShader layout");
-static_assert(__builtin_offsetof(GfxShaderLoadDef, programSize) == 0x8, "GfxShaderLoadDef layout");
-static_assert(__builtin_offsetof(GfxShaderLoadDef, loadForRenderer) == 0xC, "GfxShaderLoadDef layout");
-static_assert(__builtin_offsetof(MaterialVertexStreamRouting, decl) == 0x60, "MaterialVertexStreamRouting layout");
-static_assert(sizeof(MaterialVertexStreamRouting) == 0x60 + 0x7C8, "MaterialVertexStreamRouting layout");
 static_assert(sizeof(GfxVertexDeclSources) == 0xBC, "GfxVertexDeclSources layout");
 
 extern const dvar_t *r_loadForRenderer;
@@ -154,58 +91,58 @@ void Load_CreateComputeShader(unsigned char **data, ComputeShader *shader)
 void Load_CreateMaterialDomainShader(unsigned char **data, MaterialDomainShader *shader)
 {
 	if (*data && r_loadForRenderer->current.enabled &&
-	    shader->loadDef.loadForRenderer == r_rendererInUse->current.integer)
+	    shader->prog.loadDef.loadForRenderer == r_rendererInUse->current.integer)
 	{
 		ComCall<long>(dx.d3d11device, DEV_CreateDomainShader, (const void *)*data,
-		              (unsigned long long)shader->loadDef.programSize, (void *)nullptr, &shader->ds);
+		              (unsigned long long)shader->prog.loadDef.programSize, (void *)nullptr, &shader->prog.ds);
 		return;
 	}
-	shader->ds = nullptr;
+	shader->prog.ds = nullptr;
 }
 
 // Store 14063AD70 (gfx_d3d/r_material.cpp in the PS4 MAP)
 void Load_CreateMaterialHullShader(unsigned char **data, MaterialHullShader *shader)
 {
 	if (*data && r_loadForRenderer->current.enabled &&
-	    shader->loadDef.loadForRenderer == r_rendererInUse->current.integer)
+	    shader->prog.loadDef.loadForRenderer == r_rendererInUse->current.integer)
 	{
 		ComCall<long>(dx.d3d11device, DEV_CreateHullShader, (const void *)*data,
-		              (unsigned long long)shader->loadDef.programSize, (void *)nullptr, &shader->hs);
+		              (unsigned long long)shader->prog.loadDef.programSize, (void *)nullptr, &shader->prog.hs);
 		return;
 	}
-	shader->hs = nullptr;
+	shader->prog.hs = nullptr;
 }
 
 // Store 14063ADD0 (gfx_d3d/r_material.cpp in the PS4 MAP)
 void Load_CreateMaterialPixelShader(unsigned char **data, MaterialPixelShader *shader)
 {
 	if (*data && r_loadForRenderer->current.enabled &&
-	    shader->loadDef.loadForRenderer == r_rendererInUse->current.integer)
+	    shader->prog.loadDef.loadForRenderer == r_rendererInUse->current.integer)
 	{
 		TempPriority priority;
 		Sys_TempPriorityAtLeastNormalBegin(&priority);
 		ComCall<long>(dx.d3d11device, DEV_CreatePixelShader, (const void *)*data,
-		              (unsigned long long)shader->loadDef.programSize, (void *)nullptr, &shader->ps);
+		              (unsigned long long)shader->prog.loadDef.programSize, (void *)nullptr, &shader->prog.ps);
 		Sys_TempPriorityEnd(&priority);
 		return;
 	}
-	shader->ps = nullptr;
+	shader->prog.ps = nullptr;
 }
 
 // Store 14063AE60 (gfx_d3d/r_material.cpp in the PS4 MAP)
 void Load_CreateMaterialVertexShader(unsigned char **data, MaterialVertexShader *shader)
 {
 	if (*data && r_loadForRenderer->current.enabled &&
-	    shader->loadDef.loadForRenderer == r_rendererInUse->current.integer)
+	    shader->prog.loadDef.loadForRenderer == r_rendererInUse->current.integer)
 	{
 		TempPriority priority;
 		Sys_TempPriorityAtLeastNormalBegin(&priority);
 		ComCall<long>(dx.d3d11device, DEV_CreateVertexShader, (const void *)*data,
-		              (unsigned long long)shader->loadDef.programSize, (void *)nullptr, &shader->vs);
+		              (unsigned long long)shader->prog.loadDef.programSize, (void *)nullptr, &shader->prog.vs);
 		Sys_TempPriorityEnd(&priority);
 		return;
 	}
-	shader->vs = nullptr;
+	shader->prog.vs = nullptr;
 }
 
 // Store 14063BA50: the asset reload callbacks (Material_Reload*, gfx_d3d/r_material.cpp in the PS4 MAP) create the
@@ -226,62 +163,62 @@ void Material_ReloadComputeShader(XAssetHeader header, void *data)
 void Material_ReloadDomainShader(XAssetHeader header, void *data)
 {
 	MaterialDomainShader *shader = header.domainShader;
-	if (shader->loadDef.program && r_loadForRenderer->current.enabled &&
-	    shader->loadDef.loadForRenderer == r_rendererInUse->current.integer)
+	if (shader->prog.loadDef.program && r_loadForRenderer->current.enabled &&
+	    shader->prog.loadDef.loadForRenderer == r_rendererInUse->current.integer)
 	{
-		ComCall<long>(dx.d3d11device, DEV_CreateDomainShader, (const void *)shader->loadDef.program,
-		              (unsigned long long)shader->loadDef.programSize, (void *)nullptr, &shader->ds);
+		ComCall<long>(dx.d3d11device, DEV_CreateDomainShader, (const void *)shader->prog.loadDef.program,
+		              (unsigned long long)shader->prog.loadDef.programSize, (void *)nullptr, &shader->prog.ds);
 		return;
 	}
-	shader->ds = nullptr;
+	shader->prog.ds = nullptr;
 }
 
 // Store 14063BB10
 void Material_ReloadHullShader(XAssetHeader header, void *data)
 {
 	MaterialHullShader *shader = header.hullShader;
-	if (shader->loadDef.program && r_loadForRenderer->current.enabled &&
-	    shader->loadDef.loadForRenderer == r_rendererInUse->current.integer)
+	if (shader->prog.loadDef.program && r_loadForRenderer->current.enabled &&
+	    shader->prog.loadDef.loadForRenderer == r_rendererInUse->current.integer)
 	{
-		ComCall<long>(dx.d3d11device, DEV_CreateHullShader, (const void *)shader->loadDef.program,
-		              (unsigned long long)shader->loadDef.programSize, (void *)nullptr, &shader->hs);
+		ComCall<long>(dx.d3d11device, DEV_CreateHullShader, (const void *)shader->prog.loadDef.program,
+		              (unsigned long long)shader->prog.loadDef.programSize, (void *)nullptr, &shader->prog.hs);
 		return;
 	}
-	shader->hs = nullptr;
+	shader->prog.hs = nullptr;
 }
 
 // Store 14063BB80
 void Material_ReloadPixelShader(XAssetHeader header, void *data)
 {
 	MaterialPixelShader *shader = header.pixelShader;
-	if (shader->loadDef.program && r_loadForRenderer->current.enabled &&
-	    shader->loadDef.loadForRenderer == r_rendererInUse->current.integer)
+	if (shader->prog.loadDef.program && r_loadForRenderer->current.enabled &&
+	    shader->prog.loadDef.loadForRenderer == r_rendererInUse->current.integer)
 	{
 		TempPriority priority;
 		Sys_TempPriorityAtLeastNormalBegin(&priority);
-		ComCall<long>(dx.d3d11device, DEV_CreatePixelShader, (const void *)shader->loadDef.program,
-		              (unsigned long long)shader->loadDef.programSize, (void *)nullptr, &shader->ps);
+		ComCall<long>(dx.d3d11device, DEV_CreatePixelShader, (const void *)shader->prog.loadDef.program,
+		              (unsigned long long)shader->prog.loadDef.programSize, (void *)nullptr, &shader->prog.ps);
 		Sys_TempPriorityEnd(&priority);
 		return;
 	}
-	shader->ps = nullptr;
+	shader->prog.ps = nullptr;
 }
 
 // Store 14063BC10
 void Material_ReloadVertexShader(XAssetHeader header, void *data)
 {
 	MaterialVertexShader *shader = header.vertexShader;
-	if (shader->loadDef.program && r_loadForRenderer->current.enabled &&
-	    shader->loadDef.loadForRenderer == r_rendererInUse->current.integer)
+	if (shader->prog.loadDef.program && r_loadForRenderer->current.enabled &&
+	    shader->prog.loadDef.loadForRenderer == r_rendererInUse->current.integer)
 	{
 		TempPriority priority;
 		Sys_TempPriorityAtLeastNormalBegin(&priority);
-		ComCall<long>(dx.d3d11device, DEV_CreateVertexShader, (const void *)shader->loadDef.program,
-		              (unsigned long long)shader->loadDef.programSize, (void *)nullptr, &shader->vs);
+		ComCall<long>(dx.d3d11device, DEV_CreateVertexShader, (const void *)shader->prog.loadDef.program,
+		              (unsigned long long)shader->prog.loadDef.programSize, (void *)nullptr, &shader->prog.vs);
 		Sys_TempPriorityEnd(&priority);
 		return;
 	}
-	shader->vs = nullptr;
+	shader->prog.vs = nullptr;
 }
 
 // ---- input layouts --------------------------------------------------------------------------------------------
@@ -318,14 +255,17 @@ ID3D11InputLayout *Material_BuildVertexDecl(const MaterialStreamRouting *routing
 		elemTable[elemIndexInsert].InstanceDataStepRate = 0;
 	}
 	ComCall<long>(dx.d3d11device, DEV_CreateInputLayout, (const D3D11_INPUT_ELEMENT_DESC *)elemTable,
-	              (unsigned int)elemIndex, (const void *)vs->loadDef.program, (unsigned long long)vs->loadDef.programSize,
+	              (unsigned int)elemIndex, (const void *)vs->prog.loadDef.program, (unsigned long long)vs->prog.loadDef.programSize,
 	              &decl);
 	return decl;
 }
 
-// Store 1406650E0 (name unknown; Black Ops' Load_BuildVertexDecl loop): the input layouts of every vertex
-// declaration type for one routing and vertex shader, or all NULL when nothing is loaded for this renderer.
-void sub_1406650E0(MaterialVertexStreamRouting *routing, unsigned int streamCount, const MaterialVertexShader *vs)
+// Store 1406650E0: Load_MaterialVertexStreamRouting (the servers' MAP names it, folded into an empty stub there; the
+// Store build's Load_MaterialVertexDeclaration calls it where the servers' does; Black Ops' Load_BuildVertexDecl
+// loop): the input layouts of every vertex declaration type for one routing and the pass's vertex shader, or all
+// NULL when nothing is loaded for this renderer.
+void Load_MaterialVertexStreamRouting(MaterialVertexStreamRouting *routing, unsigned int streamCount,
+                                      MaterialVertexShader *vs)
 {
 	if (!r_loadForRenderer->current.enabled || !streamCount)
 	{
