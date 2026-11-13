@@ -167,7 +167,7 @@ void Load_XModel(bool atStreamStart)
 	{
 		g_streamPos = (unsigned char *)(((unsigned long long)g_streamPos + 1) & ~1ull);
 		varXModel->unknown230 = (unsigned short *)g_streamPos;
-		unk_144424D18 = (unsigned short *)g_streamPos;
+		varushort = (unsigned short *)g_streamPos;
 		Load_Stream(true, g_streamPos, sizeof(unsigned short) * (unsigned long long)varXModel->numsurfs);
 	}
 	varPhysPresetPtr = &varXModel->physPreset;

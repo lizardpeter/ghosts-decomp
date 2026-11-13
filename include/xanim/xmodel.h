@@ -162,5 +162,5 @@ extern XBoneInfo *varXBoneInfo;
 extern DObjAnimMat *varDObjAnimMat;
 extern ReactiveMotionModelPart *varReactiveMotionModelPart;
 extern Material **varMaterialHandle;
-extern unsigned short *unk_144424D18;  // Store only: XModel::unknown230 being loaded
+extern unsigned short *varushort;  // Store only: XModel::unknown230 being loaded
 extern const XSurface *g_defaultSurfs;
