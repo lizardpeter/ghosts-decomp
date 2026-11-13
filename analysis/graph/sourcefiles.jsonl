@@ -946,6 +946,7 @@
 {"path": "gfx_d3d/r_globals_d3d.h", "subsystem": "gfx_d3d"}
 {"path": "gfx_d3d/r_image.cpp", "subsystem": "gfx_d3d"}
 {"path": "gfx_d3d/r_image_load_common.cpp", "subsystem": "gfx_d3d"}
+{"path": "gfx_d3d/r_image_load_db.cpp", "subsystem": "gfx_d3d"}
 {"path": "gfx_d3d/r_init.cpp", "subsystem": "gfx_d3d"}
 {"path": "gfx_d3d/r_light.cpp", "subsystem": "gfx_d3d"}
 {"path": "gfx_d3d/r_macroclut.cpp", "subsystem": "gfx_d3d"}
