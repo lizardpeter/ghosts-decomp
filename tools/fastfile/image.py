@@ -111,6 +111,48 @@ def load_gfx_image(s, image: int, at_stream_start: bool = True):
     s.xstring_ptr(image + 0x60)
     load_texture_pixels(s, image)
     s.pop()
+    set_stream_picmip(s, image)
+
+
+# The picmip settings (14A2E2968/6C/70: colour, normal, specular), 0 unless r_picmip* were changed
+PICMIP_SETTINGS = (0, 0, 0)
+
+
+def get_picmip(semantic: int, settings=None) -> tuple:
+    """Image_GetPicmip (14062B3C0): (platform[0], platform[1]) for a texture semantic."""
+    colour, normal, specular = settings or PICMIP_SETTINGS
+    value = {2: colour, 3: colour, 10: colour, 11: colour, 12: colour, 14: colour,
+             5: normal, 13: normal, 8: specular}.get(semantic)
+    if value is None:
+        return 0, 0
+    return max(0, min(3, value)), 2
+
+
+def set_stream_picmip(s, image: int, settings=None):
+    """1403723B0 -> sub_14062E430, run by Load_GfxImage on every image: GfxImage::picmip (+0x20), the stream
+    levels left off the top (docs/assets/images.md 5)."""
+    raw = s.read(image, GFX_IMAGE_SIZE)
+    if raw[0x1F] & 0x02:
+        s.write(image + 0x20, bytes(2))
+        return
+    pm0, pm1 = get_picmip(raw[0x1D], settings)
+    max_size = 0x400 >> (pm0 & 0x1F)
+    levels = [struct.unpack_from("<HH", raw, 0x40 + 8 * k) for k in range(STREAM_LEVELS)]
+    count = next((k for k, (w, _) in enumerate(levels) if not w), STREAM_LEVELS)
+    top = count - 1
+    if top > 0:
+        limit = pm0 if pm0 <= top else top & 0xFF
+        pm0 = limit
+        if limit:
+            dropped = 0
+            while max_size < levels[top][0] and max_size < levels[top][1]:
+                dropped += 1
+                top -= 1
+                if dropped >= limit:
+                    break
+            else:
+                pm0 = dropped
+    s.write(image + 0x20, bytes((pm0, pm1)))
 
 
 def load_image_stream(s, linked: int):

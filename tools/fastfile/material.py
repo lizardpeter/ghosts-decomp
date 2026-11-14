@@ -463,6 +463,29 @@ def read_material(s, at):
     return m
 
 
+# Texture roles of the lit world/model shaders: the name hash of a MATERIAL_TEXTURE argument and the register it is
+# bound to in the lit pixel shaders' DXBC (docs/assets/world.md, "Lighting"), and the image semantics that agree.
+ROLE_BY_HASH = {0xA0AB1041: "base", 0x59D30D0F: "normal", 0x34ECCCB3: "specular"}   # t0, t6, t7
+ROLE_BY_SEMANTIC = {2: "base", 5: "normal", 8: "specular"}    # TS_COLOR_MAP, TS_NORMAL_MAP, TS_SPECULAR_MAP
+
+
+def texture_roles(material):
+    """{"base"|"normal"|"specular": texture entry} of a read_material() dict: an entry whose name hash names the
+    role, unless its semantic says another role (water and other special shaders reuse the hashes), else the first
+    entry of that role's semantic."""
+    out = {}
+    textures = [t for t in material["textures"] if t["semantic"] != TS_WATER_MAP and t.get("image")]
+    for t in textures:
+        role = ROLE_BY_HASH.get(t["nameHash"])
+        if role and ROLE_BY_SEMANTIC.get(t["semantic"], role) == role:
+            out.setdefault(role, t)
+    for t in textures:
+        role = ROLE_BY_SEMANTIC.get(t["semantic"])
+        if role:
+            out.setdefault(role, t)
+    return out
+
+
 def _image_name(s, p):
     """An image pointer as far as this module can tell: its name if it points at a loaded GfxImage (whose name
     the image module knows), else the address."""
