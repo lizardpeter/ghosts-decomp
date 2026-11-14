@@ -140,7 +140,8 @@ change per function, all caught).
 | 140351830 | Load_GfxWorldDraw | 14034FD70 | Load_GfxStaticModelVertexLightingInfo |
 | 140351E00 | Load_GfxWorldVertexData0 | 140361E10 | (name unknown): the constant buffer pointer arrays |
 | 140351EB0 | Load_GfxWorldVertexLayerData | 140350990 | Load_GfxWorldDpvsDynamic |
-| 1401B7180 | (name unknown): the Umbra tome pointer | | |
+| 1401B7180 | (name unknown): the Umbra tome pointer | 14034BBC0 | Load_ComWorld (com_map, section 8) |
+|  |  | 14034BD90 | Load_ComWorldPtr |
 
 The names other than Load_GfxWorldPtr/Load_GfxWorld/Load_GfxWorldAsset follow the generator's Load_<Type>
 convention for the struct each loads (the servers don't have these functions); the 53 stream variables they set
