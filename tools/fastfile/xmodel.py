@@ -216,7 +216,7 @@ def db_xmodel_surfs_fixup(s, model: int, default_surfs: int = 0):
         s.put_u64(info + 0x30, s.u64(surfs + 8))
         n = _u16(s, surfs + 0x10)
         s.write(info + 4, struct.pack("<HH", n, total & 0xFFFF))
-        if s.u64(surfs + 8) == default_surfs and default_surfs:
+        if s.u64(surfs + 8) == default_surfs:   # as the game: g_defaultSurfs is 0 until a default is loaded
             flags |= XMODEL_FLAG_DEFAULT_SURFS
         total += n
     s.write(model + 0x1F3, bytes([flags]))

@@ -1,0 +1,133 @@
+# The world's render data (GfxWorld, gfx_map)
+
+What a map's render geometry is in the Store build (`iw6mp64_MSStore_ship`), how its zone carries it, and how to
+get it out. From the Store build's loader (VAs given) and verified on real maps: the reference reader
+(`tools/fastfile/gfxworld.py`) loads the GfxWorld of **mp_conflict.ff** (Dynasty) and **mp_alien_armory.ff**
+(Point of Contact) to exactly the state the game's own loader leaves (section 6). The servers have the struct
+types (their GfxWorld is 0x9E8 bytes, PC 0xA30) but load almost none of it; names here are theirs where the
+layout matches, and the PC-only parts are described. *unverified* marks what isn't established.
+
+```
+python3 tools/fastfile/gfxworld.py <map.ff> --out <dir>          (a zone the readers can walk to its GfxWorld)
+python3 tests/fastfile/world_check.py <map.ff>                   (the game's loader in the emulator; $IW6_ORIGINALS)
+```
+
+The glTF export (`gfxworld.to_gltf`) has the world surfaces (one primitive per material: position, normal, UV,
+lightmap UV, vertex colour) and every static model placement as a node with its XModel's LOD 0 as mesh, in game
+units (inches, Z up) under a root node that turns them to glTF's Y up (and metres with `--scale`).
+
+## 1. Where it is
+
+Asset type **0x1A** (`gfx_map`, DB_GetXAssetTypeSize 0xA30), name `maps/mp/<map>.d3dbsp`. In the map's own zone,
+near the end (mp_conflict.ff: asset 1702 of 1707, after the collision map). Its data is most of the zone:
+mp_conflict.ff's GfxWorld is 0x6449000 bytes (100 MB) of the decompressed stream, mp_alien_armory.ff's 0x8A3D200.
+The XModels it places are loaded inline (inside the static model list) unless an earlier asset loaded them; so are
+its materials and images (the images streamed, docs/assets/images.md).
+
+## 2. GfxWorld (0xA30 bytes)
+
+| Off | Field | Loaded as |
+|---|---|---|
+| 0x000 | name, baseName | XStrings |
+| 0x010 | bspVersion, planeCount (+0x14), nodeCount (+0x18), surfaceCount (+0x1C), skyCount (+0x20) | |
+| 0x028 | skies | skyCount × 0x20 GfxSky: skySurfCount, skyStartSurfs (int ×), skyImage (GfxImage) |
+| 0x030 | lastSunPrimaryLightIndex, primaryLightCount (+0x34), primaryLightEnvCount, sort keys | |
+| 0x050 | dpvsPlanes (0x20) | Load_GfxWorldDpvsPlanes 140350CA0: cellCount, planes (planeCount × 0x14; -1 inline, else an offset to an earlier copy), nodes (u16 ×), sceneEntCellBits (runtime) |
+| 0x070 | aabbTreeCounts | cellCount ints |
+| 0x078 | aabbTrees | cellCount × 8, 128-aligned; each (Load_GfxCellTree 14034EE10) aabbTreeCounts[cell] × 0x38 GfxAabbTree with smodelIndexes (u16 ×) |
+| 0x080 | cells | cellCount × 0x48 GfxCell (Load_GfxCell 14034EC90): bounds, portals (0x50 each, vertices 12 bytes each), reflection probe and reference index bytes |
+| 0x088 | draw (0xB0) | Load_GfxWorldDraw 140351830, section 3 |
+| 0x138 | lightGrid (0x620) | Load_GfxLightGrid 14034F650: rowDataStart, rawRowData, entries (8), colors (0xA8), stage gains, palette, and the tree (14034F8A0) at +0x5D0 |
+| 0x758 | modelCount, models | × 0x3C GfxBrushModel (bounds, radius, startSurfIndex, surfaceCount) |
+| 0x768 | bounds | *unverified* (the values measured don't look like bounds) |
+| 0x784 | materialMemoryCount, materialMemory | × 0x10 {Material *, int} |
+| 0x790 | sun (0x70 sunflare_t) | spriteMaterial (+8), flareMaterial (+0x10) |
+| 0x7F0 | outdoorLookupMatrix (+0x800), outdoorImage (+0x840) | GfxImage |
+| 0x848 | cellCasterBits, cellHasSunLitSurfsBits, sceneDynModel, sceneDynBrush, primaryLight(DynEnt)ShadowVis ×3, nonSunPrimaryLightForModelDynEnt | runtime block, sized from the counts |
+| 0x888 | shadowGeom, shadowGeomOptimized | primaryLightCount × 0x18 (Load_GfxShadowGeometryArray 14034FBD0) |
+| 0x898 | lightRegion | primaryLightCount × 0x10, hulls 0x58, axes 0x14 (Load_GfxLightRegion 14034F950) |
+| 0x8A0 | dpvs (0x118; 0xE0 on the servers) | Load_GfxWorldDpvsStatic 140350DD0, section 4 |
+| 0x9B8 | dpvsDyn (0x50) | Load_GfxWorldDpvsDynamic 140350990: all runtime |
+| 0xA08 | mapVtxChecksum, heroOnlyLightCount (+0xA0C), heroOnlyLights (+0xA10, × 0x44) | |
+| 0xA18 | fogTypesAllowed | |
+| 0xA1C | PC only: Umbra tome size, tome data (+0xA20, 16-aligned), tome pointer (+0xA28) | the visibility data of the Umbra library: magic 0xD600, version 0x12 (1406B8020 checks it and points +0xA28 at it) |
+
+## 3. Geometry (GfxWorldDraw, +0x88)
+
+| Off | Field |
+|---|---|
+| 0x00 | reflectionProbeCount; reflectionProbes (+0x08, GfxImage * each), reflectionProbeOrigins (+0x10, 0x20 each with probe volumes 0x60), textures (+0x18, runtime) |
+| 0x20 | reflectionProbeReferenceCount; origins (+0x28, 12 bytes), references (+0x30, bytes) |
+| 0x38 | lightmapCount; lightmaps (+0x40, {primary, secondary} GfxImage), runtime textures (+0x48, +0x50), override images (+0x58, +0x60) |
+| 0x68 | trisType, vertexCount (+0x6C) |
+| 0x70 | vertices: vertexCount × **GfxWorldVertex** (0x2C), vertex buffer (+0x78) |
+| 0x80 | vertexLayerDataSize; layer data (+0x88), its buffer (+0x90) |
+| 0x98 | indexCount; indices (+0xA0, u16), index buffer (+0xA8) |
+
+**GfxWorldVertex** (0x2C): xyz (3 float), binormalSign (float), colour (RGBA8), texCoord (2 float), lmapCoord
+(2 float), normal and tangent (PackedUnitVec, 10:10:10:2 as in models, docs/assets/models.md).
+
+A **surface** (GfxSurface, 0x28, in dpvs.surfaces): srfTriangles_t {vertexLayerData, firstVertex, maxEdgeLength,
+vertexCount (u16), triCount (u16), baseIndex}, the Material (+0x18) and 8 bytes of lighting and flags (+0x20).
+Its triangles are `indices[baseIndex .. baseIndex + 3 × triCount]`, each **relative to firstVertex** (checked: on
+both maps every surface's indices stay inside the vertex array).
+
+## 4. Static models and surfaces (GfxWorldDpvsStatic, +0x8A0, 0x118 bytes)
+
+| Off | Field |
+|---|---|
+| 0x00 | smodelCount, staticSurfaceCount, the lit/decal/trans/shadow/emissive begin-end pairs |
+| 0x30 | smodelVisDataCount, surfaceVisDataCount |
+| 0x38-0xB0 | vis data: twelve runtime arrays (128-aligned) and one in the zone at +0x98 (smodelCount + 1 words; PC only) |
+| 0xB8 | sortedSurfIndex (staticSurfaceCount words) |
+| 0xC0 | smodelInsts (× 0x24: bounds, lighting origin) |
+| 0xC8 | surfaces (surfaceCount × 0x28, above) |
+| 0xD0 | surfacesBounds (× 0x24 on PC; 0x1C on the servers) |
+| 0xD8 | smodelDrawInsts (× **0xB0** on PC; 0x90 on the servers), below |
+| 0xE0-0xF8 | runtime: surfaceMaterials (× 0x10), surfaceCastsSunShadow, sunShadowOptCount (+0xF0), sunSurfVisDataCount (+0xF4), surfaceCastsSunShadowOpt |
+| 0x100 | constantBuffersLit, constantBuffersAmbient (runtime: smodelCount pointers) |
+
+**GfxStaticModelDrawInst** (0xB0): placement (origin, axis[3][3] forward/left/up, scale: 0x34 bytes), XModel *
+(+0x38), groundLighting (+0x40), vertex lighting info (+0x50, **0x38** on PC: lighting values × 0x14, their buffer and
+"lightingValuesView" shader view, numLightingValues at +0x34), then, *unverified* (the servers' order at the PC
+sizes): lightmap info (+0x88, lightmapIndex +0x98), lightingHandle, cullDist (+0x9E), flags (+0xA0), staticModelId,
+primaryLightEnvIndex, reflectionProbeIndex, firstMtlSkinIndex, sunShadowFlags.
+
+## 5. Measured
+
+| | mp_conflict (Dynasty) | mp_alien_armory (Point of Contact) |
+|---|---|---|
+| vertices | 374,756 | 652,316 |
+| surfaces | 10,225 (373 materials) | 34,741 |
+| static model placements / models | 5,566 / 185 (all in the zone) | 10,112 / 403 (399 in the zone) |
+| cells, lightmaps, probes (Dynasty) | 37, 2, 3 | |
+
+Rendered from the glTF export, both are the maps as in the game (layout, buildings, trees, placements).
+
+## 6. How it was checked
+
+`tests/fastfile/world_check.py` runs the Store build's own fastfile loader on the whole zone in the emulator
+(tests/fastfile/store_emu.py), stops it where Load_GfxWorldPtr (140351D10) starts, hands the reader the game's
+stream state (zone position, block positions, position stack, block memory, asset pool, streamed-image row
+cursor), lets both load the GfxWorld, and compares the state when Load_GfxWorldPtr returns: the zone position,
+every block's position and every byte written to it, and the asset pool. On both maps all are equal, with two
+rules: GPU objects (D3D11 buffers and views) are 0 in the reader where the game created an object (it creates
+material constant buffers even with r_loadForRenderer off); and XModel flag bytes are taken from the reader,
+because the emulator's stand-in for DB_LinkXAssetEntry1 doesn't write the pool header back as the real one does
+(14036D830), so there the game's surfs fixup runs on the other copy.
+
+Doing this needed three emulator changes: a larger allocation heap (a map zone authenticates hundreds of blocks),
+a stand-in for references to other zones' assets that aren't loaded (DB_AllocXAssetEntry with the default asset,
+14036B340: a zeroed header in its own region), and tolerance for context methods sharing the device stand-in.
+The reader also gained Load_NetConstStrings, the image picmip after loading (docs/assets/images.md 5) and the
+faithful default-surfs flag in DB_XModelSurfsFixup.
+
+## 7. Not done
+
+- The C reconstructions of these loaders (the names are recorded; the Python reader is the verified reference).
+- The collision map (col_map_mp), map entities (map_ents), lights (com_map, lightdef), effects (fx_map), glass
+  (glass_map): separate assets.
+- The light grid's encoding, the Umbra tome's contents, the surface lighting flags, the vertex layer data and the
+  PC-only vis arrays: loaded and placed exactly, their meaning *unverified*.
+- Walking a map zone from the start with the readers alone needs every asset type before the GfxWorld (sound,
+  fx, xanim, ...); until then the game's loader gets there (world_check.py).

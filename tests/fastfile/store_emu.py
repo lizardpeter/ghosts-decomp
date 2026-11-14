@@ -38,11 +38,16 @@ SCRATCH = 0x00500000          # DBFile, XZoneMemory, the output buffer, link ent
 FILEBUF = 0x10000000          # the .ff bytes
 ARENA = 0x40000000            # zone block memory (PMem_AllocFromSource)
 POOL, POOL_SIZE = 0x30000000, 0x01000000  # asset headers (DB_LinkXAssetEntry1)
-CRT_HEAP, CRT_HEAP_SIZE = 0x20000000, 0x01000000  # malloc/calloc/realloc (libtomcrypt's bignums)
+DEFAULTS, DEFAULTS_SIZE = 0x31000000, 0x01000000  # zeroed headers for references to other zones' assets
+CRT_HEAP, CRT_HEAP_SIZE = 0x20000000, 0x08000000  # malloc/calloc/realloc (libtomcrypt's bignums; never freed: a map zone authenticates hundreds of blocks)
 
 DB_LoadXFile = 0x140349300
 FAKE_ALLOC, FAKE_SL_GETSTRING, FAKE_LINK = 0x140543A40, 0x14047D4D0, 0x14036D830
 LOAD_XASSET = 0x14035D5F0
+# DB_AllocXAssetEntry with the default asset (14036B340): a reference to an asset of another zone (a name starting
+# with ',') that isn't loaded. The game copies the type's default asset (from a zone the emulator doesn't have);
+# the fake hands back a zeroed header of the type's size, which only the referencing pointer stores.
+FAKE_DEFAULT_ENTRY = 0x14036B340
 FAKE_RET0 = (0x140264A70, 0x1404A8B60, 0x140190E40)
 FAKE_RET1 = (0x140190C90,)
 ERRORS = {0x14045FB30: "Com_Error", 0x14054D9C0: "Sys_Error", 0x1403496B0: "DB_DirtyDiscError"}
@@ -106,6 +111,7 @@ class StoreLoader:
         mu.mem_map(ARENA, arena_size)
         mu.mem_map(CRT_HEAP, CRT_HEAP_SIZE)
         mu.mem_map(POOL, POOL_SIZE)
+        mu.mem_map(DEFAULTS, DEFAULTS_SIZE)
         # A null COM object for the D3D11 device and immediate context (dx.device 14A37D628, dx.context
         # 14A37D630): every method returns S_OK; the device's Create* methods hand back this same object through
         # their out pointer. Loading creates GPU objects through it (XGfxGlobals' buffers, materials' state
@@ -125,7 +131,9 @@ class StoreLoader:
             mu.mem_write(stub, b"\x31\xc0\xc3")
             mu.mem_write(slot, struct.pack("<Q", stub))
         mu.hook_add(UC_HOOK_CODE, self._on_stub, begin=STUBS, end=STUBS + 0xFFFF)
-        self.fakes = {LOAD_XASSET: self._load_xasset, FAKE_ALLOC: self._alloc, FAKE_SL_GETSTRING: self._sl_getstring, FAKE_LINK: self._link}
+        self.fakes = {LOAD_XASSET: self._load_xasset, FAKE_ALLOC: self._alloc, FAKE_SL_GETSTRING: self._sl_getstring, FAKE_LINK: self._link,
+                      FAKE_DEFAULT_ENTRY: self._default_entry}
+        self.hooks = {}   # Store VA -> callable(loader): called before the instruction there runs (load(..., hooks=))
         for a in FAKE_RET0:
             self.fakes[a] = lambda mu: 0
         for a in FAKE_RET1:
@@ -163,6 +171,11 @@ class StoreLoader:
             value = fn(mu)
             if value is not False:
                 self._ret(mu, value)
+
+    def _on_hook(self, mu, address, size, user):
+        fn = self.hooks.get(address)
+        if fn:
+            fn(self)
 
     def _load_xasset(self, mu):
         if self.stop_at_assets:
@@ -236,7 +249,10 @@ class StoreLoader:
         rsp = mu.reg_read(UC_X86_REG_RSP)
         out = self.u64(rsp + 8 + 8 * where) if isinstance(where, int) and where < 16 else mu.reg_read(where)
         if out:
-            mu.mem_write(out, struct.pack("<Q", self.com))
+            try:
+                mu.mem_write(out, struct.pack("<Q", self.com))
+            except UcError:
+                pass  # the device and the context share this object: a context method with that slot has no out
 
     def _alloc(self, mu):
         size, align = mu.reg_read(UC_X86_REG_RCX), mu.reg_read(UC_X86_REG_RDX)
@@ -251,6 +267,18 @@ class StoreLoader:
         self.script_strings.append(self.cstr(mu.reg_read(UC_X86_REG_RCX)))
         return len(self.script_strings)
 
+    def _default_entry(self, mu):
+        asset_type = mu.reg_read(UC_X86_REG_RCX) & 0xFFFFFFFF
+        name = self.cstr(mu.reg_read(UC_X86_REG_RDX))
+        self.defaults.append((asset_type, name))
+        at = (self.defaults_next + 15) & ~15
+        self.defaults_next = at + TYPE_SIZE[asset_type]
+        if self.defaults_next > DEFAULTS + DEFAULTS_SIZE:
+            raise LoadError("default asset region full")
+        entry = SCRATCH + 0xC0000 + 0x20 * (len(self.defaults) % 0x800)
+        mu.mem_write(entry, struct.pack("<QQ", asset_type, at))
+        return entry
+
     def _link(self, mu):
         asset_type, header_ptr = mu.reg_read(UC_X86_REG_RCX) & 0xFFFFFFFF, mu.reg_read(UC_X86_REG_RDX)
         header = self.u64(header_ptr)
@@ -264,7 +292,7 @@ class StoreLoader:
         return entry
 
     # --- the run -------------------------------------------------------------------------------------------------
-    def load(self, ff: bytes, zone_name: str, assets=True, limit=0):
+    def load(self, ff: bytes, zone_name: str, assets=True, limit=0, hooks=None):
         """DB_LoadXFile(&zoneMem, &file, out) on `ff`. Returns a dict of what the game saw.
 
         assets=False stops at the first Load_XAsset (14035D5F0): the header checks, authentication, the XFile
@@ -274,6 +302,16 @@ class StoreLoader:
         mu = self.mu
         self.stop_at_assets = not assets
         self.error, self.imports, self.allocs, self.script_strings, self.linked = None, [], [], [], []
+        self.defaults = []
+        if getattr(self, "defaults_next", DEFAULTS) > DEFAULTS:
+            mu.mem_write(DEFAULTS, b"\0" * (self.defaults_next - DEFAULTS))
+        self.defaults_next = DEFAULTS
+        for va, fn in (hooks or {}).items():
+            if va not in self.hooks:
+                mu.hook_add(UC_HOOK_CODE, self._on_hook, begin=va, end=va)
+            self.hooks[va] = fn
+        for va in set(self.hooks) - set(hooks or {}):
+            self.hooks[va] = None
         if getattr(self, "arena_next", ARENA) > ARENA:   # block memory starts zeroed, so runs compare cleanly
             mu.mem_write(ARENA, b"\0" * (self.arena_next - ARENA))
         self.arena_next = ARENA
