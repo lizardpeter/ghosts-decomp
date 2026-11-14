@@ -122,9 +122,32 @@ a stand-in for references to other zones' assets that aren't loaded (DB_AllocXAs
 The reader also gained Load_NetConstStrings, the image picmip after loading (docs/assets/images.md 5) and the
 faithful default-surfs flag in DB_XModelSurfsFixup.
 
-## 7. Not done
+## 7. Reconstructed in C
 
-- The C reconstructions of these loaders (the names are recorded; the Python reader is the verified reference).
+`src/gfx_d3d/r_gfx_world_load_db.cpp` (structs in `include/gfx_d3d/r_gfx_world.h`, sizes and offsets asserted):
+every function below is differential-tested against the Store build (`tests/differential/test_gfxworld_load.py`,
+150-200 random inputs each, with the stream functions and every callee as logged fakes, so the zone consumed, every
+byte written, every stream variable set and every call made are compared) and mutation-checked (one deliberate
+change per function, all caught).
+
+| VA | Function | VA | Function |
+|---|---|---|---|
+| 140351D10 | Load_GfxWorldPtr | 14034F650 | Load_GfxLightGrid |
+| 14034FF30 | Load_GfxWorld | 14034F8A0 | Load_GfxLightGridTree |
+| 140350CA0 | Load_GfxWorldDpvsPlanes | 14034FBD0 | Load_GfxShadowGeometryArray |
+| 14034EE10 | Load_GfxCellTree | 14034F950 | Load_GfxLightRegion |
+| 14034EC90 | Load_GfxCell | 140350DD0 | Load_GfxWorldDpvsStatic |
+| 140351830 | Load_GfxWorldDraw | 14034FD70 | Load_GfxStaticModelVertexLightingInfo |
+| 140351E00 | Load_GfxWorldVertexData0 | 140361E10 | (name unknown): the constant buffer pointer arrays |
+| 140351EB0 | Load_GfxWorldVertexLayerData | 140350990 | Load_GfxWorldDpvsDynamic |
+| 1401B7180 | (name unknown): the Umbra tome pointer | | |
+
+The names other than Load_GfxWorldPtr/Load_GfxWorld/Load_GfxWorldAsset follow the generator's Load_<Type>
+convention for the struct each loads (the servers don't have these functions); the 53 stream variables they set
+are named var<Type> the same way (records/names.tsv).
+
+## 8. Not done
+
 - The collision map (col_map_mp), map entities (map_ents), lights (com_map, lightdef), effects (fx_map), glass
   (glass_map): separate assets.
 - The light grid's encoding, the Umbra tome's contents, the surface lighting flags, the vertex layer data and the
