@@ -56,6 +56,7 @@ G_STREAM_POS_ARRAY = 0x145F06618  # g_streamPosArray[7]
 G_VAR_XASSET_LIST = 0x144310BF8   # g_varXAssetList (XAssetList, 0x28 bytes)
 G_STREAM_IMAGE_COUNT = 0x1443A4820
 G_STREAM_IMAGE_ROWS = 0x144310C20  # the rows, 0x18 bytes each
+G_STREAM_ROW_CURSOR = 0x144310BF4  # sub_1403492E0's index into them
 
 
 # offset of the name pointer in an asset header, by type (the name getters at 1409924A0)
@@ -285,10 +286,17 @@ class StoreLoader:
         name_ptr = self.u64(header + NAME_OFFSET.get(asset_type, 0))
         self.linked.append((asset_type, header, self.cstr(name_ptr) if name_ptr else None))
         at = (self.pool_next + 15) & ~15
+        self.pool_of[header] = at
         mu.mem_write(at, bytes(mu.mem_read(header, TYPE_SIZE[asset_type])))
         self.pool_next = at + TYPE_SIZE[asset_type]
         entry = SCRATCH + 0x80000 + 0x20 * len(self.linked)
         mu.mem_write(entry, struct.pack("<QQ", asset_type, at))
+        if asset_type == 0x0D and mu.mem_read(at + 0x35, 1)[0]:
+            # the real link runs the image type's stream hook, Load_ImageStream (140374E70), on a new image: a
+            # streamed one takes the next four rows (sub_1403492E0's cursor, 144310BF4)
+            cursor = struct.unpack("<I", bytes(mu.mem_read(G_STREAM_ROW_CURSOR, 4)))[0]
+            self.image_rows[at] = cursor
+            mu.mem_write(G_STREAM_ROW_CURSOR, struct.pack("<I", cursor + 4))
         return entry
 
     # --- the run -------------------------------------------------------------------------------------------------
@@ -303,6 +311,8 @@ class StoreLoader:
         self.stop_at_assets = not assets
         self.error, self.imports, self.allocs, self.script_strings, self.linked = None, [], [], [], []
         self.defaults = []
+        self.image_rows = {}   # pool address of a streamed image -> index of its first row
+        self.pool_of = {}      # header address the loader linked -> its pool copy (the last link of that address)
         if getattr(self, "defaults_next", DEFAULTS) > DEFAULTS:
             mu.mem_write(DEFAULTS, b"\0" * (self.defaults_next - DEFAULTS))
         self.defaults_next = DEFAULTS

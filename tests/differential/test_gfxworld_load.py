@@ -56,6 +56,9 @@ CALLEES = {
     "?Load_GfxWorldDpvsStatic@@YAX_N@Z": _rec("Load_GfxWorldDpvsStatic", "b", ("varGfxWorldDpvsStatic", "g_streamPos")),
     "?Load_GfxWorldDpvsDynamic@@YAX_N@Z": _rec("Load_GfxWorldDpvsDynamic", "b", ("varGfxWorldDpvsDynamic",)),
     "?sub_1401B7180@@YAXPEAPEAXPEAXI@Z": _rec("sub_1401B7180", "qqi", ("varUmbraTome",)),
+    "?Load_ComWorldAsset@@YAXPEAPEAUComWorld@@@Z": ds.asset_linker("Load_ComWorldAsset"),
+    "?Load_ComWorld@@YAX_N@Z": ds.clobbering(_rec("Load_ComWorld", "b", ("varComWorld", "g_streamPos")),
+                                             varComWorldPtr=HEAP + OFF_AUX + 0x1000),
     "?Load_GfxWorld@@YAX_N@Z": ds.clobbering(_rec("Load_GfxWorld", "b", ("varGfxWorld", "g_streamPos")),
                                              varGfxWorldPtr=HEAP + OFF_AUX + 0x1000),
 }
@@ -444,7 +447,49 @@ def _gfx_world_ptr(r):
     return {"args": [flag, bytes(buf)], "setup": setup}
 
 
+# --- Load_ComWorld / Load_ComWorldPtr -----------------------------------------------------------------------------
+
+def _com_world(r):
+    c = bytearray(r.randbytes(0x28))
+    n, envs = _small(r, 3), _small(r, 4)
+    _q(c, 0, r.choice([0, FOLLOWING, FOLLOWING, r.getrandbits(64) | 1]))
+    _u32(c, 0x0C, n)
+    _u32(c, 0x18, envs)
+    _q(c, 0x10, _ptr(r))
+    _q(c, 0x20, _ptr(r))
+    feed = bytearray()
+    if struct.unpack_from("<Q", c, 0)[0] == FOLLOWING:
+        feed += b"maps/mp/x.d3dbsp\0"
+    if struct.unpack_from("<Q", c, 0x10)[0]:
+        lights, names = bytearray(), bytearray()
+        for _ in range(n):
+            light = bytearray(r.randbytes(0x78))
+            p = r.choice([0, FOLLOWING, FOLLOWING, r.getrandbits(64) | 1])
+            _q(light, 0x70, p)
+            lights += light
+            if p == FOLLOWING:
+                names += b"light_def\0"
+        feed += lights
+        # each light's defName follows the array, in order (the loop loads them one by one after the array)
+        feed += names
+    return _input(r, c, feed + r.randbytes(0x100), {"varComWorld": HEAP + OFF_STRUCT})
+
+
+def _com_world_ptr(r):
+    buf, flag = bytearray(r.randbytes(ds.BUF_SIZE)), r.random() < 0.3
+    value = r.choice([0, FOLLOWING, INSERT, INSERT, r.getrandbits(64), 1])
+    _q(buf, OFF_STRUCT, value)
+    zone = ds.Zone(r, (struct.pack("<Q", value) if flag else b"") + r.randbytes(0x100))
+
+    def setup(w):
+        zone.start(w)
+        w.u64(ds.va("varComWorldPtr"), HEAP + OFF_STRUCT)
+    return {"args": [flag, bytes(buf)], "setup": setup}
+
+
 CASES = [
+    case("?Load_ComWorld@@YAX_N@Z", 0xBBC0, _com_world),
+    case("?Load_ComWorldPtr@@YAX_N@Z", 0xBD90, _com_world_ptr),
     case("?Load_GfxWorldDpvsPlanes@@YAX_N@Z", 0xCA0, _dpvs_planes),
     case("?Load_GfxCellTree@@YAX_N@Z", 0xEE10, _cell_tree),
     case("?Load_GfxCell@@YAX_N@Z", 0xEC90, _cell),

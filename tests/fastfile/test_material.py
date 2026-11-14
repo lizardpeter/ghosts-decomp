@@ -255,6 +255,21 @@ def build_container(program_tokens, shader_type=1):
         f"<{len(offs)}I", *offs) + body
 
 
+class TextureRoles(unittest.TestCase):
+    def test_hash_then_semantic(self):
+        def t(h, sem, img):
+            return {"nameHash": h, "semantic": sem, "image": img}
+        m = {"textures": [t(0x12345678, 2, "fallback_col"), t(0xA0AB1041, 5, "water_nml"),
+                          t(0x59D30D0F, 5, "nml"), t(0x34ECCCB3, 0, "spec"), t(0xA0AB1041, 2, "col"),
+                          t(0xA0AB1041, mat.TS_WATER_MAP, None)]}
+        roles = {k: v["image"] for k, v in mat.texture_roles(m).items()}
+        # the base-colour hash on a normal map is not the base colour
+        self.assertEqual(roles, {"base": "col", "normal": "nml", "specular": "spec"})
+        m["textures"] = m["textures"][:2]
+        self.assertEqual({k: v["image"] for k, v in mat.texture_roles(m).items()},
+                         {"base": "fallback_col", "normal": "water_nml"})
+
+
 class Dxbc(unittest.TestCase):
     def test_disassemble(self):
         swz = lambda x, y, z, w: x | y << 2 | z << 4 | w << 6

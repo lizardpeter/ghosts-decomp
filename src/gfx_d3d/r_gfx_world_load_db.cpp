@@ -913,3 +913,97 @@ void Load_GfxWorldPtr(bool atStreamStart)
 	}
 	DB_PopStreamPos();
 }
+
+// --- ComWorld (asset type 0x14) ------------------------------------------------------------------------------------
+
+extern ComWorld *varComWorld;                 // Store 1444267C8
+extern ComWorld **varComWorldPtr;             // Store 1444267D0
+extern ComPrimaryLight *varComPrimaryLight;   // Store 1444267B8
+extern ComPrimaryLightEnv *varComPrimaryLightEnv;  // Store 1444267C0
+
+// Store 14034BBC0 (gfx_d3d/r_material_load_db.h in the PS4 PDB; Load_ComPrimaryLightArray is inlined here)
+void Load_ComWorld(bool atStreamStart)
+{
+	Load_Stream(atStreamStart, varComWorld, sizeof(ComWorld));
+	DB_PushStreamPos(XFILE_BLOCK_VIRTUAL);
+	varXString = &varComWorld->name;
+	Load_Stream(false, varXString, 8);
+	if (*varXString)
+	{
+		if ((unsigned long long)*varXString == DB_PTR_FOLLOWING)
+		{
+			*varXString = (const char *)g_streamPos;
+			varConstChar = (const char *)g_streamPos;
+			Load_XStringCustom(varXString);
+		}
+		else
+		{
+			DB_ConvertOffsetToPointer((unsigned long long *)varXString);
+		}
+	}
+	if (varComWorld->primaryLights)
+	{
+		ALIGN_POS(4);
+		varComWorld->primaryLights = (ComPrimaryLight *)g_streamPos;
+		varComPrimaryLight = (ComPrimaryLight *)g_streamPos;
+		unsigned long long count = varComWorld->primaryLightCount;
+		Load_Stream(true, g_streamPos, count * sizeof(ComPrimaryLight));
+		ComPrimaryLight *light = varComPrimaryLight;
+		for (; count; count--)
+		{
+			varComPrimaryLight = light;
+			Load_Stream(false, light, sizeof(ComPrimaryLight));
+			varXString = &varComPrimaryLight->defName;
+			Load_Stream(false, varXString, 8);
+			if (*varXString)
+			{
+				if ((unsigned long long)*varXString == DB_PTR_FOLLOWING)
+				{
+					*varXString = (const char *)g_streamPos;
+					varConstChar = (const char *)g_streamPos;
+					Load_XStringCustom(varXString);
+				}
+				else
+				{
+					DB_ConvertOffsetToPointer((unsigned long long *)varXString);
+				}
+			}
+			light++;
+		}
+	}
+	if (varComWorld->primaryLightEnvs)
+	{
+		ALIGN_POS(4);
+		varComWorld->primaryLightEnvs = (ComPrimaryLightEnv *)g_streamPos;
+		varComPrimaryLightEnv = (ComPrimaryLightEnv *)g_streamPos;
+		Load_Stream(true, g_streamPos, (unsigned long long)varComWorld->primaryLightEnvCount * sizeof(ComPrimaryLightEnv));
+	}
+	DB_PopStreamPos();
+}
+
+// Store 14034BD90 (gfx_d3d/r_material_load_db.h in the PS4 PDB)
+void Load_ComWorldPtr(bool atStreamStart)
+{
+	Load_Stream(atStreamStart, varComWorldPtr, sizeof(ComWorld *));
+	DB_PushStreamPos(XFILE_BLOCK_TEMP);
+	ComWorld **worldPtr = varComWorldPtr;
+	unsigned long long value = (unsigned long long)*varComWorldPtr;
+	if (value)
+	{
+		if (!DB_PTR_IS_INLINE(value))
+		{
+			DB_ConvertOffsetToAlias((unsigned long long *)varComWorldPtr);
+			DB_PopStreamPos();
+			return;
+		}
+		ALIGN_POS(4);
+		*varComWorldPtr = (ComWorld *)g_streamPos;
+		varComWorld = (ComWorld *)g_streamPos;
+		unsigned char *inserted = value == DB_PTR_INSERT ? DB_InsertPointer() : nullptr;
+		Load_ComWorld(true);
+		Load_ComWorldAsset(worldPtr);
+		if (inserted)
+			*(ComWorld **)inserted = *worldPtr;
+	}
+	DB_PopStreamPos();
+}

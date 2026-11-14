@@ -97,11 +97,37 @@ class Gltf(unittest.TestCase):
         world = G.GfxWorldInfo("w", "w", verts, 3, [0, 1, 2], [G.WorldSurface("mtl", 0, 3, 1, 0, 0, 0)],
                                [G.StaticModel("m", (1, 2, 3), ((1, 0, 0), (0, 1, 0), (0, 0, 1)), 2.0, 0, -1, 0)],
                                1, [], [], [], (), ("", ""), 0, 0)
-        doc, binary = G.to_gltf(world)
-        self.assertEqual([m["name"] for m in doc["materials"]], ["mtl"])
+        sun = G.PrimaryLight(1, 1, 0, (2.0, 1.0, 0.5), (0, 0, 1), (1, 0, 0), (0, 0, 0), 0, 0, 0, "sun")
+        spot = G.PrimaryLight(2, 0, 0, (1.0, 1.0, 1.0), (0, 0, -1), (1, 0, 0), (5, 6, 7), 300, 0.5, 0.9, "spot")
+        doc, binary = G.to_gltf(world, material_images={"mtl": {"base": "mtl.png"}},
+                                lightmap_images={0: {"indirect": "lm0.png"}}, lights=[sun, spot])
+        self.assertEqual([m["name"] for m in doc["materials"]], ["mtl@lm0"])      # surface lightmap index 0
+        self.assertEqual(doc["images"], [{"uri": "mtl.png"}])
+        self.assertEqual(doc["materials"][0]["extras"]["lightmap_images"], {"indirect": "lm0.png"})
+        lights = doc["extensions"]["KHR_lights_punctual"]["lights"]
+        self.assertEqual([l["type"] for l in lights], ["directional", "point" if False else "spot"])
+        self.assertEqual((lights[0]["intensity"], lights[0]["color"]), (2.0, [1.0, 0.5, 0.25]))
         self.assertEqual(doc["nodes"][2]["matrix"][12:15], [1, 2, 3])
         self.assertEqual(doc["nodes"][2]["matrix"][0], 2.0)
         self.assertEqual(doc["accessors"][doc["meshes"][0]["primitives"][0]["indices"]]["count"], 3)
+
+
+class Lightmap(unittest.TestCase):
+    def test_halves_and_direction(self):
+        import numpy as np
+        w, h = 2, 4
+        px = np.zeros((h, w, 4), np.float16)
+        px[:2, :, :3] = 0.25            # ambient
+        px[2:, :, :3] = 2.0             # directional
+        px[:2, :, 3] = 0.6              # dir.x
+        px[2:, :, 3] = 0.0              # dir.y -> z = 0.8
+        amb, dirl, d = G.decode_lightmap(px.tobytes(), w, h)
+        self.assertEqual(amb.shape, (2, 2, 3))
+        np.testing.assert_allclose(d[0, 0], [0.6, 0.0, 0.8], atol=1e-3)
+        flat = G.lightmap_lighting(amb, dirl, d)
+        np.testing.assert_allclose(flat[0, 0], [0.25 + 2.0 * 0.8] * 3, atol=1e-2)
+        away = G.lightmap_lighting(amb, dirl, d, (-1.0, 0.0, 0.0))
+        np.testing.assert_allclose(away[0, 0], [0.0] * 3, atol=1e-6)
 
 
 class RealMaps(unittest.TestCase):

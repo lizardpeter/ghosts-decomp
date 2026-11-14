@@ -373,8 +373,76 @@ def load_gfx_world_ptr(s, varptr: int, **loaders):
     s.pop()
 
 
+ASSET_COMWORLD = 0x14
+
+
+def load_com_world(s, c: int, at_stream_start: bool = True):
+    """Load_ComWorld (14034BBC0): name, primaryLightCount (+0xC) lights of 0x78 bytes (each with its defName XString
+    at +0x70), primaryLightEnvCount (+0x18) envs of 10 bytes."""
+    s.load(at_stream_start, c, 0x28)
+    s.push(BLOCK_VIRTUAL)
+    s.xstring_ptr(c)
+    count = _u32(s, c + 0x0C)
+    p = _array(s, c + 0x10, 4, count * 0x78)
+    for i in range(count if p else 0):
+        s.xstring_ptr(p + 0x78 * i + 0x70)
+    _array(s, c + 0x20, 4, _u32(s, c + 0x18) * 10)
+    s.pop()
+
+
+def load_com_world_ptr(s, varptr: int):
+    """Load_ComWorldPtr (14034BD90), then Load_ComWorldAsset (140371A40) links it as type 0x14."""
+    s.push(BLOCK_TEMP)
+    v = s.u64(varptr)
+    if v:
+        if v not in (PTR_INLINE, PTR_INSERT):
+            s.put_u64(varptr, s.offset_to_alias(v))
+        else:
+            h = s.align(4)
+            s.put_u64(varptr, h)
+            slot = s.insert_pointer() if v == PTR_INSERT else None
+            load_com_world(s, h, True)
+            s.put_u64(varptr, s.link(ASSET_COMWORLD, h))
+            if slot is not None:
+                s.put_u64(slot, s.u64(varptr))
+    s.pop()
+
+
+LIGHT_TYPES = {1: "sun", 2: "spot", 3: "omni"}
+
+
+@dataclass
+class PrimaryLight:
+    type: int
+    can_use_shadow_map: int
+    exponent: int
+    color: tuple
+    dir: tuple
+    up: tuple
+    origin: tuple
+    radius: float
+    cos_half_fov_outer: float
+    cos_half_fov_inner: float
+    def_name: str
+
+
+def read_com_world(mem, c: int) -> list:
+    """The primary lights of a loaded ComWorld."""
+    count = struct.unpack("<I", mem.read(c + 0x0C, 4))[0]
+    p = mem.u64(c + 0x10)
+    out = []
+    for i in range(count if p else 0):
+        a = p + 0x78 * i
+        t, shadow, exp_ = mem.read(a, 3)
+        f = struct.unpack("<15f", mem.read(a + 4, 60))
+        out.append(PrimaryLight(t, shadow, exp_, f[0:3], f[3:6], f[6:9], f[9:12], f[12], f[13], f[14],
+                                _cstr(mem, mem.u64(a + 0x70))))
+    return out
+
+
 def register(asset_loaders: dict):
     asset_loaders[ASSET_GFXWORLD] = load_gfx_world_ptr
+    asset_loaders[ASSET_COMWORLD] = load_com_world_ptr
 
 
 # ==== 2. readers ===================================================================================================
@@ -486,6 +554,29 @@ def world_vertex(raw: bytes, i: int):
     return (x, y, z), sign, color, (u, v), (lu, lv), xmodel_mod.unpack_unit_vec(n)[0], xmodel_mod.unpack_unit_vec(t)[0]
 
 
+def decode_lightmap(pixels: bytes, width: int, height: int):
+    """The secondary lightmap (R16G16B16A16_FLOAT, top mip, `height` rows) as numpy float32 arrays over the lightmap
+    coordinates ((height / 2, width, 3) each): ambient, directional and the direction (unit, tangent space). The world
+    pixel shaders sample the top half at (u, v / 2) and the bottom half at (u, v / 2 + 1/2): top.rgb is the ambient
+    term, bottom.rgb the directional one, (top.a, bottom.a) the direction's x and y, z = sqrt(1 - x² - y²)."""
+    import numpy as np
+    a = np.frombuffer(pixels[:width * height * 8], np.float16).astype(np.float32).reshape(height, width, 4)
+    top, bottom = a[:height // 2], a[height // 2:]
+    z = np.sqrt(np.clip(1 - top[..., 3] ** 2 - bottom[..., 3] ** 2, 0, 1))
+    return top[..., :3], bottom[..., :3], np.stack([top[..., 3], bottom[..., 3], z], -1)
+
+
+def lightmap_lighting(ambient, directional, direction, normal=(0.0, 0.0, 1.0)):
+    """The baked diffuse lighting the shaders compute for a tangent-space `normal` (a 3-vector, or an array
+    broadcasting against `direction`): ambient * normal.z + directional * saturate(dot(normal, direction)). The
+    pixel colour is albedo * this + specular; the sun comes on top in the LIT_DIR techniques, scaled by the primary
+    lightmap (BC4: sun visibility) and the sun colour."""
+    import numpy as np
+    n = np.asarray(normal, np.float32)
+    nz = n[..., 2:3] if n.ndim > 1 else n[2]
+    return ambient * nz + directional * np.clip((direction * n).sum(-1, keepdims=True), 0, 1)
+
+
 # ==== 3. glTF ======================================================================================================
 
 def _model_mesh(b, model, materials: list, material_index: dict):
@@ -520,21 +611,70 @@ def _model_mesh(b, model, materials: list, material_index: dict):
     return {"name": model.name or "xmodel", "primitives": prims} if prims else None
 
 
-def to_gltf(world: GfxWorldInfo, z_up_to_y_up: bool = True, scale: float = 1.0, models: dict | None = None):
-    """A glTF 2.0 document and its binary buffer: one mesh of the world surfaces (one primitive per material, with
-    POSITION, NORMAL, TEXCOORD_0, TEXCOORD_1 (lightmap), COLOR_0; indices made absolute), and one node per static
-    model placement, named after its XModel (extras: model, scale), with that model's LOD 0 as its mesh when
-    `models` (name -> xmodel.XModel) has it. Materials are named
-    references to the game materials. Coordinates stay the game's (inches, Z up) under a root node that rotates Z up
-    to Y up and scales by `scale`."""
+def _look_quat(d):
+    """The rotation turning glTF's light direction (-Z) into d (normalised)."""
+    import math
+    x, y, z = xmodel_mod._normalize(d)
+    # rotate (0, 0, -1) to (x, y, z): axis = (0,0,-1) x d, angle = acos(-z)
+    ax, ay, az = y, -x, 0.0
+    s = math.sqrt(ax * ax + ay * ay)
+    if s < 1e-9:
+        return [0.0, 0.0, 0.0, 1.0] if z < 0 else [1.0, 0.0, 0.0, 0.0]
+    angle = math.acos(max(-1.0, min(1.0, -z)))
+    k = math.sin(angle / 2) / s
+    return [ax * k, ay * k, az * k, math.cos(angle / 2)]
+
+
+def to_gltf(world: GfxWorldInfo, z_up_to_y_up: bool = True, scale: float = 1.0, models: dict | None = None,
+            material_images: dict | None = None, lightmap_images: dict | None = None, lights: list | None = None):
+    """A glTF 2.0 document and its binary buffer.
+
+    The world surfaces are one mesh with a primitive per (material, lightmap): POSITION, NORMAL, TEXCOORD_0,
+    TEXCOORD_1 (the lightmap coordinates as stored: the secondary lightmap's two halves are sampled at (u, v / 2) and
+    (u, v / 2 + 1/2), the primary at (u, v)), COLOR_0 (the packed vertex colour as stored: on blended surfaces it
+    carries layer weights, not a tint, so viewers that multiply it into the base colour show false colours),
+    indices made absolute. Every static model placement is a node
+    named after its XModel (extras: model, scale), with that model's LOD 0 as mesh when `models` (name ->
+    xmodel.XModel) has it. Materials are named after the game materials; with `material_images` ({material:
+    {"base"|"normal"|"specular": uri}}) the base colour is the glTF base colour texture and the others are listed in
+    extras, and with `lightmap_images` ({lightmap index: {name: uri}}) each world material's extras name its lightmap
+    images. `lights` (read_com_world) become KHR_lights_punctual lights: the sun directional, spots and omnis at their
+    origins (colour normalised, the largest component as intensity; *unverified* units). Coordinates stay the game's
+    (inches, Z up) under a root node that rotates Z up to Y up and scales by `scale`."""
     import math
     b = xmodel_mod._Bin()
     FLOAT, UINT, UBYTE = 5126, 5125, 5121
-    by_material = {}
+    material_images = material_images or {}
+    lightmap_images = lightmap_images or {}
+    images, textures, image_index = [], [], {}
+
+    def texture(uri):
+        if uri not in image_index:
+            images.append({"uri": uri})
+            textures.append({"source": len(images) - 1, "sampler": 0})
+            image_index[uri] = len(textures) - 1
+        return image_index[uri]
+
+    def make_material(name, lightmap=None):
+        m = {"name": name if lightmap is None else f"{name}@lm{lightmap}", "extras": {"game_material": name}}
+        imgs = material_images.get(name, {})
+        pbr = {"metallicFactor": 0.0, "roughnessFactor": 1.0}
+        if "base" in imgs:
+            pbr["baseColorTexture"] = {"index": texture(imgs["base"]), "texCoord": 0}
+        m["pbrMetallicRoughness"] = pbr
+        if imgs:
+            m["extras"]["textures"] = imgs
+        if lightmap is not None:
+            m["extras"]["lightmap"] = lightmap
+            if lightmap in lightmap_images:
+                m["extras"]["lightmap_images"] = lightmap_images[lightmap]
+        return m
+
+    by_key = {}
     for s_ in world.surfaces:
-        by_material.setdefault(s_.material, []).append(s_)
+        by_key.setdefault((s_.material, s_.flags & 0xFF), []).append(s_)
     materials, prims = [], []
-    for mname, surfs in by_material.items():
+    for (mname, lm), surfs in by_key.items():
         remap, pos, nrm, uv0, uv1, col, out_idx = {}, [], [], [], [], [], []
         for s_ in surfs:
             for k in range(s_.tri_count * 3):
@@ -557,7 +697,7 @@ def to_gltf(world: GfxWorldInfo, z_up_to_y_up: bool = True, scale: float = 1.0, 
             "TEXCOORD_1": b.add(b"".join(struct.pack("<2f", *t) for t in uv1), len(uv1), FLOAT, "VEC2", 34962),
             "COLOR_0": b.add(b"".join(col), len(col), UBYTE, "VEC4", 34962, normalized=True),
         }
-        materials.append({"name": mname, "extras": {"game_material": mname}})
+        materials.append(make_material(mname, lm if lm != 0xFF else None))
         prims.append({"attributes": attrs, "material": len(materials) - 1,
                       "indices": b.add(struct.pack(f"<{len(out_idx)}I", *out_idx), len(out_idx), UINT, "SCALAR", 34963)})
     nodes = [{"name": world.name or "world", "children": []}]
@@ -571,6 +711,7 @@ def to_gltf(world: GfxWorldInfo, z_up_to_y_up: bool = True, scale: float = 1.0, 
         nodes.append({"name": "world_surfaces", "mesh": 0})
         nodes[0]["children"].append(len(nodes) - 1)
     material_index = {m["name"]: i for i, m in enumerate(materials)}
+    model_materials = []
     model_mesh = {}
     for i, m in enumerate(world.static_models):
         f, l, u = m.axis
@@ -580,20 +721,60 @@ def to_gltf(world: GfxWorldInfo, z_up_to_y_up: bool = True, scale: float = 1.0, 
         node = {"name": f"{m.model}#{i}", "matrix": matrix, "extras": {"xmodel": m.model, "scale": s}}
         if models and m.model in models:
             if m.model not in model_mesh:
-                mesh = _model_mesh(b, models[m.model], materials, material_index)
+                mesh = _model_mesh(b, models[m.model], model_materials, {})
                 model_mesh[m.model] = None
                 if mesh:
+                    for prim in mesh["primitives"]:     # the model's materials, with textures, after the world's
+                        name = model_materials[prim["material"]]["name"]
+                        if name not in material_index:
+                            materials.append(make_material(name))
+                            material_index[name] = len(materials) - 1
+                        prim["material"] = material_index[name]
                     meshes.append(mesh)
                     model_mesh[m.model] = len(meshes) - 1
             if model_mesh[m.model] is not None:
                 node["mesh"] = model_mesh[m.model]
         nodes.append(node)
         nodes[0]["children"].append(len(nodes) - 1)
+    doc_lights = []
+    for i, light in enumerate(lights or []):
+        kind = LIGHT_TYPES.get(light.type)
+        if not kind:
+            continue
+        peak = max(light.color) or 1.0
+        entry = {"name": light.def_name or f"light{i}", "color": [c / peak for c in light.color], "intensity": peak,
+                 "type": {"sun": "directional", "spot": "spot", "omni": "point"}[kind],
+                 "extras": {"game_type": kind, "index": i, "exponent": light.exponent,
+                            "canUseShadowMap": light.can_use_shadow_map}}
+        if kind != "sun":
+            entry["range"] = light.radius * scale     # glTF ranges ignore node scale
+        if kind == "spot":
+            outer = math.acos(max(-1.0, min(1.0, light.cos_half_fov_outer)))
+            inner = math.acos(max(-1.0, min(1.0, light.cos_half_fov_inner)))
+            entry["spot"] = {"innerConeAngle": min(inner, outer), "outerConeAngle": outer}
+        doc_lights.append(entry)
+        node = {"name": entry["name"], "extensions": {"KHR_lights_punctual": {"light": len(doc_lights) - 1}}}
+        if kind == "sun":
+            # ComPrimaryLight::dir of the sun points towards the sun (*unverified*: the shaders' use); the light shines
+            # the other way
+            node["rotation"] = _look_quat(tuple(-c for c in light.dir))
+        else:
+            node["translation"] = list(light.origin)
+            if kind == "spot":
+                node["rotation"] = _look_quat(light.dir)
+        nodes.append(node)
+        nodes[0]["children"].append(len(nodes) - 1)
     doc = {"asset": {"version": "2.0", "generator": "ghosts-decomp tools/fastfile/gfxworld.py"},
            "scene": 0, "scenes": [{"nodes": [0]}], "nodes": nodes, "meshes": meshes, "materials": materials,
            "accessors": b.accessors, "bufferViews": b.views,
-           "extras": {"map": world.name, "lightmaps": world.lightmaps, "sky": world.sky_images,
-                      "reflection_probes": [p[0] for p in world.reflection_probes]}}
+           "extras": {"map": world.name, "lightmaps": world.lightmaps, "lightmap_images": lightmap_images,
+                      "sky": world.sky_images, "reflection_probes": [p[0] for p in world.reflection_probes]}}
+    if images:
+        doc["images"], doc["textures"] = images, textures
+        doc["samplers"] = [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497}]
+    if doc_lights:
+        doc["extensionsUsed"] = ["KHR_lights_punctual"]
+        doc["extensions"] = {"KHR_lights_punctual": {"lights": doc_lights}}
     return doc, bytes(b.data)
 
 

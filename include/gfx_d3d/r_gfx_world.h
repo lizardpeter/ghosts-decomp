@@ -437,6 +437,56 @@ static_assert(offsetof(GfxWorld, dpvsDyn) == 0x9B8, "dpvsDyn");
 static_assert(offsetof(GfxWorld, umbraTomeSize) == 0xA1C, "umbraTomeSize");
 static_assert(sizeof(GfxWorld) == 0xA30, "GfxWorld");
 
+// ComWorld (asset type 0x14, com_map): the map's primary lights. Same layout as the servers'.
+struct ComPrimaryLight  // 0x78
+{
+	unsigned char type;           // 1 sun, 2 spot, 3 omni (docs/assets/world.md)
+	unsigned char canUseShadowMap;
+	unsigned char exponent;
+	unsigned char unused;
+	float color[3];               // +0x04
+	float dir[3];                 // +0x10
+	float up[3];                  // +0x1C
+	float origin[3];              // +0x28
+	float radius;                 // +0x34
+	float cosHalfFovOuter;
+	float cosHalfFovInner;
+	float cosHalfFovExpanded;
+	float rotationLimit;
+	float translationLimit;
+	float cucRotationOffsetRad;
+	float cucRotationSpeedRad;
+	float cucScrollVector[2];
+	float cucScaleVector[2];
+	float cucTransVector[2];
+	const char *defName;          // +0x70
+};
+
+struct ComPrimaryLightEnv  // 0xA
+{
+	unsigned short primaryLightIndices[4];
+	unsigned char numIndices;
+	unsigned char pad;
+};
+
+struct ComWorld  // 0x28
+{
+	const char *name;
+	int isInUse;
+	unsigned int primaryLightCount;        // +0x0C
+	ComPrimaryLight *primaryLights;        // +0x10
+	unsigned int primaryLightEnvCount;     // +0x18
+	ComPrimaryLightEnv *primaryLightEnvs;  // +0x20
+};
+
+static_assert(sizeof(ComPrimaryLight) == 0x78, "ComPrimaryLight");
+static_assert(sizeof(ComPrimaryLightEnv) == 0xA, "ComPrimaryLightEnv");
+static_assert(sizeof(ComWorld) == 0x28, "ComWorld");
+
+void Load_ComWorld(bool atStreamStart);
+void Load_ComWorldPtr(bool atStreamStart);
+void Load_ComWorldAsset(ComWorld **world);
+
 // gfx_d3d/r_gfx_world_load_db.cpp
 void Load_GfxWorldDpvsPlanes(bool atStreamStart);
 void Load_GfxCellTree(bool atStreamStart);
