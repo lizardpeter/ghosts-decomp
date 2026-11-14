@@ -146,10 +146,78 @@ The names other than Load_GfxWorldPtr/Load_GfxWorld/Load_GfxWorldAsset follow th
 convention for the struct each loads (the servers don't have these functions); the 53 stream variables they set
 are named var<Type> the same way (records/names.tsv).
 
-## 8. Not done
+## 8. Lighting and textures
 
-- The collision map (col_map_mp), map entities (map_ents), lights (com_map, lightdef), effects (fx_map), glass
+### Lightmaps
+
+GfxWorldDraw +0x38 is the lightmap count and +0x40 the lightmaps, each {primary, secondary} GfxImage. A world
+surface's lightmap is the low byte of its lighting-and-flags word (surface +0x20: lightmapIndex,
+reflectionProbeIndex, primaryLightEnvIndex, flags); 0xFF means none. Dynasty has 2 lightmaps:
+
+| | format | size | bound at |
+|---|---|---|---|
+| primary | BC4 | 2048 × 4096 | t2: sun visibility (0..1) |
+| secondary | R16G16B16A16_FLOAT | 1024 × 4096 | t3: two halves, see below |
+
+Evidence: the DXBC of Dynasty's lit world pixel shader (techset `l_sm_r0c0nl0sl0l0_b1hb1c1vl1sl1l1sr0_nfwpf`, zone
+techsets_mp_conflict.ff, disassembled with tools/fastfile/dxbc.py). From the vertex's lightmap coordinate (u, v) it
+samples the secondary lightmap twice:
+
+- **top** at (u, v / 2): rgb is the ambient term, a is the light direction's x;
+- **bottom** at (u, v / 2 + 1/2): rgb is the directional term, a is the direction's y; z = sqrt(1 − x² − y²).
+
+The baked diffuse light for a tangent-space normal N is `top.rgb · N.z + bottom.rgb · saturate(dot(N, dir))`, and
+the pixel is `albedo · that + specular`. The LIT_DIR techniques (technique 8) add the sun on top: the sun colour
+(constant buffer 1, register 6) times the primary lightmap's visibility. Reference code:
+`gfxworld.decode_lightmap` and `gfxworld.lightmap_lighting` (tests/fastfile/test_gfxworld.py).
+
+The values are linear HDR (Dynasty: mean ≈ 0.9, 99th percentile ≈ 8), so a viewer needs tone mapping. Static
+models are lit by per-vertex lighting values (GfxStaticModelVertexLighting, 0x14 bytes each; section 4), not
+decoded yet.
+
+### Primary lights (ComWorld, com_map, asset type 0x14)
+
+ComWorld (0x28): name, isInUse, primaryLightCount (+0x0C), primaryLights (+0x10, × 0x78), primaryLightEnvCount
+(+0x18), primaryLightEnvs (+0x20, × 0xA: four light indices and a count). ComPrimaryLight: type (1 sun, 2 spot,
+3 omni), canUseShadowMap, exponent, colour (+4), dir (+0x10), up (+0x1C), origin (+0x28), radius (+0x34), the cone
+cosines (outer, inner, expanded), rotation and translation limits, cookie animation (rotation, scroll, scale,
+translation), defName (+0x70, an XString). Light 0 is always empty; Dynasty has the sun (light 1) and 25 spots.
+Load_ComWorld (14034BBC0) and Load_ComWorldPtr (14034BD90) are reconstructed in C (section 7);
+`gfxworld.read_com_world` reads them.
+
+The static lights are already baked into the lightmaps; the primary lights are what the game lights dynamic
+objects and specular with. The sun's dir is taken to point towards the sun (*unverified*).
+
+### Material texture roles
+
+A material's texture table (Material +0x1D8, 16 bytes per entry: name hash, first and last name characters,
+sampler state, semantic, image) doesn't say which texture is the colour map; the shader does. In the lit world
+shaders the MATERIAL_TEXTURE arguments bind:
+
+| name hash | register | role | image semantic |
+|---|---|---|---|
+| 0xA0AB1041 | t0 | base colour | 2 (colour map) |
+| 0x59D30D0F | t6 | normal map | 5 (normal map) |
+| 0x34ECCCB3 | t7 | specular map | 8 (specular map) |
+
+Other shaders (water, for example) reuse the hashes for other images, so `material.texture_roles` takes a hash
+only when the image's semantic agrees, and otherwise falls back to the first image of the role's semantic.
+Normal maps are BC5 (x, y) or BC3 with x in alpha and y in green; z = sqrt(1 − x² − y²).
+
+### glTF
+
+`to_gltf(..., material_images=, lightmap_images=, lights=)` groups world triangles per (material, lightmap),
+names the materials `<material>@lm<N>`, uses the base colour as baseColorTexture, lists the other roles and the
+lightmap images in the material extras, and writes the primary lights as KHR_lights_punctual. COLOR_0 is the
+stored vertex colour; multiplied into the base colour it gives false colours (red to yellow gradients, magenta), so
+on blended surfaces it most likely holds layer weights, not a tint (*unverified*: the vertex shaders' use). Most streamed images of a map live in the image paks (`imagefileN.pak`, docs/assets/images.md); without
+those the exporter can only use the images in the zone itself.
+
+## 9. Not done
+
+- The collision map (col_map_mp), map entities (map_ents), lightdef, effects (fx_map), glass
   (glass_map): separate assets.
+- Static model vertex lighting values; the light grid (lighting for dynamic objects).
 - The light grid's encoding, the Umbra tome's contents, the surface lighting flags, the vertex layer data and the
   PC-only vis arrays: loaded and placed exactly, their meaning *unverified*.
 - Walking a map zone from the start with the readers alone needs every asset type before the GfxWorld (sound,

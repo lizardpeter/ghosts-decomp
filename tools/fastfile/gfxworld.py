@@ -631,8 +631,8 @@ def to_gltf(world: GfxWorldInfo, z_up_to_y_up: bool = True, scale: float = 1.0, 
 
     The world surfaces are one mesh with a primitive per (material, lightmap): POSITION, NORMAL, TEXCOORD_0,
     TEXCOORD_1 (the lightmap coordinates as stored: the secondary lightmap's two halves are sampled at (u, v / 2) and
-    (u, v / 2 + 1/2), the primary at (u, v)), COLOR_0 (the packed vertex colour as stored: on blended surfaces it
-    carries layer weights, not a tint, so viewers that multiply it into the base colour show false colours),
+    (u, v / 2 + 1/2), the primary at (u, v)), COLOR_0 (the packed vertex colour as stored: most likely layer weights on
+    blended surfaces, not a tint (*unverified*), so viewers that multiply it into the base colour show false colours),
     indices made absolute. Every static model placement is a node
     named after its XModel (extras: model, scale), with that model's LOD 0 as mesh when `models` (name ->
     xmodel.XModel) has it. Materials are named after the game materials; with `material_images` ({material:
