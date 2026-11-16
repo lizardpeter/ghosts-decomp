@@ -76,6 +76,26 @@ class Evaluate(unittest.TestCase):
         self.assertEqual(float(out[0, 2]), float((k1 - k0) * f + k0))
 
 
+class RootMotion(unittest.TestCase):
+    def test_keyed_translation_and_yaw(self):
+        a = make(10, counts(no_quat=1))
+        a.flags = XA.FLAG_DELTA_2D
+        a.delta = XA.DeltaPart(
+            trans={"mins": (0.0, 0.0, 0.0), "size": (2.0, 1.0, 1.0), "small": True, "indices": [0, 10],
+                   "keys": [0, 0, 0, 100, 0, 0]},
+            quat2={"indices": [0, 10], "keys": [0, 32767, 32767, 0]}, quat=None)
+        d = XA.calc_abs_delta(a, 0.5)
+        self.assertEqual(d[5:].tolist(), [100.0, 0.0, 0.0])
+        self.assertEqual(float(d[4]), 1.0)
+        q, t = XA.sample_delta(a, 1.0)
+        self.assertAlmostEqual(q[2], 1.0, places=5)
+        self.assertEqual(t, (200.0, 0.0, 0.0))
+
+    def test_no_root_motion_without_flags(self):
+        a = make(10, counts(no_quat=1))
+        self.assertIsNone(XA.sample_delta(a, 0.5))
+
+
 class RealZones(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

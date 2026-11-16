@@ -54,10 +54,6 @@ def _u16(s, a):
     return struct.unpack("<H", s.read(a, 2))[0]
 
 
-def _i16(s, a):
-    return struct.unpack("<h", s.read(a, 2))[0]
-
-
 def _u32(s, a):
     return struct.unpack("<I", s.read(a, 4))[0]
 
@@ -165,7 +161,7 @@ def load_xanim_parts(s, at: int, at_stream_start: bool = True):
         _delta_part(s, at, p)
     p = _inline(s, at + 0x40, 1)                                   # dataByte
     if p is not None:
-        s.load(True, p, _i16(s, at + 8) & 0xFFFFFFFFFFFFFFFF)     # the count is read as a signed short
+        s.load(True, p, _u16(s, at + 8))
     p = _inline(s, at + 0x48, 2)                                   # dataShort
     if p is not None:
         s.load(True, p, 2 * _u16(s, at + 0xA))
@@ -322,7 +318,7 @@ def read_xanim(mem, a: int, script_string=None) -> XAnim:
     return XAnim(
         name=_cstr(mem, name_p), numframes=numframes, framerate=framerate, frequency=frequency, flags=flags,
         asset_type=asset_type, ik_type=ik_type, bone_count=bone_count, names=names, notify=notify,
-        data_byte=arr(db_p, struct.unpack("<h", struct.pack("<H", dbc))[0], 1),
+        data_byte=arr(db_p, dbc, 1),
         data_short=arr(ds_p, dsc, 2, "H"), data_int=arr(di_p, dic, 4),
         random_data_short=arr(rds_p, rdsc, 2, "h"), random_data_byte=arr(rdb_p, rdbc, 1),
         random_data_int=arr(rdi_p, rdic, 4),
@@ -504,14 +500,93 @@ def sample(anim: XAnim, t: float):
     return out
 
 
+FLAG_DELTA_2D, FLAG_DELTA_3D = 2, 4   # XAnimParts.flags: the root motion has a 2D (yaw) or a 3D rotation
+
+
+def _delta_key(d: dict, frame: int, frame_f):
+    """(key, lerp fraction) in a deltaPart part's frame index table (the game's search over sorted tables)."""
+    table = d["indices"]
+    i = _find(table, frame)
+    return i, (frame_f - F32(table[i])) / F32(int(table[i + 1]) - int(table[i]))
+
+
+def _delta_rot(anim: XAnim, t: float, comps: int):
+    """XAnim_CalcRotDeltaDuring / XAnim_CalcRotDelta3DDuring and the end case of XAnim_CalcDeltaForTime /
+    XAnim_CalcDelta3DForTime: the root rotation's (z, w) or (x, y, z, w) as unscaled shorts in float32."""
+    d = (anim.delta.quat2 if comps == 2 else anim.delta.quat) if anim.delta else None
+    if d is None:
+        return [F32(0.0)] * (comps - 1) + [F32(32767.0)]
+    if "frame0" in d:
+        return [F32(x) for x in d["frame0"]]
+    keys, n = d["keys"], len(d["indices"]) - 1
+    if t == 1.0 or anim.numframes == 0:
+        return [F32(x) for x in keys[comps * n:comps * n + comps]]
+    frame_f = F32(anim.numframes) * F32(t)
+    i, f = _delta_key(d, int(frame_f), frame_f)
+    k0, k1 = keys[comps * i:comps * i + comps], keys[comps * (i + 1):comps * (i + 1) + comps]
+    return [F32(int(k1[j]) - int(k0[j])) * f + F32(k0[j]) for j in range(comps)]
+
+
+def _delta_pos(anim: XAnim, t: float):
+    """XAnim_CalcPosDeltaDuring / XAnim_CalcPosDeltaEntire: the root translation."""
+    d = anim.delta.trans if anim.delta else None
+    if d is None:
+        return [F32(0.0)] * 3
+    if "frame0" in d:
+        return [F32(x) for x in d["frame0"]]
+    keys, n = d["keys"], len(d["indices"]) - 1
+    mins, size = [F32(x) for x in d["mins"]], [F32(x) for x in d["size"]]
+    if t == 1.0 or anim.numframes == 0:
+        return [size[j] * F32(keys[3 * n + j]) + mins[j] for j in range(3)]
+    frame_f = F32(anim.numframes) * F32(t)
+    i, f = _delta_key(d, int(frame_f), frame_f)
+    k0, k1 = keys[3 * i:3 * i + 3], keys[3 * (i + 1):3 * (i + 1) + 3]
+    return [((F32(k1[j]) - F32(k0[j])) * f + F32(k0[j])) * size[j] + mins[j] for j in range(3)]
+
+
+def calc_abs_delta(anim: XAnim, t: float, weight: float = 1.0):
+    """XAnimCalcAbsDeltaParts (Store 140559750) into a fresh XAnimRotPos: [rot x, y, z, w, posWeight, pos x, y, z]
+    of float32, the root motion from the animation's start to time t (rotation not normalised). Animations whose
+    flags have neither a 2D nor a 3D root rotation add nothing."""
+    out = np.zeros(8, dtype=F32)
+    w = F32(weight)
+    if anim.flags & FLAG_DELTA_2D:
+        rot = [None, None] + _delta_rot(anim, t, 2)
+    elif anim.flags & FLAG_DELTA_3D:
+        rot = _delta_rot(anim, t, 4)
+        for j in range(2):
+            out[j] = rot[j] * w * QUAT_SCALE + out[j]
+    else:
+        return out
+    for j in (2, 3):
+        out[j] = rot[j] * w * QUAT_SCALE + out[j]
+    out[4] = w + out[4]
+    pos = _delta_pos(anim, t)
+    for j in range(3):
+        out[5 + j] = w * pos[j] + out[5 + j]
+    return out
+
+
+def sample_delta(anim: XAnim, t: float):
+    """The root motion at time t: (unit quaternion (x, y, z, w), translation), or None for an animation without."""
+    d = calc_abs_delta(anim, t)
+    if not d[4]:
+        return None
+    q = [float(x) for x in d[:4]]
+    n = sum(x * x for x in q) ** 0.5 or 1.0
+    return tuple(x / n for x in q), tuple(float(x) / float(d[4]) for x in d[5:8])
+
+
 # ==== 3. glTF ======================================================================================================
 
 def add_to_gltf(doc: dict, binary: bytearray, anim: XAnim, bone_nodes: dict, scale: float = 1.0,
-                bone_name=lambda x: x, fps: float | None = None):
+                bone_name=lambda x: x, fps: float | None = None, root_motion: str | None = None):
     """Add `anim` to a glTF document as an animation over the model's bone nodes (bone_nodes: bone name -> node
     index, from xmodel.to_gltf). Rotations replace the node rotation (the game uses the animation's local rotation
     as it is); translations are offsets the game adds to the bone's base local translation (CalcSkelNonRootBones),
-    so the channel holds base + offset × scale. Root motion (the deltaPart) is not applied."""
+    so the channel holds base + offset × scale. With root_motion (the name of the model's root bone, normally
+    tag_origin) the animation's root motion (calc_abs_delta: how far the entity moves and turns from the start) drives
+    that bone, so a run cycle moves forward; without it the animation plays in place."""
     rate = fps or anim.framerate or 30.0
     frames = anim.numframes + 1
     times = [i / rate for i in range(frames)]
@@ -547,6 +622,19 @@ def add_to_gltf(doc: dict, binary: bytearray, anim: XAnim, bone_nodes: dict, sca
             # model->trans + scale * anim trans)
             base = doc["nodes"][node].get("translation", [0.0, 0.0, 0.0])
             trs = [tuple(b + x * scale for b, x in zip(base, t)) for t in trs]
+            samplers.append({"input": tacc, "output": put(trs, 3, "VEC3"), "interpolation": "LINEAR"})
+            channels.append({"sampler": len(samplers) - 1, "target": {"node": node, "path": "translation"}})
+    node = bone_nodes.get(root_motion) if root_motion else None
+    targets = {(c["target"]["node"], c["target"]["path"]) for c in channels}
+    deltas = [sample_delta(anim, i / anim.numframes if anim.numframes else 1.0) for i in range(frames)]
+    if node is not None and all(d is not None for d in deltas):
+        base = doc["nodes"][node].get("translation", [0.0, 0.0, 0.0])
+        if (node, "rotation") not in targets:
+            samplers.append({"input": tacc, "output": put([d[0] for d in deltas], 4, "VEC4"),
+                             "interpolation": "LINEAR"})
+            channels.append({"sampler": len(samplers) - 1, "target": {"node": node, "path": "rotation"}})
+        if (node, "translation") not in targets:
+            trs = [tuple(b + x * scale for b, x in zip(base, d[1])) for d in deltas]
             samplers.append({"input": tacc, "output": put(trs, 3, "VEC3"), "interpolation": "LINEAR"})
             channels.append({"sampler": len(samplers) - 1, "target": {"node": node, "path": "translation"}})
     doc.setdefault("animations", []).append({"name": anim.name, "channels": channels, "samplers": samplers})

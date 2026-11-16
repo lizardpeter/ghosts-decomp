@@ -3,9 +3,9 @@
 1. Loader: the Store build's own loader (store_emu.py) loads a real zone; at the n-th Load_XAnimPartsPtr (14035D3D0)
    the stream state is handed to xanim.load_xanim_parts_ptr, and the game's state when the call returns must be the
    same (zone and block positions, block memory, asset pool), as world_check.py does for the GfxWorld.
-2. Evaluator: after the game loaded the zone, its XAnimCalcParts (14055EE30 under 256 frames, 140560280 from 256)
-   and XAnimCalcNonLoopEnd (140563620, the last frame) are called on every animation at a set of times, and the
-   rotTransArray they accumulate must equal xanim.calc_parts's bit for bit.
+2. Evaluator: after the game loaded the zone, its XAnimCalcAbsDeltaParts (140559750, the root motion), XAnimCalcParts (14055EE30 under 256 frames, 140560280 from 256)
+   and XAnimCalcNonLoopEnd (140563620, the last frame) are called on every animation at a set of times, and what
+   they accumulate must equal xanim.calc_abs_delta's and xanim.calc_parts's bit for bit.
 
     python3 tests/fastfile/xanim_check.py <zone.ff> [loader occurrences, e.g. 0,5]   (needs $IW6_ORIGINALS)
 
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 from unicorn.x86_const import (UC_X86_REG_R8, UC_X86_REG_R9, UC_X86_REG_RCX, UC_X86_REG_RDX, UC_X86_REG_RSP,
-                               UC_X86_REG_XMM2, UC_X86_REG_XMM3)
+                               UC_X86_REG_XMM1, UC_X86_REG_XMM2, UC_X86_REG_XMM3)
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -34,6 +34,7 @@ VAR_XANIMPARTS_PTR = 0x144425998
 XANIM_CALC_PARTS_U8 = 0x14055EE30
 XANIM_CALC_PARTS_U16 = 0x140560280
 XANIM_CALC_NON_LOOP_END = 0x140563620
+XANIM_CALC_ABS_DELTA_PARTS = 0x140559750
 TIMES = (0.0, 0.25, 0.5, 0.999, 1.0)
 # g_keepXYZ (the servers' universal/com_vector4_const.cpp): {~0, ~0, ~0, 0}, set by a dynamic initializer at startup,
 # which the emulator doesn't run; the translation code masks with it
@@ -106,6 +107,20 @@ def compare_calc(ff: bytes, name: str, extra_times: int = 3, seed: int = 1):
             pairs += 1
             if game.tobytes() != mine.tobytes():
                 diffs.append((anim.name, t, game[:total], mine[:total]))
+            # XAnimCalcAbsDeltaParts(parts, weight, time, XAnimRotPos *): the root motion
+            mu.mem_write(mats, bytes(0x20))
+            mu.mem_write(sp, struct.pack("<Q", store_emu.SENTINEL))
+            mu.reg_write(UC_X86_REG_RCX, a)
+            mu.reg_write(UC_X86_REG_XMM1, struct.unpack("<I", struct.pack("<f", 1.0))[0])
+            mu.reg_write(UC_X86_REG_XMM2, struct.unpack("<I", struct.pack("<f", t))[0])
+            mu.reg_write(UC_X86_REG_R9, mats)
+            mu.reg_write(UC_X86_REG_RSP, sp)
+            mu.emu_start(XANIM_CALC_ABS_DELTA_PARTS, store_emu.SENTINEL)
+            game = np.frombuffer(bytes(mu.mem_read(mats, 0x20)), np.float32).reshape(1, 8)
+            mine = xanim.calc_abs_delta(anim, float(np.float32(t))).reshape(1, 8)
+            pairs += 1
+            if game.tobytes() != mine.tobytes():
+                diffs.append((anim.name + " (root motion)", t, game, mine))
     return diffs, pairs
 
 

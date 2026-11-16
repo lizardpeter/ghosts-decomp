@@ -9,8 +9,9 @@ What the Microsoft Store build loads for an animation, how its data is laid out,
 - **Loader.** The Store build's loader runs in the emulator (`tests/fastfile/store_emu.py`) on Point of Contact
   (mp_alien_town, 1077 animations). At a chosen call of `Load_XAnimPartsPtr` (14035D3D0) the stream state is handed
   to `xanim.load_xanim_parts_ptr`; when the game's call returns, the zone position, every block position, the block
-  memory and the asset pool must be the same (`world_check.compare`, which can now stop at the call's own return
-  for animations loaded from inside other assets, such as weapon animation arrays).
+  memory and the asset pool must be the same (`world_check.compare`, which can stop at the call's own return for
+  animations loaded from inside other assets, such as weapon animation arrays). Equal for the calls checked (0, 1,
+  131, 564 and 700: top-level and nested ones, with root motion and split index tables among them).
 - **Evaluator.** After the game has loaded the zone, its `XAnimCalcParts` (14055EE30 for animations under 256
   frames, 140560280 from 256) and `XAnimCalcNonLoopEnd` (140563620, the last frame) are called on every animation of
   the zone at seven times (0, 0.25, 0.5, 0.999, 1, and two others) with weight 1, an identity bone map and no
@@ -18,6 +19,14 @@ What the Microsoft Store build loads for an animation, how its data is laid out,
   `xanim.calc_parts` bit for bit for all 1077 × 7 cases, among them 6 animations of 256 frames or more (5 with the
   split frame index tables of section 4) and 100 with no frames; and for all 724 animations of common_alien_mp.ff
   (the Extinction aliens' shared zone: the drone, queen and spitter sets) × 7.
+- **Root motion.** The game's `XAnimCalcAbsDeltaParts` (140559750; it calls XAnim_CalcDeltaForTime 140565550 or
+  XAnim_CalcDelta3DForTime 1405653B0) equals `xanim.calc_abs_delta` bit for bit on the same 724 × 8 cases of
+  common_alien_mp (521 animations with a 2D root rotation, 30 with a 3D one; 424 with keyed root translation, 159
+  and 30 with keyed rotations).
+- **C.** `src/xanim/xanim_load_db.cpp` reconstructs the 11 loaders (Load_XAnimPartsPtr down to the frame index
+  tables), each tested against the Store exe in `tests/differential/test_xanim_load.py` (200 inputs each; 13
+  deliberate mutations of the C, among them a wrong frame-count test, index count, alignment or var assignment, all
+  fail).
 - The translation code masks with `g_keepXYZ` ({~0, ~0, ~0, 0}, Store 149B76820), which a dynamic initializer sets
   at startup; the emulator doesn't run it, so the check sets it first.
 
@@ -28,7 +37,7 @@ The servers' PDB layout (iw6_ds_xb3) is the Store build's.
 | offset | field | |
 |---|---|---|
 | +0x00 | name | XString |
-| +0x08 | dataByteCount (u16, read as a signed short by the loader) | |
+| +0x08 | dataByteCount (u16) | |
 | +0x0A, +0x0C | dataShortCount, dataIntCount (u16) | |
 | +0x0E, +0x10 | randomDataByteCount, randomDataIntCount (u16) | |
 | +0x12 | numframes (u16) | frame intervals: the animation has numframes + 1 frames |
@@ -103,17 +112,24 @@ The game (the servers' CalcSkelNonRootBones, xanim/dobj_skel.cpp) uses the norma
 bone's local rotation, and adds the animation translation to the bone's base local translation (the XModel's
 `trans`): translations are offsets, not positions. Animation bones are matched to model bones by name.
 
-## 6. Use in glTF
+## 6. Root motion (deltaPart)
+
+`XAnimCalcAbsDeltaParts` adds the root motion from the animation's start to time t, when the flags say there is
+one (2: a 2D rotation, the yaw as (z, w); 4: a 3D rotation): rotation keys are shorts interpolated as
+`(k1 − k0) × f + k0` with the difference taken in integers, scaled by 1/32767 afterwards; the translation as the
+parts' (`key × size + mins`). A missing rotation part gives (0, 32767), the identity. At t = 1 and for animations
+without frames the last keys are taken.
+
+## 7. Use in glTF
 
 `xanim.sample(anim, t)` gives each animation bone's normalised local rotation and translation (None where the
 animation doesn't set one). `xanim.add_to_gltf` adds an animation to a document from `xmodel.to_gltf`, matching
 animation bones to the model's bones by name: a rotation channel for every rotated bone and a translation channel
-for every translated bone (base translation + offset), one key per frame at the animation's frame rate. The model's other bones keep their base
-pose. The root motion (deltaPart) is decoded by `read_xanim` but not applied.
+for every translated bone (base translation + offset), one key per frame at the animation's frame rate. The
+model's other bones keep their base pose. With `root_motion="tag_origin"` the root motion drives the model's root
+bone, so the animation moves the model as it moves the entity in the game (a drone run cycle covers 270 inches).
 
-## 7. Not done
+## 8. Not done
 
-- Root motion (the deltaPart) is read but its evaluation (XAnim_CalcDeltaForTime, Store 140565550) is not
-  reconstructed or checked.
 - Blending, additive animations, animation trees (animclass assets) and notetracks beyond reading them.
-- C reconstructions of the loaders and evaluators.
+- C reconstructions of the evaluators (XAnimCalcParts, XAnimCalcNonLoopEnd, the delta functions).
