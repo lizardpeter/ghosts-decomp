@@ -363,3 +363,124 @@ def get_light_grid(tree: Tree, coord):
     colors, lights, voxels = decode_block(tree, mask, child, leaf_offset)
     voxel = (2 if voxels >> (cell + 16) & 1 else 0) | (voxels >> cell & 1)
     return colors[cell], lights[cell] & 0xFFFF, voxel
+
+
+# ==== colours: spherical harmonics in the palette
+
+@dataclass
+class LightGrid:                 # GfxLightGrid (0x620), the parts the decoder uses
+    mins: tuple
+    maxs: tuple
+    range_exponents: tuple       # rangeExponent8/12/16BitsEncoding (+0x64)
+    palette_entry_address: tuple # +0x78, paletteEntryCount (+0x70) of them
+    palette: bytes               # paletteBitstream (+0x88), paletteBitstreamSize (+0x80) bytes
+    tree: Tree
+
+
+def read_light_grid(mem, at: int) -> LightGrid:
+    """GfxLightGrid at `at` (GfxWorld + 0x138)."""
+    h = mem.read(at, 0x90)
+    mins, maxs = struct.unpack_from("<3H", h, 0x08), struct.unpack_from("<3H", h, 0x0E)
+    exps = struct.unpack_from("<3b", h, 0x64)
+    count, = struct.unpack_from("<I", h, 0x70)
+    addr_p, = struct.unpack_from("<Q", h, 0x78)
+    size, = struct.unpack_from("<I", h, 0x80)
+    pal_p, = struct.unpack_from("<Q", h, 0x88)
+    addrs = struct.unpack(f"<{count}i", mem.read(addr_p, 4 * count)) if count and addr_p else ()
+    pal = mem.read(pal_p, size) if size and pal_p else b""
+    return LightGrid(mins, maxs, exps, addrs, pal, read_tree(mem, at + 0x5D0))
+
+
+def decode_spherical_harmonics(range_exponents, data: bytes, offset: int = 0):
+    """R_DecodeLightGridSphericalHarmonics (Store 1406452D0, the coefficient decoders inlined): 9 coefficients per
+    colour channel, as float32 [9][3] (numpy), and the record's size in bytes (even).
+
+    A u16 header holds a 5-bit exponent per channel (r: bits 10-14, g: 5-9, b: 0-4), each minus 8; the scale is
+    2^exponent. The exponent selects the channel's encoding through the grid's range exponents: up to the 8-bit one
+    9 bytes, up to the 12-bit one 14 bytes (2-byte aligned), else 18 bytes (2-byte aligned). Coefficient 0 maps to
+    [0, scale), the others to [-scale, scale)."""
+    import numpy as np
+    f32 = np.float32
+    head, = struct.unpack_from("<H", data, offset)
+    exps = ((head >> 10 & 0x1F) - 8, (head >> 5 & 0x1F) - 8, (head & 0x1F) - 8)
+    out = np.zeros((9, 3), np.float32)
+    pos = 2
+    for ch, e in enumerate(exps):
+        bits = 8 if e <= range_exponents[0] else (12 if e <= range_exponents[1] else 16)
+        scale = f32(1.0) / f32(1 << -e) if e < 0 else f32(1 << e)
+        neg = -scale
+        p = offset + pos
+        if bits == 8:
+            b = data[p:p + 9]
+            step = scale * f32(2.0) * f32(0.00390625)
+            out[0, ch] = scale * f32(0.00390625) * f32(b[0])
+            for i in range(1, 9):
+                out[i, ch] = f32(b[i]) * step + neg
+            pos += 9
+        else:
+            pos += pos & 1
+            p = offset + pos
+            b = data[p:p + (14 if bits == 12 else 18)]
+            out[0, ch] = scale * f32(1.5258789e-05) * f32(struct.unpack_from("<H", b, 0)[0])
+            if bits == 12:
+                step = scale * f32(2.0) * f32(0.00024414062)
+                nib = (b[9] >> 4, b[10] & 15, b[10] >> 4, b[11] & 15, b[11] >> 4, b[12] & 15, b[12] >> 4, b[13] & 15)
+                for i in range(1, 9):
+                    out[i, ch] = f32(b[1 + i] << 4 | nib[i - 1]) * step + neg
+                pos += 14
+            else:
+                step = scale * f32(2.0) * f32(1.5258789e-05)
+                for i in range(1, 9):
+                    out[i, ch] = f32(struct.unpack_from("<H", b, 2 * i)[0]) * step + neg
+                pos += 18
+    return out, pos + (pos & 1)
+
+
+def palette_sh(grid: LightGrid, color_index: int):
+    """The spherical harmonics of a colour index (R_BlendLightGridColorsSH with one sample)."""
+    return decode_spherical_harmonics(grid.range_exponents, grid.palette, grid.palette_entry_address[color_index])[0]
+
+
+def evaluate_sh(coeffs, direction):
+    """The light from a unit direction (x, y, z), linear RGB, as R_SphericalHarmonicsToColorsLDR (Store: the 2-band
+    branch, r_lightGridSHBands 0) evaluates it: c0 + c1 x + c2 y + c3 z + c4 zx + c5 zy + c6 xy + c7 (3z² - 1)
+    + c8 (x² - y²), the basis constants folded into the coefficients. The game's 8-bit grid colours are
+    min(255, 127.5 sqrt(max(L, 2^-18))): 1.0 is the middle of the range, 4.0 the top."""
+    import numpy as np
+    x, y, z = (float(v) for v in direction)
+    basis = np.array([1, x, y, z, z * x, z * y, x * y, 3 * z * z - 1, x * x - y * y], np.float32)
+    return basis @ np.asarray(coeffs, np.float32)
+
+
+def world_to_grid(pos):
+    """A world position as the grid point below it and the fractions towards the next one
+    (R_LightGridLookup_Compressed): 32 units per step in x and y, 64 in z, origin at -131072."""
+    import math
+    g, f = [], []
+    for v, shift, unit in ((pos[0], 5, 0.03125), (pos[1], 5, 0.03125), (pos[2], 6, 0.015625)):
+        i = (int(math.floor(v)) + 0x20000) >> shift
+        g.append(i)
+        f.append((v + 131072.0) * unit - i)
+    return tuple(g), tuple(f)
+
+
+def sample_sh(grid: LightGrid, pos):
+    """The spherical harmonics at a world position: the 8 grid points around it, trilinear weights (corner i is
+    (i >> 2, i >> 1 & 1, i & 1) in x, y, z, as the game orders them), samples without colour dropped and the rest
+    renormalised. An approximation of GetLightingAtPoint: the game also tests each sample's visibility
+    (R_IsValidLightGridSample, the voxel bits, the light environment), which is not modelled. None where no corner
+    has colour."""
+    import numpy as np
+    (gx, gy, gz), (fx, fy, fz) = world_to_grid(pos)
+    acc, total = np.zeros((9, 3), np.float32), 0.0
+    for i in range(8):
+        dx, dy, dz = i >> 2, i >> 1 & 1, i & 1
+        w = (fx if dx else 1 - fx) * (fy if dy else 1 - fy) * (fz if dz else 1 - fz)
+        if w <= 0:
+            continue
+        ci, _, _ = get_light_grid(grid.tree, (gx + dx, gy + dy, gz + dz))
+        if ci == 0 or ci >= len(grid.palette_entry_address):
+            continue
+        acc += np.float32(w) * palette_sh(grid, ci)
+        total += w
+    return acc / np.float32(total) if total > 0 else None

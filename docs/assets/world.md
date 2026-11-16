@@ -227,8 +227,31 @@ The result per point is GfxLightGridRaw: colorIndex, lightIndex (primary light e
 own R_GetLightGrid in the emulator (after the Store's table initialiser, 1406466E0) on every cell of sampled
 blocks: 16000 Dynasty and 32000 Point of Contact cells, all equal.
 
-Not decoded yet: what a colorIndex selects (the palette bit stream: spherical harmonics, R_DecodeLightGridSphericalHarmonics,
-and the 8, 12 and 16 bit coefficient decoders) and how a world position becomes a grid point.
+**Colours.** A colorIndex selects a record of the palette: `paletteBitstream + paletteEntryAddress[colorIndex]`
+(R_BlendLightGridColorsSH). The record is second-order spherical harmonics, 9 coefficients per colour channel
+(R_DecodeLightGridSphericalHarmonics, Store 1406452D0, the coefficient decoders inlined):
+
+- a u16 header with a 5-bit exponent per channel (r: bits 10–14, g: 5–9, b: 0–4), each minus 8; scale = 2^e;
+- per channel, by its exponent against the grid's range exponents (+0x64, +0x65; Dynasty 0, 4, 23): up to the
+  first, 9 bytes of 8-bit values; up to the second, 14 bytes of 12-bit values (8 bytes of high parts after the
+  u16 c0, the low nibbles packed after them); else 18 bytes of u16 values. 12 and 16 bit channels start 2-byte
+  aligned, and the record's size is even;
+- coefficient 0 is value × scale / 2^bits (0 to scale), the others value × 2·scale / 2^bits − scale.
+
+The light from a unit direction (x, y, z) is `c0 + c1 x + c2 y + c3 z + c4 zx + c5 zy + c6 xy + c7 (3z² − 1) +
+c8 (x² − y²)` with the basis constants folded into the coefficients (R_SphericalHarmonicsToColorsLDR, which stores
+it for the 56 grid directions as min(255, 127.5·sqrt(L)): 1.0 is mid-range). Dynasty: 65310 palette entries
+(2.7 MB); sampled at the static models' lighting origins the light from straight up is bluish (the sky),
+mean ≈ (3.3, 3.8, 4.6).
+
+**World to grid** (R_LightGridLookup_Compressed): grid x, y = (floor(v) + 0x20000) >> 5 (32 units), z the same
+>> 6 (64 units); the game blends the 8 surrounding points by trilinear weights (corner i = (i >> 2, i >> 1 & 1,
+i & 1)) after testing each sample's visibility (R_IsValidLightGridSample, the voxel bits, the primary light
+environment). `lightgrid.sample_sh` blends the corners that have colour, without the visibility tests: an
+approximation.
+
+`decode_spherical_harmonics` equals the game's decoder bit for bit on 2000 Dynasty palette entries
+(tests/fastfile/lightgrid_check.py).
 
 ### Primary lights (ComWorld, com_map, asset type 0x14)
 
@@ -272,9 +295,9 @@ those the exporter can only use the images in the zone itself.
 
 - The collision map (col_map_mp), map entities (map_ents), lightdef, effects (fx_map), glass
   (glass_map): separate assets.
-- The light grid (lighting for static models through their lighting handle, and for dynamic objects); vertex
-  lighting values (unused on the maps measured).
-- The light grid's encoding, the Umbra tome's contents, the surface lighting flags, the vertex layer data and the
+- The light grid's visibility tests (R_IsValidLightGridSample, the voxel bits, light environments), its
+  non-compressed path (entries, colors) and hero-only lights; vertex lighting values (unused on the maps measured).
+- The Umbra tome's contents, the surface lighting flags, the vertex layer data and the
   PC-only vis arrays: loaded and placed exactly, their meaning *unverified*.
 - Walking a map zone from the start with the readers alone needs every asset type before the GfxWorld (sound,
   fx, xanim, ...); until then the game's loader gets there (world_check.py).

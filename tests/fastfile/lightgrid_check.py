@@ -24,6 +24,7 @@ import store_emu  # noqa: E402
 
 R_GET_LIGHT_GRID = 0x140646380
 R_INIT_LIGHT_GRID_DECODER_TABLES = 0x1406466E0
+R_DECODE_LIGHT_GRID_SPHERICAL_HARMONICS = 0x1406452D0
 ASSET_GFXWORLD = 0x1A
 LIGHT_GRID = 0x138        # GfxWorld.lightGrid
 TREE = 0x5D0              # GfxLightGrid.tree
@@ -110,10 +111,44 @@ def compare(ff: bytes, name: str, blocks: int = 500, seed: int = 1):
     return diffs, cells
 
 
+def compare_sh(ff: bytes, name: str, entries: int = 2000, seed: int = 1):
+    """Spherical harmonics of palette entries: the game's R_DecodeLightGridSphericalHarmonics (1406452D0) against
+    lightgrid.decode_spherical_harmonics, bit for bit. [(entry, game, reader)] of the differences, entries compared."""
+    import numpy as np
+    L, world = load_world(ff, name)
+    mu = L.mu
+    grid_at = world + LIGHT_GRID
+    grid = lightgrid.read_light_grid(Mem(L), grid_at)
+    pal_p, = struct.unpack("<Q", bytes(mu.mem_read(grid_at + 0x88, 8)))
+    out = store_emu.SCRATCH + 0x80000
+    rng = random.Random(seed)
+    ids = list(range(len(grid.palette_entry_address)))
+    ids = rng.sample(ids, min(entries, len(ids)))
+    diffs = []
+    for i in ids:
+        mu.mem_write(out, b"\xCD" * 0x90)
+        sp = store_emu.STACK + store_emu.STACK_SIZE - 0x1000 - 8
+        mu.mem_write(sp, struct.pack("<Q", store_emu.SENTINEL))
+        mu.reg_write(UC_X86_REG_RSP, sp)
+        mu.reg_write(UC_X86_REG_RCX, grid_at + 0x64)
+        mu.reg_write(UC_X86_REG_RDX, pal_p + grid.palette_entry_address[i])
+        mu.reg_write(UC_X86_REG_R8, out)
+        mu.emu_start(R_DECODE_LIGHT_GRID_SPHERICAL_HARMONICS, store_emu.SENTINEL)
+        game = np.frombuffer(bytes(mu.mem_read(out, 0x90)), np.float32).reshape(9, 4)[:, :3]
+        mine, _ = lightgrid.decode_spherical_harmonics(grid.range_exponents, grid.palette, grid.palette_entry_address[i])
+        if game.tobytes() != mine.tobytes():
+            diffs.append((i, game, mine))
+    return diffs, len(ids)
+
+
 if __name__ == "__main__":
     path = Path(sys.argv[1])
     d, n = compare(path.read_bytes(), path.stem, int(sys.argv[2]) if len(sys.argv) > 2 else 500)
     for c, g, m in d[:20]:
         print(f"{c}: game {g} reader {m}")
     print(f"{path.stem}: {n} cells, {len(d)} differences")
-    sys.exit(1 if d else 0)
+    ds, ns = compare_sh(path.read_bytes(), path.stem)
+    for i, g, m in ds[:5]:
+        print(f"palette entry {i}:\n game {g.tolist()}\n reader {m.tolist()}")
+    print(f"{path.stem}: {ns} palette entries, {len(ds)} differences")
+    sys.exit(1 if d or ds else 0)

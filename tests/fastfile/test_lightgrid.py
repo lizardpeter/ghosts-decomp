@@ -95,6 +95,48 @@ class Tree(unittest.TestCase):
         self.assertEqual(LG.get_light_grid(empty, (5, 5, 1)), (0, 0, 0))   # child 7 not in the mask
 
 
+class SphericalHarmonics(unittest.TestCase):
+    def test_three_encodings(self):
+        import struct
+        # exponents r = 0 (8 bit), g = 3 (12 bit), b = 5 (16 bit) with range exponents (0, 4, 23)
+        head = ((0 + 8) << 10) | ((3 + 8) << 5) | (5 + 8)
+        r = bytes([128] + [0, 255, 128, 64, 192, 1, 2, 3])                    # 9 bytes at offset 2
+        g = bytes(14)                                                          # offset 11 -> aligned to 12
+        g = bytearray(g)
+        struct.pack_into("<H", g, 0, 0x8000)                                   # c0 = 8 * 0.5
+        g[2], g[9] = 0x80, 0x00                                                # c1 = 0x800 -> 0
+        g[3], g[10] = 0xFF, 0x0F                                               # c2 = 0xFFF
+        b = bytearray(18)
+        struct.pack_into("<9H", b, 0, 0xFFFF, 0, 0x8000, 0, 0, 0, 0, 0, 0xFFFF)
+        data = struct.pack("<H", head) + r + b"\0" + bytes(g) + bytes(b)
+        sh, size = LG.decode_spherical_harmonics((0, 4, 23), data)
+        self.assertEqual(size, 2 + 9 + 1 + 14 + 18)
+        self.assertAlmostEqual(float(sh[0, 0]), 0.5)
+        self.assertAlmostEqual(float(sh[1, 0]), -1.0)
+        self.assertAlmostEqual(float(sh[2, 0]), 255 * 2 / 256 - 1, places=6)
+        self.assertAlmostEqual(float(sh[0, 1]), 4.0)
+        self.assertAlmostEqual(float(sh[1, 1]), 0.0)
+        self.assertAlmostEqual(float(sh[2, 1]), 0xFFF * 16 / 4096 - 8, places=5)
+        self.assertAlmostEqual(float(sh[0, 2]), 32 * 0xFFFF / 65536, places=4)
+        self.assertAlmostEqual(float(sh[1, 2]), -32.0)
+        self.assertAlmostEqual(float(sh[2, 2]), 0.0)
+
+    def test_evaluate(self):
+        import numpy as np
+        c = np.zeros((9, 3), np.float32)
+        c[0] = 1.0
+        c[3] = 0.5      # z
+        c[7] = 0.25     # 3z^2 - 1
+        np.testing.assert_allclose(LG.evaluate_sh(c, (0, 0, 1)), [1.0 + 0.5 + 0.5] * 3)
+        np.testing.assert_allclose(LG.evaluate_sh(c, (1, 0, 0)), [1.0 - 0.25] * 3)
+
+    def test_world_to_grid(self):
+        g, f = LG.world_to_grid((0.0, 16.0, -32.0))
+        self.assertEqual(g, (0x1000, 0x1000, (0x20000 - 32) >> 6))
+        self.assertAlmostEqual(f[1], 0.5)
+        self.assertAlmostEqual(f[2], 0.5)
+
+
 class RealMaps(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
