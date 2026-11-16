@@ -423,7 +423,8 @@ def main(argv=None) -> int:
     ap.add_argument("--flac", action="store_true", help="keep FLAC as it is (don't decode with ffmpeg)")
     opts = ap.parse_args(argv)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    register(iw6ff.ASSET_LOADERS)
+    import loaders
+    loaders.register_all()          # every asset type, so the walk reaches the sounds
     with open(opts.fastfile, "rb") as f:
         zone = iw6ff.read_fastfile(f.read(), os.path.basename(opts.fastfile).rsplit(".", 1)[0])
     if not zone.complete:

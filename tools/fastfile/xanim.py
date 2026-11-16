@@ -207,8 +207,125 @@ def load_xanim_parts_ptr(s, varptr: int):
     s.pop()
 
 
-def register(asset_loaders: dict):
+# ---- animation classes (asset type 0x20, "animclass") -----------------------------------------------------------
+
+ASSET_ANIMCLASS = 0x20
+HOOKS = {"scriptable_ptr": None, "fx_ptr": None}
+
+
+def _ss(s, at):
+    """Load_ScriptStringCustom (14037AF90)."""
+    idx = s.u32(at)
+    s.put_u32(at, s.u64(s.string_table + 8 * idx) & 0xFFFFFFFF)
+
+
+def _following(s, at, align, body):
+    """-1: aligned, then body(address); another non-null value: an offset."""
+    v = s.u64(at)
+    if not v:
+        return
+    if v != 0xFDFDFDFFFFFFFFFF:
+        s.put_u64(at, s.offset_to_pointer(v))
+        return
+    p = s.align(align)
+    s.put_u64(at, p)
+    body(p)
+
+
+def _scr_strings(s, p, count):
+    """Load_scr_string_tArray (140361EA0)."""
+    s.load(True, p, 4 * count)
+    for i in range(count):
+        _ss(s, p + 4 * i)
+
+
+def _anim_aim_set(s, t, at_stream_start):
+    """14034A460 (Load_AnimationAimSet): 0x70 bytes: name and rootName script strings, then eight animation names
+    (+8)."""
+    s.load(at_stream_start, t, 0x70)
+    _ss(s, t)
+    _ss(s, t + 4)
+    for i in range(8):
+        _ss(s, t + 8 + 4 * i)
+
+
+def _anim_states(s, p, count):
+    """14034A970 (Load_AnimationStateArray): count AnimationState (0x28): name and notify script strings, an aim set
+    (+0x10), entryCount (byte +0xD) AnimationEntry {alias, animName} (+0x18) and as many 8-byte animIndices in the
+    runtime block (+0x20, zero-filled)."""
+    s.load(True, p, 0x28 * count)
+    for i in range(count):
+        e = p + 0x28 * i
+        _ss(s, e)
+        _ss(s, e + 4)
+        _following(s, e + 0x10, 4, lambda t: _anim_aim_set(s, t, True))
+
+        def pairs(q, e=e):
+            n = s.read(e + 0xD, 1)[0]
+            s.load(True, q, 8 * n)
+            for k in range(n):
+                _ss(s, q + 8 * k)
+                _ss(s, q + 8 * k + 4)
+        _following(s, e + 0x18, 4, pairs)
+        s.push(2)                                         # XFILE_BLOCK_RUNTIME
+        if s.u64(e + 0x20):
+            q = s.align(4)
+            s.put_u64(e + 0x20, q)
+            s.load(True, q, 8 * s.read(e + 0xD, 1)[0])
+        s.pop()
+
+
+def _anim_state_machine(s, m):
+    """14034ABE0 (Load_AnimationStateMachine): 0x18 bytes: name, the states (+8, stateCount u16 +4) and aim sets
+    (+0x10, aimSetCount u16 +6, × 0x70)."""
+    s.load(True, m, 0x18)
+    _ss(s, m)
+    _following(s, m + 8, 4, lambda p: _anim_states(s, p, struct.unpack("<H", s.read(m + 4, 2))[0]))
+
+    def transitions(p):
+        n = struct.unpack("<H", s.read(m + 6, 2))[0]
+        s.load(True, p, 0x70 * n)
+        for i in range(n):
+            _anim_aim_set(s, p + 0x70 * i, False)
+    _following(s, m + 0x10, 4, transitions)
+
+
+def load_animation_class(s, h: int, at_stream_start: bool = True):
+    """14034A550 (Load_AnimationClass): 0x58 bytes, in the virtual block: className, the state machine (+8), animTree
+    (+0x14), the scriptable (+0x18), soundNotes / soundNames / soundOptions (+0x28, +0x30, +0x38: soundCount u16
+    +0x20), effectNotes (+0x40), effectDefs (+0x48) and effectTags (+0x50) (effectCount u16 +0x22)."""
+    s.load(at_stream_start, h, 0x58)
+    s.push(3)                                             # XFILE_BLOCK_VIRTUAL
+    s.xstring_ptr(h)
+    _following(s, h + 8, 4, lambda p: _anim_state_machine(s, p))
+    _ss(s, h + 0x14)
+    HOOKS["scriptable_ptr"](s, h + 0x18)
+    n1 = struct.unpack("<H", s.read(h + 0x20, 2))[0]
+    n2 = struct.unpack("<H", s.read(h + 0x22, 2))[0]
+    for off in (0x28, 0x30, 0x38):
+        _following(s, h + off, 4, lambda p: _scr_strings(s, p, n1))
+    _following(s, h + 0x40, 4, lambda p: _scr_strings(s, p, n2))
+
+    def effects(p):
+        s.load(True, p, 8 * n2)
+        for i in range(n2):
+            HOOKS["fx_ptr"](s, p + 8 * i)
+    _following(s, h + 0x48, 8, effects)
+    _following(s, h + 0x50, 4, lambda p: _scr_strings(s, p, n2))
+    s.pop()
+
+
+def load_animation_class_ptr(s, varptr: int):
+    """Load_AnimationClassPtr (14034A880); Load_AnimationClassAsset (140371730) links it as 0x20."""
+    import iw6ff
+    iw6ff.asset_ptr(ASSET_ANIMCLASS, lambda s_, h: load_animation_class(s_, h, True))(s, varptr)
+
+
+def register(asset_loaders: dict, scriptable_ptr=None, fx_ptr=None):
     asset_loaders[ASSET_XANIMPARTS] = load_xanim_parts_ptr
+    if scriptable_ptr is not None and fx_ptr is not None:
+        HOOKS["scriptable_ptr"], HOOKS["fx_ptr"] = scriptable_ptr, fx_ptr
+        asset_loaders[ASSET_ANIMCLASS] = load_animation_class_ptr
 
 
 # ==== 2. reader and evaluator ======================================================================================

@@ -152,3 +152,70 @@ void Load_XAnimDeltaPart(bool atStreamStart);
 void Load_XAnimParts(bool atStreamStart);
 void Load_XAnimPartsPtr(bool atStreamStart);
 void Load_XAnimPartsAsset(XAnimParts **header);  // Store 140374000 (links the asset; not reconstructed here)
+
+// ---- animation classes (asset type 0x20, "animclass"): the servers' PDBs' layouts ------------------------------
+
+struct ScriptableDef;
+struct FxEffectDef;
+
+struct AnimationEntry
+{
+	scr_string_t alias;
+	scr_string_t animName;
+};
+
+struct AnimationAimSet
+{
+	scr_string_t name;          // +0x00
+	scr_string_t rootName;      // +0x04
+	scr_string_t animName[8];   // +0x08
+	unsigned char rest[0x48];   // +0x28 (no pointers)
+};
+static_assert(sizeof(AnimationAimSet) == 0x70, "AnimationAimSet");
+
+struct AnimationState
+{
+	scr_string_t name;                  // +0x00
+	scr_string_t notify;                // +0x04
+	float blendTime;                    // +0x08
+	unsigned char flags;                // +0x0C
+	unsigned char entryCount;           // +0x0D
+	AnimationAimSet *aimSet;            // +0x10
+	AnimationEntry *animEntries;        // +0x18
+	unsigned long long *animIndices;    // +0x20 (runtime block)
+};
+static_assert(sizeof(AnimationState) == 0x28, "AnimationState");
+
+struct AnimationStateMachine
+{
+	scr_string_t name;                  // +0x00
+	unsigned short stateCount;          // +0x04
+	unsigned short aimSetCount;         // +0x06
+	AnimationState *states;             // +0x08
+	AnimationAimSet *aimSets;           // +0x10
+};
+static_assert(sizeof(AnimationStateMachine) == 0x18, "AnimationStateMachine");
+
+struct AnimationClass
+{
+	const char *className;                  // +0x00
+	AnimationStateMachine *stateMachine;    // +0x08
+	int animCtrl;                           // +0x10
+	scr_string_t animTree;                  // +0x14
+	ScriptableDef *scriptable;              // +0x18
+	unsigned short soundCount;              // +0x20
+	unsigned short effectCount;             // +0x22
+	scr_string_t *soundNotes;               // +0x28
+	scr_string_t *soundNames;               // +0x30
+	scr_string_t *soundOptions;             // +0x38
+	scr_string_t *effectNotes;              // +0x40
+	const FxEffectDef **effectDefs;         // +0x48
+	scr_string_t *effectTags;               // +0x50
+};
+static_assert(sizeof(AnimationClass) == 0x58, "AnimationClass");
+
+void Load_AnimationAimSet(bool atStreamStart);
+void Load_AnimationStateArray(bool atStreamStart, unsigned long long count);
+void Load_AnimationStateMachine(bool atStreamStart);
+void Load_AnimationClass(bool atStreamStart);
+void Load_AnimationClassPtr(bool atStreamStart);

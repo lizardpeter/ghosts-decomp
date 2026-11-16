@@ -133,3 +133,6 @@ bone, so the animation moves the model as it moves the entity in the game (a dro
 
 - Blending, additive animations, animation trees (animclass assets) and notetracks beyond reading them.
 - C reconstructions of the evaluators (XAnimCalcParts, XAnimCalcNonLoopEnd, the delta functions).
+
+Animation classes (AnimationClass, asset type 0x20: state machines of animation names for scripted entities) are in
+docs/assets/map_assets.md.

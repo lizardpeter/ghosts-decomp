@@ -354,6 +354,24 @@ Not filed by this work (the brief reserves records/bugs.tsv); each is reproducib
 - `Load_RawFile` (140355760) reads `compressedLen` bytes of buffer regardless of `len` (so an uncompressed raw file
   must store its size in `compressedLen`); behaviour to keep, noted for the importer.
 
+**Whole zones with every loader.** `tools/fastfile/loaders.py` registers every loader tools/fastfile has
+(`register_all()`); with them `iw6ff.read_fastfile` walks entire real zones. `tests/fastfile/zone_check.py
+<zone.ff> --full` loads the zone in the emulator and with the reader (at the game's block addresses) and compares
+every block's memory and the asset pool:
+
+| Zone | Assets | Result |
+|---|---|---|
+| common_alien_mp.ff (the Extinction aliens' shared zone) | 1909 | equal |
+| mp_conflict.ff (Dynasty) | 1707 | equal |
+| mp_alien_town.ff (Point of Contact) | 2560 | equal |
+
+Two things the check allows for, both of the emulator's doing and both explained in zone_check.py: the address of the
+engine's copy of each loaded sound's data (the copy itself must hold the same bytes, docs/assets/sound.md), and the
+fields DB_XModelSurfsFixup writes into a model's pool copy (the emulator's stand-in link leaves them in the zone copy;
+they differ only for models whose XModelSurfs belongs to another zone, which neither side has). The same script
+checks single assets: `zone_check.py <zone.ff> 0x23:0,5` hands the stream to the reader at a type's Load_*Ptr and
+compares when it returns.
+
 ## 14. What the per-asset-type work starts with
 
 - Each type's `Load_<Type>` in the Store disassembly, from its `Load_<Type>Ptr` in the table above: the header

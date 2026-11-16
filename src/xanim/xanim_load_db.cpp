@@ -341,3 +341,257 @@ void Load_XAnimPartsPtr(bool atStreamStart)
 	}
 	DB_PopStreamPos();
 }
+
+// ==== animation classes (asset type 0x20) ===========================================================================
+
+void Load_FxEffectDefHandleArray(bool atStreamStart, unsigned long long count);  // Store 14034D210
+void Load_ScriptableDefPtr(bool atStreamStart);                                    // Store 140356330
+void Load_AnimationClassAsset(AnimationClass **animClass);                         // Store 140371730
+
+extern AnimationClass **varAnimationClassPtr;          // Store 1444254D0
+extern AnimationClass *varAnimationClass;              // Store 1444254C8
+extern AnimationStateMachine *varAnimationStateMachine;  // Store 1444254B8
+extern AnimationState *varAnimationState;              // Store 1444254B0
+extern AnimationAimSet *varAnimationAimSet;            // Store 1444254A0
+extern AnimationEntry *varAnimationEntry;              // Store 1444254A8
+extern unsigned long long *varraw_uint64;              // Store 144424C08
+extern ScriptableDef **varScriptableDefPtr;            // Store 144424B70
+extern const FxEffectDef **varFxEffectDefHandle;       // Store 1444260F8
+
+static inline void LoadScriptString(scr_string_t *s)
+{
+	varscr_string_t = s;
+	Load_Stream(false, varscr_string_t, 4);
+	Load_ScriptStringCustom(varscr_string_t);
+}
+
+// Store 14034A460
+void Load_AnimationAimSet(bool atStreamStart)
+{
+	Load_Stream(atStreamStart, varAnimationAimSet, sizeof(AnimationAimSet));
+	LoadScriptString(&varAnimationAimSet->name);
+	LoadScriptString(&varAnimationAimSet->rootName);
+	varscr_string_t = varAnimationAimSet->animName;
+	Load_Stream(false, varscr_string_t, sizeof(varAnimationAimSet->animName));
+	scr_string_t *name = varscr_string_t;
+	for (int i = 8; i; i--, name++)
+	{
+		varscr_string_t = name;
+		Load_Stream(false, name, 4);
+		Load_ScriptStringCustom(varscr_string_t);
+	}
+	DB_PushStreamPos(XFILE_BLOCK_RUNTIME);  // nothing of the aim set lives there
+	DB_PopStreamPos();
+}
+
+// Store 14034A970
+// Each state's animation indices are allocated in the runtime block (not read).
+void Load_AnimationStateArray(bool atStreamStart, unsigned long long count)
+{
+	Load_Stream(atStreamStart, varAnimationState, count * sizeof(AnimationState));
+	AnimationState *state = varAnimationState;
+	for (; count; count--, state++)
+	{
+		varAnimationState = state;
+		Load_Stream(false, state, sizeof(AnimationState));
+		LoadScriptString(&varAnimationState->name);
+		LoadScriptString(&varAnimationState->notify);
+		AnimationAimSet **aimSet = &varAnimationState->aimSet;
+		if (*aimSet)
+		{
+			if ((unsigned long long)*aimSet == DB_PTR_FOLLOWING)
+			{
+				ALIGN_POS(4);
+				*aimSet = (AnimationAimSet *)g_streamPos;
+				varAnimationAimSet = (AnimationAimSet *)g_streamPos;
+				Load_AnimationAimSet(true);
+			}
+			else
+			{
+				DB_ConvertOffsetToPointer((unsigned long long *)aimSet);
+			}
+		}
+		AnimationEntry **entries = &varAnimationState->animEntries;
+		if (*entries)
+		{
+			if ((unsigned long long)*entries == DB_PTR_FOLLOWING)
+			{
+				ALIGN_POS(4);
+				*entries = (AnimationEntry *)g_streamPos;
+				varAnimationEntry = (AnimationEntry *)g_streamPos;
+				unsigned long long n = varAnimationState->entryCount;
+				Load_Stream(true, varAnimationEntry, n * sizeof(AnimationEntry));
+				AnimationEntry *entry = varAnimationEntry;
+				for (; n; n--, entry++)
+				{
+					varAnimationEntry = entry;
+					Load_Stream(false, entry, sizeof(AnimationEntry));
+					LoadScriptString(&varAnimationEntry->alias);
+					LoadScriptString(&varAnimationEntry->animName);
+				}
+			}
+			else
+			{
+				DB_ConvertOffsetToPointer((unsigned long long *)entries);
+			}
+		}
+		DB_PushStreamPos(XFILE_BLOCK_RUNTIME);
+		if (varAnimationState->animIndices)
+		{
+			ALIGN_POS(4);
+			varAnimationState->animIndices = (unsigned long long *)g_streamPos;
+			varraw_uint64 = (unsigned long long *)g_streamPos;
+			Load_Stream(true, varraw_uint64, (unsigned long long)varAnimationState->entryCount << 3);
+		}
+		DB_PopStreamPos();
+	}
+}
+
+// Store 14034ABE0
+void Load_AnimationStateMachine(bool atStreamStart)
+{
+	Load_Stream(atStreamStart, varAnimationStateMachine, sizeof(AnimationStateMachine));
+	LoadScriptString(&varAnimationStateMachine->name);
+	AnimationState **states = &varAnimationStateMachine->states;
+	if (*states)
+	{
+		if ((unsigned long long)*states == DB_PTR_FOLLOWING)
+		{
+			ALIGN_POS(4);
+			*states = (AnimationState *)g_streamPos;
+			varAnimationState = (AnimationState *)g_streamPos;
+			Load_AnimationStateArray(true, varAnimationStateMachine->stateCount);
+		}
+		else
+		{
+			DB_ConvertOffsetToPointer((unsigned long long *)states);
+		}
+	}
+	AnimationAimSet **aimSets = &varAnimationStateMachine->aimSets;
+	if (*aimSets)
+	{
+		if ((unsigned long long)*aimSets != DB_PTR_FOLLOWING)
+		{
+			DB_ConvertOffsetToPointer((unsigned long long *)aimSets);
+			return;
+		}
+		ALIGN_POS(4);
+		*aimSets = (AnimationAimSet *)g_streamPos;
+		varAnimationAimSet = (AnimationAimSet *)g_streamPos;
+		unsigned long long n = varAnimationStateMachine->aimSetCount;
+		Load_Stream(true, varAnimationAimSet, n * sizeof(AnimationAimSet));
+		AnimationAimSet *aimSet = varAnimationAimSet;
+		for (; n; n--, aimSet++)
+		{
+			varAnimationAimSet = aimSet;
+			Load_AnimationAimSet(false);
+		}
+	}
+}
+
+// A script string array behind a pointer: inline (aligned 4) when -1, else an offset.
+static inline void LoadScrStringArrayField(scr_string_t **field, unsigned short count)
+{
+	if (*field)
+	{
+		if ((unsigned long long)*field == DB_PTR_FOLLOWING)
+		{
+			ALIGN_POS(4);
+			*field = (scr_string_t *)g_streamPos;
+			varscr_string_t = (scr_string_t *)g_streamPos;
+			Load_scr_string_tArray(true, count);
+		}
+		else
+		{
+			DB_ConvertOffsetToPointer((unsigned long long *)field);
+		}
+	}
+}
+
+// Store 14034A550
+void Load_AnimationClass(bool atStreamStart)
+{
+	Load_Stream(atStreamStart, varAnimationClass, sizeof(AnimationClass));
+	DB_PushStreamPos(XFILE_BLOCK_VIRTUAL);
+	varXString = &varAnimationClass->className;
+	Load_Stream(false, varXString, 8);
+	if (*varXString)
+	{
+		if ((unsigned long long)*varXString == DB_PTR_FOLLOWING)
+		{
+			*varXString = (const char *)g_streamPos;
+			varConstChar = (const char *)g_streamPos;
+			Load_XStringCustom(varXString);
+		}
+		else
+		{
+			DB_ConvertOffsetToPointer((unsigned long long *)varXString);
+		}
+	}
+	AnimationStateMachine **machine = &varAnimationClass->stateMachine;
+	if (*machine)
+	{
+		if ((unsigned long long)*machine == DB_PTR_FOLLOWING)
+		{
+			ALIGN_POS(4);
+			*machine = (AnimationStateMachine *)g_streamPos;
+			varAnimationStateMachine = (AnimationStateMachine *)g_streamPos;
+			Load_AnimationStateMachine(true);
+		}
+		else
+		{
+			DB_ConvertOffsetToPointer((unsigned long long *)machine);
+		}
+	}
+	LoadScriptString(&varAnimationClass->animTree);
+	varScriptableDefPtr = &varAnimationClass->scriptable;
+	Load_ScriptableDefPtr(false);
+	LoadScrStringArrayField(&varAnimationClass->soundNotes, varAnimationClass->soundCount);
+	LoadScrStringArrayField(&varAnimationClass->soundNames, varAnimationClass->soundCount);
+	LoadScrStringArrayField(&varAnimationClass->soundOptions, varAnimationClass->soundCount);
+	LoadScrStringArrayField(&varAnimationClass->effectNotes, varAnimationClass->effectCount);
+	const FxEffectDef ***effects = &varAnimationClass->effectDefs;
+	if (*effects)
+	{
+		if ((unsigned long long)*effects == DB_PTR_FOLLOWING)
+		{
+			ALIGN_POS(8);
+			*effects = (const FxEffectDef **)g_streamPos;
+			varFxEffectDefHandle = (const FxEffectDef **)g_streamPos;
+			Load_FxEffectDefHandleArray(true, varAnimationClass->effectCount);
+		}
+		else
+		{
+			DB_ConvertOffsetToPointer((unsigned long long *)effects);
+		}
+	}
+	LoadScrStringArrayField(&varAnimationClass->effectTags, varAnimationClass->effectCount);
+	DB_PopStreamPos();
+}
+
+// Store 14034A880
+void Load_AnimationClassPtr(bool atStreamStart)
+{
+	Load_Stream(atStreamStart, varAnimationClassPtr, sizeof(AnimationClass *));
+	DB_PushStreamPos(XFILE_BLOCK_TEMP);
+	AnimationClass **ptr = varAnimationClassPtr;
+	unsigned long long value = (unsigned long long)*varAnimationClassPtr;
+	if (value)
+	{
+		if (!DB_PTR_IS_INLINE(value))
+		{
+			DB_ConvertOffsetToAlias((unsigned long long *)varAnimationClassPtr);
+			DB_PopStreamPos();
+			return;
+		}
+		ALIGN_POS(4);
+		*varAnimationClassPtr = (AnimationClass *)g_streamPos;
+		varAnimationClass = (AnimationClass *)g_streamPos;
+		unsigned char *inserted = value == DB_PTR_INSERT ? DB_InsertPointer() : nullptr;
+		Load_AnimationClass(true);
+		Load_AnimationClassAsset(ptr);
+		if (inserted)
+			*(AnimationClass **)inserted = *ptr;
+	}
+	DB_PopStreamPos();
+}

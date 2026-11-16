@@ -231,7 +231,10 @@ def _asset_ptr_alias_only(kind: str):
     return load
 
 
-load_fx_effect_def_handle = _asset_ptr_alias_only("FxEffectDef (14034D120)")
+def load_fx_effect_def_handle(s, varptr: int):
+    """Load_FxEffectDefHandle (14034D120): tools/fastfile/fx.py."""
+    import fx
+    fx.load_effect_ptr(s, varptr)
 ASSET_SOUND = 0x0E
 ASSET_SCRIPTABLEDEF = 0x37
 
@@ -493,8 +496,10 @@ def load_clipmap_ptr(s, varptr: int, **loaders):
     iw6ff.asset_ptr(ASSET_CLIPMAP, lambda s_, h: load_clipmap(s_, h, True, **loaders))(s, varptr)
 
 
-def register(asset_loaders: dict):
+def register(asset_loaders: dict, xmodel_ptr=None):
     asset_loaders[ASSET_CLIPMAP] = load_clipmap_ptr
+    asset_loaders[0x18] = load_map_ents_ptr
+    asset_loaders[ASSET_SCRIPTABLEDEF] = lambda s, varptr: load_scriptable_def_ptr(s, varptr, xmodel_ptr)
 
 
 # ==== 2. readers ===================================================================================================

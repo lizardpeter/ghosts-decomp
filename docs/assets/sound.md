@@ -135,11 +135,9 @@ common_alien_mp's streamed and primed sounds use soundfile62 (90 aliases), 7 (28
   sound as a WAVE file, or a primed start's FLAC frames behind a made-up fLaC header and STREAMINFO (flac_header:
   rate, channels, bits and sample count from the LoadedSound, block sizes 16..65535), which ffmpeg decodes. to_wav
   decodes FLAC to WAVE with ffmpeg. extract writes a zone's sounds, one file per alias.
-- **Command line:** `python3 tools/fastfile/sound.py <zone.ff> --out <dir> --paks <dir>` uses iw6ff.py's reader,
-  which stops at asset types it has no loader for yet (in common_alien_mp, colorizationset 0x39 comes first; weapons
-  0x23, vehicles 0x32 and tonemapping 0x3A are also missing,
-  some before the sounds). Until it has them, `python3 tests/fastfile/sound_check.py <zone.ff> --extract <out dir>
-  [<pak dir>]` extracts from the zone the game loaded in the emulator.
+- **Command line:** `python3 tools/fastfile/sound.py <zone.ff> --out <dir> --paks <dir>` walks the zone with every
+  loader (tools/fastfile/loaders.py) and writes its sounds. `python3 tests/fastfile/sound_check.py <zone.ff> --extract
+  <out dir> [<pak dir>]` does the same from the zone as the game loaded it in the emulator.
 
 **Tests (tests/fastfile/test_sound.py):** an alias list in hand-made memory (loaded, packed and localized files);
 PCM to WAVE; a pak range; FLAC frames with their header stripped (as primed starts are) decoding to the same
