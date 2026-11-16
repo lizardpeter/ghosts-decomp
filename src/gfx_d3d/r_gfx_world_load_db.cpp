@@ -59,7 +59,7 @@ extern GfxStaticModelVertexLightingInfo *varGfxStaticModelVertexLightingInfo;  /
 extern GfxStaticModelVertexLighting *varGfxStaticModelVertexLighting;  // Store 144427028
 extern GfxDrawSurf *varGfxDrawSurf;                  // Store 1444268C0
 extern unsigned char **varGfxConstantBufferPtr;      // Store 144424C58
-extern unsigned char *varGfxConstantBufferByte;      // Store 144424A08
+extern void *varvoid;                                // Store 144424A08 (the generator's void* var)
 extern GfxWorldDpvsDynamic *varGfxWorldDpvsDynamic;  // Store 1444268E8
 extern unsigned char *varraw_byte16;                 // Store 144424C38
 extern GfxHeroOnlyLight *varGfxHeroOnlyLight;        // Store 144426808
@@ -525,7 +525,7 @@ void sub_140361E10(bool atStreamStart, unsigned long long count)
 		if (*varGfxConstantBufferPtr)
 		{
 			*varGfxConstantBufferPtr = g_streamPos;
-			varGfxConstantBufferByte = g_streamPos;
+			varvoid = g_streamPos;
 			Load_Stream(true, g_streamPos, 1);
 		}
 		ptr++;
