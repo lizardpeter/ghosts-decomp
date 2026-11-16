@@ -173,8 +173,12 @@ the pixel is `albedo · that + specular`. The LIT_DIR techniques (technique 8) a
 `gfxworld.decode_lightmap` and `gfxworld.lightmap_lighting` (tests/fastfile/test_gfxworld.py).
 
 The values are linear HDR (Dynasty: mean ≈ 0.9, 99th percentile ≈ 8), so a viewer needs tone mapping. Static
-models are lit by per-vertex lighting values (GfxStaticModelVertexLighting, 0x14 bytes each; section 4), not
-decoded yet.
+models do not use the lightmaps. On Dynasty (5566 placed models) and Point of Contact, mp_alien_town (15260) none has
+per-vertex lighting values (GfxStaticModelVertexLightingInfo +0x34 is 0 everywhere) and every model lightmap index
+(+0x98) is 0xFFFFFFFF. What they have instead: a lighting handle (u16 at +0xA2, set on nearly every instance; most
+likely an index into the light grid's lighting, which the model shaders' "lprobe" techniques sample, *unverified*)
+and, on foliage, a ground lighting colour (+0x40, 4 floats: HDR RGB and a fourth value, set on 1381 Dynasty
+instances, all grass and foliage). Decoding the light grid is what lights the props.
 
 ### Primary lights (ComWorld, com_map, asset type 0x14)
 
@@ -218,7 +222,8 @@ those the exporter can only use the images in the zone itself.
 
 - The collision map (col_map_mp), map entities (map_ents), lightdef, effects (fx_map), glass
   (glass_map): separate assets.
-- Static model vertex lighting values; the light grid (lighting for dynamic objects).
+- The light grid (lighting for static models through their lighting handle, and for dynamic objects); vertex
+  lighting values (unused on the maps measured).
 - The light grid's encoding, the Umbra tome's contents, the surface lighting flags, the vertex layer data and the
   PC-only vis arrays: loaded and placed exactly, their meaning *unverified*.
 - Walking a map zone from the start with the readers alone needs every asset type before the GfxWorld (sound,
