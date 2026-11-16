@@ -445,7 +445,9 @@ def evaluate_sh(coeffs, direction):
     """The light from a unit direction (x, y, z), linear RGB, as R_SphericalHarmonicsToColorsLDR (Store: the 2-band
     branch, r_lightGridSHBands 0) evaluates it: c0 + c1 x + c2 y + c3 z + c4 zx + c5 zy + c6 xy + c7 (3z² - 1)
     + c8 (x² - y²), the basis constants folded into the coefficients. The game's 8-bit grid colours are
-    min(255, 127.5 sqrt(max(L, 2^-18))): 1.0 is the middle of the range, 4.0 the top."""
+    min(255, 127.5 sqrt(max(L, 2^-18))): 1.0 is the middle of the range, 4.0 the top. Model shaders sample those
+    colours from a texture and multiply them straight into the albedo, so a renderer lighting models like the game
+    uses about L / 4 (docs/assets/world.md, "How models use it")."""
     import numpy as np
     x, y, z = (float(v) for v in direction)
     basis = np.array([1, x, y, z, z * x, z * y, x * y, 3 * z * z - 1, x * x - y * y], np.float32)
