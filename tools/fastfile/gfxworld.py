@@ -467,6 +467,8 @@ class StaticModel:
     flags: int
     lightmap_index: int
     cull_dist: int
+    lighting_origin: tuple | None = None   # GfxStaticModelInst +0x18: where the game samples the light grid
+    primary_light_env: int = 0             # +0xA4
 
 
 @dataclass
@@ -515,6 +517,7 @@ def read_world(mem, w: int) -> GfxWorldInfo:
                                      mem.u64(a + 0x20)))
     smodels = []
     mp = mem.u64(dpvs + 0xD8)
+    ip = mem.u64(w + 0x960)            # smodelInsts (0x24 bytes: bounds, lighting origin at +0x18)
     for i in range(u32(dpvs) if mp else 0):
         a = mp + SMODEL_DRAW_INST_SIZE * i
         f = struct.unpack("<13f", mem.read(a, 0x34))
@@ -523,8 +526,10 @@ def read_world(mem, w: int) -> GfxWorldInfo:
         # (+0xA4); the handle, flags and light environment offsets are read by R_SetAllStaticModelLighting (14063EEF0)
         lightmap = struct.unpack("<I", mem.read(a + 0x98, 4))[0]
         cull, flags = struct.unpack("<HH", mem.read(a + 0x9E, 4))
+        env = struct.unpack("<H", mem.read(a + 0xA4, 2))[0]
+        lo = struct.unpack("<3f", mem.read(ip + 0x24 * i + 0x18, 12)) if ip else None
         smodels.append(StaticModel(_asset_name(mem, mem.u64(a + 0x38)), f[0:3], (f[3:6], f[6:9], f[9:12]), f[12],
-                                   flags, lightmap, cull))
+                                   flags, lightmap, cull, lo, env))
     lightmaps = []
     lp = mem.u64(draw + 0x40)
     for i in range(i32(draw + 0x38) if lp else 0):
@@ -627,7 +632,8 @@ def _look_quat(d):
 
 
 def to_gltf(world: GfxWorldInfo, z_up_to_y_up: bool = True, scale: float = 1.0, models: dict | None = None,
-            material_images: dict | None = None, lightmap_images: dict | None = None, lights: list | None = None):
+            material_images: dict | None = None, lightmap_images: dict | None = None, lights: list | None = None,
+            model_lighting: dict | None = None):
     """A glTF 2.0 document and its binary buffer.
 
     The world surfaces are one mesh with a primitive per (material, lightmap): POSITION, NORMAL, TEXCOORD_0,
@@ -640,7 +646,10 @@ def to_gltf(world: GfxWorldInfo, z_up_to_y_up: bool = True, scale: float = 1.0, 
     {"base"|"normal"|"specular": uri}}) the base colour is the glTF base colour texture and the others are listed in
     extras, and with `lightmap_images` ({lightmap index: {name: uri}}) each world material's extras name its lightmap
     images. `lights` (read_com_world) become KHR_lights_punctual lights: the sun directional, spots and omnis at their
-    origins (colour normalised, the largest component as intensity; *unverified* units). Coordinates stay the game's
+    origins (colour normalised, the largest component as intensity; *unverified* units). `model_lighting`
+    ({static model index: 9 x 3 spherical harmonics, lightgrid.sample_sh}) adds each placement's light grid lighting
+    to its node extras ("light_grid_sh", rows c0..c8 of RGB; lightgrid.evaluate_sh gives the light from a
+    direction in the game's coordinates). Coordinates stay the game's
     (inches, Z up) under a root node that rotates Z up to Y up and scales by `scale`."""
     import math
     b = xmodel_mod._Bin()
@@ -720,6 +729,8 @@ def to_gltf(world: GfxWorldInfo, z_up_to_y_up: bool = True, scale: float = 1.0, 
         matrix = [f[0] * s, f[1] * s, f[2] * s, 0, l[0] * s, l[1] * s, l[2] * s, 0, u[0] * s, u[1] * s, u[2] * s, 0,
                   m.origin[0], m.origin[1], m.origin[2], 1]
         node = {"name": f"{m.model}#{i}", "matrix": matrix, "extras": {"xmodel": m.model, "scale": s}}
+        if model_lighting and model_lighting.get(i) is not None:
+            node["extras"]["light_grid_sh"] = [[round(float(v), 5) for v in row] for row in model_lighting[i]]
         if models and m.model in models:
             if m.model not in model_mesh:
                 mesh = _model_mesh(b, models[m.model], model_materials, {})
