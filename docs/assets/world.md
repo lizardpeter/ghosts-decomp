@@ -3,7 +3,7 @@
 What a map's render geometry is in the Store build (`iw6mp64_MSStore_ship`), how its zone carries it, and how to
 get it out. From the Store build's loader (VAs given) and verified on real maps: the reference reader
 (`tools/fastfile/gfxworld.py`) loads the GfxWorld of **mp_conflict.ff** (Dynasty) and **mp_alien_armory.ff**
-(Point of Contact) to exactly the state the game's own loader leaves (section 6). The servers have the struct
+(an Extinction map, probably Nightfall: *unverified*; Point of Contact is mp_alien_town) to exactly the state the game's own loader leaves (section 6). The servers have the struct
 types (their GfxWorld is 0x9E8 bytes, PC 0xA30) but load almost none of it; names here are theirs where the
 layout matches, and the PC-only parts are described. *unverified* marks what isn't established.
 
@@ -95,7 +95,7 @@ primaryLightEnvIndex, reflectionProbeIndex, firstMtlSkinIndex, sunShadowFlags.
 
 ## 5. Measured
 
-| | mp_conflict (Dynasty) | mp_alien_armory (Point of Contact) |
+| | mp_conflict (Dynasty) | mp_alien_armory (Extinction) |
 |---|---|---|
 | vertices | 374,756 | 652,316 |
 | surfaces | 10,225 (373 materials) | 34,741 |
