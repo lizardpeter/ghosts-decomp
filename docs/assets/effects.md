@@ -15,7 +15,8 @@ reconstructs the loaders in C++.
   and flare definitions, and the GfxLightDef and FxParticleSimAnimation loaders), each tested against the Store exe
   in `tests/differential/test_fx_load.py` (200 or 300 random inputs each; 16 deliberate mutations, among them a wrong
   count, alignment, element type, call order or missing reference, all fail).
-- **Reader.** `fx.read_effect` on every effect of common_alien_mp as the game loaded it: 175 effects, 881 elements.
+- **Reader.** `fx.read_effect` on every effect as the game loaded it: common_alien_mp, 175 effects with 881 elements;
+  mp_alien_town, 517 effects with 1392 elements, among them a spot light with its GfxLightDef.
 
 ## 2. Asset types
 
