@@ -185,6 +185,51 @@ light grid: R_GetLightingAtPoint -> R_GetLightingAtPointSH (140682240) -> GetLig
 R_LightGridLookup_Compressed (140683500) / _NonCompressed (140683BD0) -> R_GetLightGrid (140646380), which decodes a
 block of the compressed tree (PC: through a 509-slot block cache, 140644CC0, that the servers do not have).
 
+### Light grid (GfxWorld + 0x138)
+
+What lights the static models (above) and moving objects. GfxLightGrid (0x620 bytes) holds the grid's bounds,
+`entries` (8 bytes: colorsIndex, primaryLightEnvIndex, needsTrace), `colors` (GfxLightGridColors: rgb[56][3], 0xA8
+bytes), a palette (`paletteEntryAddress`, `paletteBitstream`, with range exponents for 8, 12 and 16 bit encodings),
+sky and default colours (56 × RGB floats each) and, at +0x5D0, a compressed tree (GfxLightGridTree, 0x50 bytes):
+
+| tree | |
+|---|---|
+| +0x00 maxDepth (u8), +0x04 nodeCount, +0x08 leafCount | Dynasty: 8, 3498, 16071; Point of Contact: 9, 8871, 40597 |
+| +0x0C coordMinGridSpace, +0x18 coordMaxGridSpace, +0x24 coordHalfSizeGridSpace | int[3] each |
+| +0x30 defaultColorIndexBitCount, +0x34 defaultLightIndexBitCount | 16 and 8 (Dynasty) |
+| +0x38 p_nodeTable (u32 × nodeCount), +0x40 leafTableSize, +0x48 p_leafTable | |
+
+**Looking up a point** (R_GetLightGrid, Store 140646380). A grid point (u16 x, y, z) inside the bounds belongs to a
+block of 4 × 4 points in x and y and 1 in z: block (bx, by, bz) = ((x − min.x) >> 2, (y − min.y) >> 2, z − min.z),
+and its cell is `CELL_ORDER[(x & 3) + 4 · (y & 3)]` with CELL_ORDER = 0 1 4 5 2 3 6 7 8 9 12 13 10 11 14 15 (the
+raw coordinate, not relative to min). The node table is an octree: each u32 is a child mask (high 8 bits) and an
+index (low 24). From node 0, at each depth d = 0..maxDepth the child is bit (maxDepth − d) of bz, by, bx as
+(z << 2 | y << 1 | x); a missing child means no data (all zero). Below maxDepth the next node is index + the number
+of present children before this one; at maxDepth the index is the byte offset of the block group in the leaf
+table.
+
+**A block group** (R_DecodeLightGridBlock, 140644F00) is a bit stream, read least significant bit first:
+
+1. Node header, byte aligned (R_LoadLightGridNodeBitStream): format (8 bits); a 6-bit byte size per present child;
+   then for colour and light indices each: a minimum and bit count (format 1 / 8), a default (2 / 0x10) and a
+   table of up to 16 values (4 / 0x20).
+2. Skip the sizes of the children before this one; the block itself, byte aligned
+   (R_LoadLightGridBlockBitStream): format (8 bits, when its size is not 0), per index kind a minimum and bit
+   count, a default, and commands (R_LoadLightGridBlockIndexBitStream): 0 = all 16 values; 1 = 2 or 3 listed cells
+   get one value; 2 = a cell mask, one value each; 3 = a cell mask, one value. Commands 1 and 3 end with a
+   continue bit. Masks are 16 literal bits or a 4-bit code into a 16-entry table of 4-cell groups.
+   Format 0x40 and 0x80 add two voxel masks (the low and high voxel bit of each cell).
+3. Every cell starts at the default; the commands write their cells; values become indices relative to the
+   minimum (0 stays 0, else value − 1 + min), through the node's table when it has one.
+
+The result per point is GfxLightGridRaw: colorIndex, lightIndex (primary light environment) and 2 voxel bits.
+`tools/fastfile/lightgrid.py` decodes it, function by function. tests/fastfile/lightgrid_check.py calls the game's
+own R_GetLightGrid in the emulator (after the Store's table initialiser, 1406466E0) on every cell of sampled
+blocks: 16000 Dynasty and 32000 Point of Contact cells, all equal.
+
+Not decoded yet: what a colorIndex selects (the palette bit stream: spherical harmonics, R_DecodeLightGridSphericalHarmonics,
+and the 8, 12 and 16 bit coefficient decoders) and how a world position becomes a grid point.
+
 ### Primary lights (ComWorld, com_map, asset type 0x14)
 
 ComWorld (0x28): name, isInUse, primaryLightCount (+0x0C), primaryLights (+0x10, × 0x78), primaryLightEnvCount
