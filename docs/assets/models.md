@@ -82,7 +82,7 @@ The loader is Load_XModel (14035E020). Below, `nb` is numBones, `nr` numRootBone
 | 0x00A | u8 | numsurfs | | total over the LODs, rewritten by DB_XModelSurfsFixup; data: 35 |
 | 0x00B | u8 | numReactiveMotionParts | | |
 | 0x00C | float | scale | | data: 1.0. The servers have lodRampType (u8) at +0xC and scale at +0x10. The Store build has no room for both, and the data has 1.0 at +0xC |
-| 0x010 | u32[8] | noScalePartBits | | by size: fills +0x10..+0x30 exactly; data: zero; no Store reader found |
+| 0x010 | u32[8] | noScalePartBits | | CalcSkelNonRootBones (1405561D0) reads it per bone: scale 1 for a set bit; data: zero |
 | 0x030 | scr_string_t* | boneNames | FOLLOWING: align 4, Load_scr_string_tArray(nb) | script string per bone; data: j_spine4, j_neck, j_head, ... |
 | 0x038 | u8* | parentList | FOLLOWING: unaligned, nb - nr bytes | parent of bone i (i ≥ nr) is `i - parentList[i - nr]` (data: consistent with baseMat) |
 | 0x040 | s16* | quats | FOLLOWING: align 2, (nb - nr) × 4 s16 | local rotation (x, y, z, w) / 32767, parent space (data) |
@@ -279,6 +279,65 @@ Data: all 314 blended vertices of a surface agree with blendVerts exactly.
 **tensionData and tensionAccumTable** are absent from the data model. Their sizes are Σ blendVertCounts floats and
 vertCount × 16 u16. They are probably for "tension" (wrinkle) maps; their use is unverified.
 
+### Posing and skinning in the game
+
+The CPU path, as the Store build runs it (the PC build can also skin on the GPU: below). Every step is checked
+against the game: tools/fastfile/skin.py reproduces it, and tests/fastfile/skin_check.py runs the game's own
+functions in the emulator on the same input.
+
+1. **Local pose.** DObjCalcBaseAnim fills one DObjAnimMat per bone: identity for root bones, the base local
+   rotation (quats / 32767) for the others, no offset. The animations add into it (docs/assets/animations.md:
+   XAnimCalcParts, XAnimCalcNonLoopEnd), then XAnimNormalizeRotScaleTransArray normalises every animated rotation
+   (the 0x5f3759df estimate with one Newton step) and divides the translations by their weight.
+2. **Model space.** CalcSkelRootBonesNoParentOrDuplicate (140556990) only gives the root bones their transWeight.
+   CalcSkelNonRootBones (1405561D0) then walks the other bones in order (parents come first):
+   - rotation `parent × local`; for a **control** bone (DSkelPartBits.control) the local rotation is in the root
+     bone's frame: `root × local × (root⁻¹ × parent)`; a **world-control** bone keeps its rotation;
+   - `transWeight = 2 / |q|²`, or identity and 2 when |q|² ≤ 1e-6. The test is in double precision and a NaN takes
+     the identity branch too (COMISD, JBE);
+   - translation `parent.trans + R(parent) × (scale × local.trans + baseTrans)`, where scale is XModel.scale (+0xC)
+     unless the bone's bit is set in noScalePartBits (+0x10, read here), and R(parent) the matrix of the parent's
+     quaternion through its transWeight.
+
+   Both functions clear each bone's bit in calcPartBits as they go (the root function's cleared bits keep the
+   second function off the root bones). src/xanim/dobj_skel.cpp reconstructs both (differential tests: 400 random
+   models each, bit for bit, mutations caught).
+3. **Skinning transforms.** R_SkinXModelCmd (1406408A0) takes one command:
+
+   | Off | Field |
+   |---|---|
+   | +0x00 | entries (0x38 bytes each) |
+   | +0x08 | the posed model-space DObjAnimMat array |
+   | +0x10 | partBits[8] (bones to build) |
+   | +0x30 | u16 entry count |
+
+   An entry holds the output offset (+0, int), the model's baseMat (+8), the first bone (+0x10) and bone count
+   (+0x11) and the XSurface (+0x28). Nothing happens while dx.deviceLost (14A3852E8) is set; output goes to
+   gfxBuf.skinnedCacheLockAddr (14A107BF8) + offset. For each bone it builds a DObjSkelMat (0x40 bytes, hence the
+   × 0x40 bone offsets): the inverse of the base pose times the pose (R_MultiplySkelMat, 140640610), and from that
+   a **dual quaternion** (Axis4ToQuat, 14052EDA0, for the real part; the dual part is ½ translation × real).
+4. **Vertices.** R_SkinXSurfaceWeightDQB (1406436F0) walks the blendVertCounts groups: R_SkinXSurfaceWeight0
+   (140641010) transforms one-bone vertices by the DObjSkelMat; R_SkinXSurfaceWeight1DQB..7DQB (140641260,
+   140641660, 140641AD0, 140641FA0, 1406424C0, 140642A50, 140643050) blend 2..8 bones' dual quaternions (each one's
+   sign set by its dot product with the first bone's), normalise with rsqrtps and one Newton step, and transform
+   the position. Normals and tangents are rotated by the real part and repacked 10:10:10:2 (unpack: component mask,
+   + -511.5 / -523776 / -5.3634662e8, × 1/511.5 per step; repack: clamp to ±1, (n + 1) × 511.5, top bits 0b11).
+
+**Verification.** On the five Extinction aliens of mp_alien_town (brute, goon, minion, queen, spitter) in their
+base pose and every animation of the zone that drives them at three times (290 poses): the skeleton equals the
+game's bit for bit, and every vertex's position is within 3.3e-5 of the game's, its packed normal and tangent
+within one step. The vertex differences come from rsqrtps, whose result depends on the CPU, so the game itself
+differs between machines here.
+
+**Dual quaternions, not linear blending.** glTF skins blend matrices linearly, so a glTF export (to_gltf) deforms
+blended vertices differently from the game. On a drill-attack pose the difference is a mean of 0.09 units (goon)
+and 0.17 (queen), at most 1.6 and 2.3 units (inches). skin.skin_vertices gives the game's result for baking
+poses.
+
+**GPU skinning (PC).** The Store build also has compute shaders for this (cs_skinning.hlsl, entry
+cs_skin_main_dqb, behind r_useComputeSkinning), which read the blendVertsTable above; vertex shaders always receive
+vertices that are already skinned. The tension data feeds that path; it is not reconstructed here.
+
 ### Collision tree (XSurfaceCollisionTree, 0x38 bytes, per rigid vertex list)
 
 The loader is Load_XSurfaceCollisionTree (14035F2E0).
@@ -452,6 +511,8 @@ buffer loaders do not check the dvar.
 
 ## Decoder and converters (tools/fastfile/xmodel.py)
 
+Posing and skinning are tools/fastfile/skin.py (above, "Posing and skinning in the game"; tests: tests/fastfile/test_skin.py).
+
 **Loaders.** load_xmodel, load_xmodel_surfs, load_xsurface, load_collision_tree, load_subdiv_info, load_physpreset,
 load_physcollmap and load_brush_wrapper follow the reconstructed C functions statement for statement. So do the
 asset pointer rule (asset_ptr) and the two fixups. They run on any stream with the pipeline's Stream methods.
@@ -541,7 +602,6 @@ The reader part (read_xmodel from the game's own memory) is already checked on t
 
 | Field or behaviour | Status |
 |---|---|
-| XModel +0x10..+0x2F (noScalePartBits) | by size only; zero in the data |
 | XModel +0x1F2 (collLod) | by position |
 | XModel +0x22C | unknown; 0 in the data |
 | XModel +0x230 | the Store-only u16 per surface; meaning unknown |

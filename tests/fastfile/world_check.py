@@ -176,6 +176,11 @@ def compare(ff: bytes, name: str, entry: int = LOAD_GFXWORLD_PTR, var: int = VAR
     if before is None:
         return [f"the zone has no asset loaded by {entry:09X}"], None
     s = run_reader(ff, name, before, load)
+    return differences(before, after, s, L), (before, after, s)
+
+
+def differences(before, after, s, L):
+    """What differs between the reader's state `s` and the game's `after` (both from `before`)."""
     out = []
     if s.cursor != after.read_total:
         out.append(f"zone position: reader {s.cursor:#x} game {after.read_total:#x} (start {before.read_total:#x})")
@@ -206,7 +211,7 @@ def compare(ff: bytes, name: str, entry: int = LOAD_GFXWORLD_PTR, var: int = VAR
     bad = _differences(bytes(s.pool), bytes(game_pool), 0, L.com)
     if bad:
         out.append(f"asset pool differs at {bad[0]:#x} ({len(bad)} words)")
-    return out, (before, after, s)
+    return out
 
 
 if __name__ == "__main__":

@@ -89,7 +89,7 @@ struct XModel
 	// The servers have lodRampType (u8, +0xC), scale (+0x10) and noScalePartBits[8] (+0x14); the Store build is 8
 	// bytes shorter here. scale: 1.0 at +0xC in a real zone (docs); noScalePartBits by size; no lodRampType.
 	float scale;                              // +0x00C
-	unsigned int noScalePartBits[8];          // +0x010
+	unsigned int noScalePartBits[8];          // +0x010 bones not scaled by scale (CalcSkelNonRootBones)
 	scr_string_t *boneNames;                  // +0x030 numBones
 	unsigned char *parentList;                // +0x038 numBones - numRootBones: parent index offsets
 	short *quats;                             // +0x040 (numBones - numRootBones) * 4: packed base-pose rotations

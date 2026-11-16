@@ -23,9 +23,9 @@ What the Microsoft Store build loads for an animation, how its data is laid out,
   XAnim_CalcDelta3DForTime 1405653B0) equals `xanim.calc_abs_delta` bit for bit on the same 724 × 8 cases of
   common_alien_mp (521 animations with a 2D root rotation, 30 with a 3D one; 424 with keyed root translation, 159
   and 30 with keyed rotations).
-- **C.** `src/xanim/xanim_load_db.cpp` reconstructs the 11 loaders (Load_XAnimPartsPtr down to the frame index
+- **C++.** `src/xanim/xanim_load_db.cpp` reconstructs the 11 loaders (Load_XAnimPartsPtr down to the frame index
   tables), each tested against the Store exe in `tests/differential/test_xanim_load.py` (200 inputs each; 13
-  deliberate mutations of the C, among them a wrong frame-count test, index count, alignment or var assignment, all
+  deliberate mutations of the C++, among them a wrong frame-count test, index count, alignment or var assignment, all
   fail).
 - The translation code masks with `g_keepXYZ` ({~0, ~0, ~0, 0}, Store 149B76820), which a dynamic initializer sets
   at startup; the emulator doesn't run it, so the check sets it first.

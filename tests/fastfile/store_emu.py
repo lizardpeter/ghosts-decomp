@@ -144,6 +144,24 @@ class StoreLoader:
         for a in self.fakes:
             mu.hook_add(UC_HOOK_CODE, self._on_fake, begin=a, end=a)
 
+    def init_vector_constants(self):
+        """Run the exe's __m128 constant initializers: the CRT's dynamic initializers that copy a 16-byte constant
+        from .rdata into a global (g_keepXYZ, g_one, g_packMask1010102, ...: `movaps xmm0, [c]; movaps [g], xmm0;
+        ret`, 108 of them in the Store build). The emulator doesn't run the CRT startup, so code that reads these
+        globals (animation and skinning math) needs this first. Returns the number applied."""
+        import re
+        n = 0
+        data, base = self.img.data, self.img.base
+        for m in re.finditer(rb"\x0f\x28\x05(....)\x0f\x29\x05(....)\xc3", data, re.S):
+            i = m.start()
+            src = base + i + 7 + struct.unpack("<i", m.group(1))[0]
+            dst = base + i + 14 + struct.unpack("<i", m.group(2))[0]
+            if not (base <= src < base + self.img.size and base <= dst < base + self.img.size):
+                continue
+            self.mu.mem_write(dst, bytes(self.mu.mem_read(src, 16)))
+            n += 1
+        return n
+
     # --- helpers -------------------------------------------------------------------------------------------------
     def u64(self, va):
         return struct.unpack("<Q", bytes(self.mu.mem_read(va, 8)))[0]
