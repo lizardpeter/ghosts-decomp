@@ -12,6 +12,7 @@ import struct
 import sys
 from pathlib import Path
 
+from unicorn import UC_HOOK_CODE
 from unicorn.x86_const import UC_X86_REG_RDX, UC_X86_REG_RSP
 
 HERE = Path(__file__).resolve().parent
@@ -62,24 +63,37 @@ class Capture:
             at += store_emu.TYPE_SIZE[t]
 
 
-def run_game(ff: bytes, name: str, entry: int = LOAD_GFXWORLD_PTR, var: int = VAR_GFXWORLD_PTR):
-    """Load the zone in the emulator; returns (capture at the asset's Load_*Ptr `entry`, whose pointer variable is
-    `var`, capture when it returns, loader)."""
+def run_game(ff: bytes, name: str, entry: int = LOAD_GFXWORLD_PTR, var: int = VAR_GFXWORLD_PTR, occurrence: int = 0,
+             at_return: bool = False):
+    """Load the zone in the emulator; returns (capture at the occurrence-th call of the asset's Load_*Ptr `entry`,
+    whose pointer variable is `var`, capture when it returns, loader). With at_return the second capture is taken at
+    the call's own return address (for an asset loaded from inside another asset's loader), else when Load_XAsset
+    returns."""
     sizes = iw6ff.read_fastfile(ff, name, max_assets=0).block_sizes
     L = store_emu.StoreLoader(max(0x4000000, (sum(sizes) + 7 * 0x1000 + 0xFFFFFF) & ~0xFFFFFF))
     zonemem = store_emu.SCRATCH + 0x100
-    state = {"read": 0, "before": None, "after": None, "ret": None}
+    state = {"read": 0, "before": None, "after": None, "ret": None, "seen": 0}
 
     def on_read(L_):
         state["read"] += L_.mu.reg_read(UC_X86_REG_RDX)
 
     def on_world(L_):
-        if state["before"] is None:
+        state["seen"] += 1
+        if state["before"] is None and state["seen"] == occurrence + 1:
             state["before"] = Capture(L_, zonemem, state["read"], var)
+            if at_return:   # the asset's Load_*Ptr may be called from another asset's loader: stop at its return
+                rsp = L_.mu.reg_read(UC_X86_REG_RSP)
+                ret = L_.u64(rsp)
+
+                def on_ret(mu, address, size, user):
+                    if state["after"] is None and mu.reg_read(UC_X86_REG_RSP) == rsp + 8:
+                        state["after"] = Capture(L_, zonemem, state["read"], var)
+                L_.mu.hook_add(UC_HOOK_CODE, on_ret, begin=ret, end=ret)
+                L_.mu.ctl_remove_cache(ret, ret + 1)   # code already translated there wouldn't see the new hook
 
     def on_next(L_):
         # Load_XAsset tail-jumps to the type's Load_*Ptr, which returns here (in Load_XAssetListCustom)
-        if state["after"] is None and state["before"] is not None:
+        if state["after"] is None and state["before"] is not None and not at_return:
             state["after"] = Capture(L_, zonemem, state["read"], var)
 
     L.load(ff, name, assets=True, hooks={DB_READ_XFILE: on_read, entry: on_world, AFTER_LOAD_XASSET: on_next})
@@ -153,9 +167,11 @@ def _differences(a: bytes, b: bytes, base: int, com: int):
     return out
 
 
-def compare(ff: bytes, name: str, entry: int = LOAD_GFXWORLD_PTR, var: int = VAR_GFXWORLD_PTR, load=None):
-    """The reader against the game for one asset of the zone (default the GfxWorld): differences, and the states."""
-    before, after, L = run_game(ff, name, entry, var)
+def compare(ff: bytes, name: str, entry: int = LOAD_GFXWORLD_PTR, var: int = VAR_GFXWORLD_PTR, load=None,
+            occurrence: int = 0, at_return: bool = False):
+    """The reader against the game for one asset of the zone (default the GfxWorld; the occurrence-th call of its
+    Load_*Ptr): differences, and the states."""
+    before, after, L = run_game(ff, name, entry, var, occurrence, at_return)
     compare.loader = L
     if before is None:
         return [f"the zone has no asset loaded by {entry:09X}"], None

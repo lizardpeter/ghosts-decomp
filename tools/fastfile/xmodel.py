@@ -173,9 +173,14 @@ def load_xmodel(s, at: int, at_stream_start: bool = True, material_loader=None):
 
 
 def load_scr_string_array(s, at: int, count: int):
-    """Load_scr_string_tArray (140361EA0): count 4-byte script string indices, read as they are (the game maps them
-    through the zone's script string table; tools/fastfile/iw6ff.py does that part)."""
+    """Load_scr_string_tArray (140361EA0): count 4-byte script string indices, each mapped through the zone's script
+    string table by Load_ScriptStringCustom (14037AF90) when the stream has one (string_table)."""
     s.load(True, at, 4 * count)
+    table = getattr(s, "string_table", 0)
+    if table:
+        for i in range(count):
+            idx = struct.unpack("<I", s.read(at + 4 * i, 4))[0]
+            s.put_u32(at + 4 * i, s.u64(table + 8 * idx) & 0xFFFFFFFF)
 
 
 def load_material_handle_array(s, at: int, count: int, material_loader=None):
@@ -782,13 +787,26 @@ class _Bin:
         return len(self.accessors) - 1
 
 
-def to_gltf(model: XModel, lods=None, z_up_to_y_up: bool = True, scale: float = 1.0) -> tuple[dict, bytes]:
+def to_gltf(model: XModel, lods=None, z_up_to_y_up: bool = True, scale: float = 1.0,
+            material_images: dict | None = None) -> tuple[dict, bytes]:
     """A glTF 2.0 document (JSON dict) and its binary buffer. The skeleton is one node per bone with the local base
     pose; the skin's inverse bind matrices come from the model-space base pose (baseMat). Every LOD is its own
     mesh on its own node (extras: lod index and switch distance); every surface a primitive with POSITION, NORMAL,
     TANGENT (w: binormal sign), TEXCOORD_0, COLOR_0, JOINTS_0/WEIGHTS_0 (and _1 for up to 8 bones), indices.
-    Materials are named references (the game material's name); no textures. Coordinates stay the game's (inches,
-    Z up) under a root node that rotates Z up to Y up (z_up_to_y_up) and scales by `scale`."""
+    Materials are named references (the game material's name); with `material_images` ({material name: {role:
+    image uri}}, roles as material.texture_roles) the base colour becomes baseColorTexture, the normal map
+    normalTexture, the emissive map emissiveTexture, and every role is listed in the material extras. Coordinates
+    stay the game's (inches, Z up) under a root node that rotates Z up to Y up (z_up_to_y_up) and scales by
+    `scale`."""
+    material_images = material_images or {}
+    images, textures, image_index = [], [], {}
+
+    def texture(uri):
+        if uri not in image_index:
+            images.append({"uri": uri})
+            textures.append({"source": len(images) - 1, "sampler": 0})
+            image_index[uri] = len(textures) - 1
+        return image_index[uri]
     b = _Bin()
     FLOAT, USHORT, UBYTE, UINT = 5126, 5123, 5121, 5125
     nodes, root_children = [], []
@@ -833,8 +851,20 @@ def to_gltf(model: XModel, lods=None, z_up_to_y_up: bool = True, scale: float = 
             mi_key = model.materials[lod.surf_index + si] if lod.surf_index + si < len(model.materials) else None
             if mi_key not in material_index:
                 material_index[mi_key] = len(materials)
-                materials.append({"name": str(mi_key) if not isinstance(mi_key, int) else f"material_{mi_key:#x}",
-                                  "extras": {"game_material": mi_key}})
+                mat = {"name": str(mi_key) if not isinstance(mi_key, int) else f"material_{mi_key:#x}",
+                       "extras": {"game_material": mi_key}}
+                imgs = material_images.get(mi_key, {})
+                if imgs:
+                    mat["extras"]["textures"] = imgs
+                    mat["pbrMetallicRoughness"] = {"metallicFactor": 0.0, "roughnessFactor": 1.0}
+                    if "base" in imgs:
+                        mat["pbrMetallicRoughness"]["baseColorTexture"] = {"index": texture(imgs["base"])}
+                    if "normal" in imgs:
+                        mat["normalTexture"] = {"index": texture(imgs["normal"])}
+                    if "emissive" in imgs:
+                        mat["emissiveTexture"] = {"index": texture(imgs["emissive"])}
+                        mat["emissiveFactor"] = [1.0, 1.0, 1.0]
+                materials.append(mat)
             pos = [v.position for v in vs]
             attrs = {
                 "POSITION": b.add(b"".join(struct.pack("<3f", *p) for p in pos), len(vs), FLOAT, "VEC3", 34962,
@@ -879,6 +909,9 @@ def to_gltf(model: XModel, lods=None, z_up_to_y_up: bool = True, scale: float = 
                       "lod_distances": [lod.dist for lod in model.lods]}}
     if skins:
         doc["skins"] = skins
+    if images:
+        doc["images"], doc["textures"] = images, textures
+        doc["samplers"] = [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497}]
     return doc, bytes(b.data)
 
 

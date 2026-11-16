@@ -303,6 +303,35 @@ what tests/fastfile/store_emu.py's run of the Store build's own DB_LoadXFile lea
 (pointers compared as offsets into their blocks). `techsets_*.ff` zones exercise technique sets, shaders and vertex
 declarations; `*_load.ff` and map zones exercise materials, water and layered materials.
 
+## What the shaders do with the textures
+
+The material's texture table names its textures only by hash; which register each one is bound to comes from the
+pass's MATERIAL_TEXTURE arguments, and what the register does from the disassembled pixel shader
+(tools/fastfile/dxbc.py). Two shader families are read so far:
+
+- **Lit world surfaces** (BSP): docs/assets/world.md section 8 (lightmaps, base t0, normal t6, specular t7).
+- **Lit models, e.g. the Extinction aliens** (techset `m_l_sm_rim_r0c0e0n0s0lm0_nfwpf`, zone
+  techsets_mp_alien_town.ff; the name reads model, lit, shadow-mapped, rim light, r0 c0 e0 n0 s0 lm0: reflection,
+  colour, emissive, normal, specular maps). Pixel shader of the sun technique (TECHNIQUE_LIT_DIR,
+  `lpo_sm_l0d_nofog_r0c0n0s0lm0_nc_blm_rim_em0_sm5`):
+
+| hash | register | texture | how the shader uses it |
+|---|---|---|---|
+| 0xA0AB1041 | t0 | colour map | albedo, squared (gamma 2 to linear) |
+| 0x59D30D0F | t4 | normal map | two channels (BC5), × 2, perturb the interpolated normal along tangent and binormal |
+| 0x34ECCCB3 | t5 | specular map | rgb: specular colour (squared); a: gloss. A sun highlight e^((2^(9.3775 × gloss) + 7) · (R·L − 0.99925)) (R the reflected view vector), capped at 1, and the reflection probe cube (t1) sampled along R at mip 4.5 − 5 × gloss |
+| 0x34614347 | t8 | emissive map | squared, × a material constant (cb3[4].x) × CONST_SRC_CODE_GENERIC_MATERIAL_DATA.x, added after lighting (the glowing parts) |
+| 0x7592D1BF | t7 | (unnamed) | .x × a material constant (cb3[5].x) is written to the output alpha |
+| (code) | t6 | the light grid's 3D lighting texture | sampled at the vertex's lighting coordinate offset along the normal (light probe; world.md: rgb ambient, a sun visibility) |
+| (code) | t1 | reflection probe cube map | |
+
+The lighting is: ambient from the light probe (t6.rgb) + sun (dot(N, sun dir) × sun colour × t6.a) + rim light
+(CONST_SRC_CODE_RIM_LIGHT_0: pow(saturate(dot(N, rim dir) + bias), power) × probe × rim colour), all times albedo,
+plus the emissive term; specular (sun highlight and reflection) is weighted by a Fresnel term
+lerp(cb3[0].x, cb3[0].y, (1 − |N·V|)^cb3[0].z). `material.texture_roles` maps the emissive hash to "emissive";
+`xmodel.to_gltf(material_images=)` writes base colour, normal and emissive textures. Not read yet: the vertex shaders'
+skinning path, the other lit techniques (spot, omni, shadowed), the "lm" variants, and the meaning of t7.
+
 ## Findings
 
 - The matcher's `Load_MenuListPtr` pair for Store 14034F380 is wrong: it is `Load_GfxImagePtr` (records/names.tsv).
