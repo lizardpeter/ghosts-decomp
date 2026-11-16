@@ -35,7 +35,7 @@ G_STREAM_ROW_CURSOR = 0x144310BF4   # sub_1403492E0's index into the streamed-im
 class Capture:
     """The game's stream state at a point of the run."""
 
-    def __init__(self, L, zonemem, read_total):
+    def __init__(self, L, zonemem, read_total, var=VAR_GFXWORLD_PTR):
         mu = L.mu
         u64 = L.u64
         self.blocks = [struct.unpack_from("<QQ", bytes(mu.mem_read(zonemem + 16 * i, 16))) for i in range(7)]
@@ -50,12 +50,21 @@ class Capture:
         self.mem = [bytes(mu.mem_read(d, size)) if d else b"" for d, size in self.blocks]
         self.pool = bytes(mu.mem_read(store_emu.POOL, L.pool_next - store_emu.POOL))
         self.read_total = read_total
-        self.varptr = u64(VAR_GFXWORLD_PTR)
+        self.varptr = u64(var)
         self.rows_used = struct.unpack("<I", bytes(mu.mem_read(G_STREAM_ROW_CURSOR, 4)))[0]
+        self.string_table = u64(store_emu.G_VAR_XASSET_LIST + 8)   # XAssetList.stringList.strings
+        # the assets linked so far, as (type, pool copy) in link order (the pool copies are 16-byte aligned, one
+        # after another, as Stream.link places them)
+        self.links, at = [], store_emu.POOL
+        for t, _, _ in L.linked:
+            at = (at + 15) & ~15
+            self.links.append((t, at))
+            at += store_emu.TYPE_SIZE[t]
 
 
-def run_game(ff: bytes, name: str):
-    """Load the zone in the emulator; returns (capture at Load_GfxWorldPtr, capture when it returns, loader)."""
+def run_game(ff: bytes, name: str, entry: int = LOAD_GFXWORLD_PTR, var: int = VAR_GFXWORLD_PTR):
+    """Load the zone in the emulator; returns (capture at the asset's Load_*Ptr `entry`, whose pointer variable is
+    `var`, capture when it returns, loader)."""
     sizes = iw6ff.read_fastfile(ff, name, max_assets=0).block_sizes
     L = store_emu.StoreLoader(max(0x4000000, (sum(sizes) + 7 * 0x1000 + 0xFFFFFF) & ~0xFFFFFF))
     zonemem = store_emu.SCRATCH + 0x100
@@ -66,19 +75,20 @@ def run_game(ff: bytes, name: str):
 
     def on_world(L_):
         if state["before"] is None:
-            state["before"] = Capture(L_, zonemem, state["read"])
+            state["before"] = Capture(L_, zonemem, state["read"], var)
 
     def on_next(L_):
         # Load_XAsset tail-jumps to the type's Load_*Ptr, which returns here (in Load_XAssetListCustom)
         if state["after"] is None and state["before"] is not None:
-            state["after"] = Capture(L_, zonemem, state["read"])
+            state["after"] = Capture(L_, zonemem, state["read"], var)
 
-    L.load(ff, name, assets=True, hooks={DB_READ_XFILE: on_read, LOAD_GFXWORLD_PTR: on_world, AFTER_LOAD_XASSET: on_next})
+    L.load(ff, name, assets=True, hooks={DB_READ_XFILE: on_read, entry: on_world, AFTER_LOAD_XASSET: on_next})
     return state["before"], state["after"], L
 
 
-def run_reader(ff: bytes, name: str, before: Capture):
-    """The Python reader from the game's state at Load_GfxWorldPtr."""
+def run_reader(ff: bytes, name: str, before: Capture, load=None):
+    """The Python reader `load(stream, varptr)` (default gfxworld.load_gfx_world_ptr) from the game's state at the
+    asset's Load_*Ptr."""
     import gfxworld
     import image
     import material
@@ -99,9 +109,11 @@ def run_reader(ff: bytes, name: str, before: Capture):
         blk = next((i for i, (d, size) in enumerate(before.blocks) if d and d <= pos <= d + size), None)
         s.stack.append(((pos - before.blocks[blk][0]) if blk is not None else 0, idx))
     s.pool = bytearray(before.pool)
+    s.links = list(before.links)
+    s.string_table = before.string_table
     st = image.state_of(s)
     st.rows, st.cursor = prefix.stream_images, before.rows_used
-    gfxworld.load_gfx_world_ptr(s, before.varptr)
+    (load or gfxworld.load_gfx_world_ptr)(s, before.varptr)
     return s
 
 
@@ -119,6 +131,20 @@ def _differences(a: bytes, b: bytes, base: int, com: int):
         if a[j:j + 8] == bytes(8):
             b[j:j + 8] = bytes(8)
         j = b.find(obj, j + 1)
+    # DB_FindXAssetHeader (sound aliases of scriptables): the emulator's stand-in link registers no names, so the
+    # game's lookup always ends in a default entry (store_emu.DEFAULTS); the reader resolves aliases this zone has
+    # linked (a pool address) and leaves the others 0. Pointers can sit at 4-byte offsets.
+    lo_d, hi_d = store_emu.DEFAULTS, store_emu.DEFAULTS + store_emu.DEFAULTS_SIZE
+    lo_p, hi_p = store_emu.POOL, store_emu.POOL + store_emu.POOL_SIZE
+    j = (4 - base % 4) % 4
+    while j + 8 <= n:
+        v = int.from_bytes(b[j:j + 8], "little")
+        r = int.from_bytes(a[j:j + 8], "little")
+        if lo_d <= v < hi_d and (r == 0 or lo_p <= r < hi_p):
+            b[j:j + 8] = a[j:j + 8]
+            j += 8
+            continue
+        j += 4
     out = []
     for w in range(base & ~7, base + n, 8):
         lo, hi = max(w, base) - base, min(w + 8, base + n) - base
@@ -127,12 +153,13 @@ def _differences(a: bytes, b: bytes, base: int, com: int):
     return out
 
 
-def compare(ff: bytes, name: str):
-    before, after, L = run_game(ff, name)
+def compare(ff: bytes, name: str, entry: int = LOAD_GFXWORLD_PTR, var: int = VAR_GFXWORLD_PTR, load=None):
+    """The reader against the game for one asset of the zone (default the GfxWorld): differences, and the states."""
+    before, after, L = run_game(ff, name, entry, var)
     compare.loader = L
     if before is None:
-        return ["the zone has no GfxWorld"], None
-    s = run_reader(ff, name, before)
+        return [f"the zone has no asset loaded by {entry:09X}"], None
+    s = run_reader(ff, name, before, load)
     out = []
     if s.cursor != after.read_total:
         out.append(f"zone position: reader {s.cursor:#x} game {after.read_total:#x} (start {before.read_total:#x})")

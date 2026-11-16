@@ -385,6 +385,16 @@ class Stream:
         self.links.append((asset_type, self.pool_base + at))
         return self.pool_base + at
 
+    def find_asset(self, asset_type: int, name: bytes) -> int:
+        """DB_FindXAssetHeader (14036C290) for an asset this stream has linked: its pool copy (the name pointer is
+        the header's first field), else 0 (the game would find another zone's asset or make a default entry)."""
+        for t, at in reversed(self.links):
+            if t == asset_type:
+                p = self.u64(at)
+                if p and self.cstr(p) == name:
+                    return at
+        return 0
+
     def write(self, address: int, data: bytes):
         i, off = self.locate(address)
         if i == 7:
