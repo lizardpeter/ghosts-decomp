@@ -250,8 +250,14 @@ i & 1)) after testing each sample's visibility (R_IsValidLightGridSample, the vo
 environment). `lightgrid.sample_sh` blends the corners that have colour, without the visibility tests: an
 approximation.
 
+Scale against the lightmaps: *unverified*. Rendered with the same factor, grid-lit models on Dynasty come out about
+four times brighter than lightmapped surfaces around them (light from above ≈ 3–4.6 against a lightmap mean of
+≈ 0.9). Either the grid holds light the lightmaps leave to the sun pass, or the model shaders scale it; the model
+shaders' use of the coefficients has not been read yet.
+
 `decode_spherical_harmonics` equals the game's decoder bit for bit on 2000 Dynasty palette entries
-(tests/fastfile/lightgrid_check.py).
+(tests/fastfile/lightgrid_check.py); on Point of Contact the tree and palette checks are equal as well (8000 cells,
+2000 entries).
 
 ### Primary lights (ComWorld, com_map, asset type 0x14)
 
