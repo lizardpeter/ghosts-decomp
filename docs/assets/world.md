@@ -250,10 +250,15 @@ i & 1)) after testing each sample's visibility (R_IsValidLightGridSample, the vo
 environment). `lightgrid.sample_sh` blends the corners that have colour, without the visibility tests: an
 approximation.
 
-Scale against the lightmaps: *unverified*. Rendered with the same factor, grid-lit models on Dynasty come out about
-four times brighter than lightmapped surfaces around them (light from above ≈ 3–4.6 against a lightmap mean of
-≈ 0.9). Either the grid holds light the lightmaps leave to the sun pass, or the model shaders scale it; the model
-shaders' use of the coefficients has not been read yet.
+**How models use it (PC).** The model shaders do not read the coefficients. Static models are drawn with the
+light-probe techniques (technique 7 of the `mc_*` techsets, e.g. pixel shader `lpo_sm_l0n_nofog_r0c0l0_blm_sm5`),
+which sample a 3D lighting texture (t4: one of the `$model_lighting` built-in images) at the model's patch,
+offset along the normal (scaled by cb2[0]), and output `sample × (albedo × vertex colour)²`. The patch is filled
+from the grid's 8-bit colour sets (R_SphericalHarmonicsToColorsLDR, the 56 directions): byte = 127.5·√L, so L = 4
+is the texture's full scale. The shader multiplies the sample straight into the albedo, so a model sees about
+L / 4 (√L / 2 if the texture is UNORM, ≈ (√L / 2)^2.2 if it is sRGB; the texture's format is *unverified*). With
+that factor, grid-lit models on Dynasty sit in the brightness of the lightmapped surfaces around them (light from
+above ≈ 3–4.6, i.e. ≈ 0.8–1.15, against a lightmap mean of ≈ 0.9).
 
 `decode_spherical_harmonics` equals the game's decoder bit for bit on 2000 Dynasty palette entries
 (tests/fastfile/lightgrid_check.py); on Point of Contact the tree and palette checks are equal as well (8000 cells,
