@@ -533,7 +533,7 @@ class ClipMapInfo:
     materials: list               # (name, surfaceFlags, contents)
     brushes: list
     verts: list                   # terrain / mesh collision vertices
-    tris: list                    # (a, b, c) into verts
+    tris: list                    # (a, b, c) into verts (the partitions' vertex segments applied)
     static_models: list
     submodels: list               # (mins, maxs, ClipInfo address): brush models (doors, movers)
     entities: list                # the entity string as dicts
@@ -734,7 +734,18 @@ def read_clipmap(mem, c: int) -> ClipMapInfo:
     verts = [_f(mem, vp + 12 * i, 3) for i in range(nv if vp else 0)]
     nt, tp = i32(c + 0xD8), u64(c + 0xE0)
     raw = struct.unpack(f"<{nt * 3}H", mem.read(tp, nt * 6)) if nt > 0 and tp else ()
-    tris = [raw[3 * i:3 * i + 3] for i in range(nt if raw else 0)]
+    # Triangle indices are u16; each CollisionPartition (0x10: triCount u8, borderCount u8, firstVertSegment u8,
+    # firstTri i32 at +4, borders at +8) gives the first vertex its triangles index from: firstVertSegment × 1024
+    # (Dynasty: the last partition, segment 6, reaches vertex 65311 + 6144 = 71455, the last one).
+    base = [0] * (nt if raw else 0)
+    pp = u64(c + 0x108)
+    for i in range(i32(c + 0x100) if pp and raw else 0):
+        a = pp + 0x10 * i
+        tri_count, _, segment = mem.read(a, 3)
+        first = i32(a + 4)
+        for k in range(first, min(first + tri_count, nt)):
+            base[k] = segment << 10
+    tris = [tuple(base[i] + v for v in raw[3 * i:3 * i + 3]) for i in range(nt if raw else 0)]
     sms = []
     sp = u64(c + 0xA0)
     for i in range(u32(c + 0x98) if sp else 0):

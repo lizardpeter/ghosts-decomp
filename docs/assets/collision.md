@@ -33,7 +33,7 @@ itself has linked (`Stream.find_asset`) and leaves the others 0, and the check a
 | +0xD8 / +0xE0 | triCount / triIndices | u16 × 3 per triangle, aligned 2 |
 | +0xE8 | triEdgeIsWalkable | ((triCount × 3 + 31) >> 3) & ~3 bytes, unaligned |
 | +0xF0 / +0xF8 | borderCount / borders | CollisionBorder × 0x1C |
-| +0x100 / +0x108 | partitionCount / partitions | CollisionPartition × 0x10: borders (+8: 0x1C, inline or offset) |
+| +0x100 / +0x108 | partitionCount / partitions | CollisionPartition × 0x10: triCount (u8), borderCount (u8), firstVertSegment (u8), firstTri (+4), borders (+8: 0x1C, inline or offset) |
 | +0x110 / +0x118 | aabbTreeCount / aabbTrees | CollisionAabbTree × 0x20, aligned 16 |
 | +0x120 / +0x128 | numSubModels / cmodels | cmodel_t × 0x50: bounds, radius, info (+0x20: ClipInfo, inline or alias), leaf |
 | +0x130 | mapEnts | MapEnts (asset pointer rule; linked as type 0x18) |
@@ -53,6 +53,10 @@ edgeCount), brushEdges (+0x30/+0x38, bytes), leafbrushNodes (+0x40/+0x48, × 0x1
 cbrush_t: numsides, glassPieceIndex, sides (+8), baseAdjacentSide (+0x10), axialMaterialNum, …), brushBounds (+0x70,
 × 0x18, aligned 128: mid, half), brushContents (+0x78, × 4). Most pointers are inline or an offset into data loaded
 before (DB_ConvertOffsetToPointer).
+
+**Triangles.** triIndices are u16, but a map can have more vertices (Dynasty: 71456): each partition's triangles
+(firstTri, triCount) index from vertex firstVertSegment × 1024. On Dynasty the last partition (segment 6) reaches
+65311 + 6144 = 71455, the last vertex; `read_clipmap` applies it.
 
 A **brush** is its bounds (brushBounds) cut by the planes of its non-axial sides: `clipmap.brush_faces` turns one
 into convex polygons. Contents: Dynasty's 8009 brushes are mostly 0x8000001 (5011), 0x2080 (1059) and 0x8031640.
