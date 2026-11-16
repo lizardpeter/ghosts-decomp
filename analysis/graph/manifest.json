@@ -22,7 +22,7 @@
     },
     {
       "file": "iw6/functions-iw6mp64_MSStore_ship.jsonl",
-      "sha256": "f00c48dbf12fb78b62e0eab5a743edc9cf4ac04ab11a2f9c2eed269cce3d768e",
+      "sha256": "50aee46a3ad19cb1e431b0895676272c9b2d421594e9684326808c278848e345",
       "rows": 23588,
       "cypher": "UNWIND {{ROWS}} AS r MATCH (b:Build {id:r.build}) MERGE (fn:Function {key:r.key}) SET fn.name = coalesce(fn.name, r.name), fn.symbol = r.symbol MERGE (fi:FunctionInstance {id:r.id}) SET fi.build=r.build, fi.va=r.va, fi.size=r.size, fi.status=r.status, fi.type=r.type, fi.src=r.src, fi.bytes_sha256=r.sha MERGE (fi)-[:INSTANCE_OF]->(fn) MERGE (fi)-[:IN_BUILD]->(b) WITH fn, r WHERE r.source <> '' MATCH (sf:SourceFile {path:r.source}) MERGE (fn)-[d:DEFINED_IN]->(sf) SET d.line=r.line"
     },

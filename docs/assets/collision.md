@@ -102,4 +102,15 @@ Dynasty has 159 instances.
   modelled.
 - The collision tree (nodes, leafs, partitions, AABB trees) is loaded but not read; the readers give brushes and
   triangles directly.
-- C reconstructions of these loaders.
+- C reconstructions of Load_clipMap_t, Load_clipMap_ptr, the scriptable and dynamic entity loaders (section 6
+  covers the rest).
+
+## 6. C reconstructions
+
+`src/qcommon/cm_load_db.cpp` (`include/qcommon/cm_clipmap.h` for the layouts) has 13 of the Store loaders: the map
+entities (Load_MapEnts, Load_MapTriggers, Load_ClientTriggers, Load_ClientTriggerBlend, the spawn and spline record
+lists and their elements) and ClipInfo with its brushes (Load_ClipInfo, Load_cbrush_t, Load_cbrushside_t,
+Load_cLeafBrushNodeLeaf_t). `tests/differential/test_clipmap_load.py` runs each against the Store exe with the stream
+functions and every nested loader as logged fakes (200 inputs each, laid out so the loops and inline arrays load);
+mutation checks (a wrong count or alignment, a dropped var assignment, the wrong stream block, the leaf test's sign)
+all fail (15).

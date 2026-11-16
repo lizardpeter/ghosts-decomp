@@ -767,3 +767,16 @@ iw6_ds_ps4	1400B52F0	compiles	src/gfx_d3d/r_gfx_world_load_db.cpp	Store-build re
 iw6_ds_ps4	1400B4B60	compiles	src/gfx_d3d/r_image_load_db.cpp	Store-build reconstruction (matches there); the server build's Load_GfxImage loads only what a dedicated server keeps (no render world, images or primary-light rendering data), so the server copy is a different function and auto inputs cannot drive the stream
 iw6_ds_ps4	1400B4C10	compiles	src/gfx_d3d/r_image_load_db.cpp	Store-build reconstruction (matches there); the server build's Load_GfxImagePtr loads only what a dedicated server keeps (no render world, images or primary-light rendering data), so the server copy is a different function and auto inputs cannot drive the stream
 iw6_ds_ps4	1400B4F40	compiles	src/gfx_d3d/r_image_load_db.cpp	Store-build reconstruction (matches there); the server build's Load_GfxTextureLoad loads only what a dedicated server keeps (no render world, images or primary-light rendering data), so the server copy is a different function and auto inputs cannot drive the stream
+iw6mp64_MSStore_ship	140352E40	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
+iw6mp64_MSStore_ship	14034B0A0	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
+iw6mp64_MSStore_ship	14034B030	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
+iw6mp64_MSStore_ship	140357100	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
+iw6mp64_MSStore_ship	1403571A0	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
+iw6mp64_MSStore_ship	1403572D0	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
+iw6mp64_MSStore_ship	1403573B0	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
+iw6mp64_MSStore_ship	140357460	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
+iw6mp64_MSStore_ship	140352C10	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
+iw6mp64_MSStore_ship	14035F9D0	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
+iw6mp64_MSStore_ship	14035F900	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
+iw6mp64_MSStore_ship	14035F7D0	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
+iw6mp64_MSStore_ship	14034B360	matches	src/qcommon/cm_load_db.cpp	differential test against the Store build (emulated; zone stream functions and nested loaders as logged fakes)
