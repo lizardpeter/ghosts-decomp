@@ -175,10 +175,15 @@ the pixel is `albedo · that + specular`. The LIT_DIR techniques (technique 8) a
 The values are linear HDR (Dynasty: mean ≈ 0.9, 99th percentile ≈ 8), so a viewer needs tone mapping. Static
 models do not use the lightmaps. On Dynasty (5566 placed models) and Point of Contact, mp_alien_town (15260) none has
 per-vertex lighting values (GfxStaticModelVertexLightingInfo +0x34 is 0 everywhere) and every model lightmap index
-(+0x98) is 0xFFFFFFFF. What they have instead: a lighting handle (u16 at +0xA2, set on nearly every instance; most
-likely an index into the light grid's lighting, which the model shaders' "lprobe" techniques sample, *unverified*)
-and, on foliage, a ground lighting colour (+0x40, 4 floats: HDR RGB and a fourth value, set on 1381 Dynasty
-instances, all grass and foliage). Decoding the light grid is what lights the props.
+(+0x98) is 0xFFFFFFFF. The game lights them from the light grid at run time: R_SetAllStaticModelLighting
+(Store 14063EEF0) calls R_GetLightingAtPoint (140682120) for every draw instance with flags (+0xA0) & 0x240, with
+&world->lightGrid, the instance's lighting origin (GfxStaticModelInst, 0x24 bytes, +0x18), its primary light
+environment (+0xA4) and its lighting handle (u16 at +0x9C) minus one. The handle is 0 in the zone on every instance:
+the game assigns it at run time (R_AllocStaticModelLighting). Foliage also carries a ground lighting colour
+(+0x40, 4 floats: HDR RGB and a fourth value; 1381 Dynasty instances, all grass and foliage). So props need the
+light grid: R_GetLightingAtPoint -> R_GetLightingAtPointSH (140682240) -> GetLightingAtPoint (14067FF80) ->
+R_LightGridLookup_Compressed (140683500) / _NonCompressed (140683BD0) -> R_GetLightGrid (140646380), which decodes a
+block of the compressed tree (PC: through a 509-slot block cache, 140644CC0, that the servers do not have).
 
 ### Primary lights (ComWorld, com_map, asset type 0x14)
 

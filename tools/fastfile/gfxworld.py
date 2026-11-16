@@ -519,7 +519,8 @@ def read_world(mem, w: int) -> GfxWorldInfo:
         a = mp + SMODEL_DRAW_INST_SIZE * i
         f = struct.unpack("<13f", mem.read(a, 0x34))
         # after the 0x38-byte vertex lighting info (+0x50): modelLightmapInfo (+0x88, lightmapIndex +0x98),
-        # lightingHandle, cullDist (+0x9E), flags (+0xA0): the servers' order with the Store sizes (*unverified*)
+        # lightingHandle (+0x9C, assigned at run time), cullDist (+0x9E), flags (+0xA0), primaryLightEnvIndex
+        # (+0xA4); the handle, flags and light environment offsets are read by R_SetAllStaticModelLighting (14063EEF0)
         lightmap = struct.unpack("<I", mem.read(a + 0x98, 4))[0]
         cull, flags = struct.unpack("<HH", mem.read(a + 0x9E, 4))
         smodels.append(StaticModel(_asset_name(mem, mem.u64(a + 0x38)), f[0:3], (f[3:6], f[6:9], f[9:12]), f[12],
