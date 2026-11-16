@@ -2,7 +2,8 @@
 
 What the Microsoft Store build loads for a weapon (WeaponCompleteDef, asset type 0x23) and the assets around it:
 WeaponAttachment (0x22), TracerDef (0x31) and VehicleDef (0x32). `tools/fastfile/weapon.py` loads them, statement
-for statement after the Store loaders; `src/bgame/bg_tracer_load_db.cpp` reconstructs the tracer loaders in C++.
+for statement after the Store loaders; `src/bgame/bg_weapons_load_db.cpp` and `src/bgame/bg_tracer_load_db.cpp`
+reconstruct the same loaders in C++.
 
 ## 1. How it was checked
 
@@ -11,9 +12,19 @@ for statement after the Store loaders; `src/bgame/bg_tracer_load_db.cpp` reconst
   every block and the asset pool equal the game's (`tests/fastfile/zone_check.py --full`; docs/fastfiles.md).
 - **Single assets.** `zone_check.py` at Load_WeaponCompleteDefPtr calls 0, 1 and 20 and Load_VehicleDefPtr call 0 of
   common_alien_mp, and Load_WeaponAttachmentPtr call 0 of mp_alien_town: equal.
-- **C++.** The tracer loaders (Load_TracerDef 140358530, Load_TracerDefPtr 1403585D0) match the exe in
-  `tests/differential/test_misc_asset_load.py`. The weapon, attachment and vehicle loaders are not reconstructed in
-  C++ yet (their full layouts, 0xA98 bytes for WeaponDef, are the remaining work).
+- **C++.** Every loader here matches the exe in differential tests: the tracer loaders (Load_TracerDef 140358530,
+  Load_TracerDefPtr 1403585D0) in `tests/differential/test_misc_asset_load.py`, and 14 weapon, attachment and
+  vehicle loaders (`src/bgame/bg_weapons_load_db.cpp`) in `tests/differential/test_weapon_load.py`: Load_WeaponDef
+  14035AD90, Load_WeaponCompleteDef 14035A460 and its Ptr 14035ACA0, Load_WeaponAttachment 140359A30 with its Ptr
+  14035A240 and PtrArray 14035A330, Load_XAnimPartsPtrArray 14035D4C0, Load_ADSOverlay 14034A080, Load_AttRumbles
+  14034AEA0, Load_AttProjectile 14034AD20, Load_NoteTrackToSoundEntry 140354C50, Load_VehicleDef 140358960 with its
+  Ptr 140359150 and Load_VehiclePhysDef 140359240. Thirteen mutations (a sound order, an alignment, a count, a
+  dropped field, a knot count from the wrong graph, ...) each fail a test. The full layouts the C++ uses
+  (`include/bgame/bg_weapons_load_db.h`) are the PS4 PDB's, with every size and pointer offset asserted.
+- **Inlining differs from the server.** The Store build inlines the server's per-block functions (Load_AttSight,
+  Load_AnimOverrideEntryArray, Load_scr_string_tArray, ...) into Load_WeaponAttachment and Load_WeaponCompleteDef,
+  and splits Load_NoteTrackToSoundEntryArray the other way: the array is inline and each 0x18-byte entry has its own
+  function (140354C50, named Load_NoteTrackToSoundEntry after the generator's pattern).
 
 ## 2. The loaders
 
@@ -115,6 +126,5 @@ customization menu); their materials and images are in the common multiplayer zo
 
 | What | Status |
 |---|---|
-| C++ for WeaponCompleteDef, WeaponDef, WeaponAttachment and VehicleDef | not reconstructed |
-| Weapon fields the Store build moved | none found; read_weapon's values are plausible for every Extinction weapon (damage, fire type, reload times, sounds), not checked field by field against the game |
+| Weapon fields the Store build moved | none: every pointer field is at the PDB's offset (the C++ loaders built on those layouts match the exe), and the sizes agree. The plain values between them are only checked for plausibility (damage, fire type, reload times of every Extinction weapon), not field by field against the code that reads them |
 | Multiplayer camo materials and images | need the common multiplayer zones and image paks |

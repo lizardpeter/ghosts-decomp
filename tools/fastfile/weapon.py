@@ -4,7 +4,8 @@
 
 Loaders only, the Store build's statement for statement (Load_WeaponCompleteDefPtr 14035ACA0, Load_WeaponAttachmentPtr
 14035A240, Load_TracerDefPtr 1403585D0, Load_VehicleDefPtr 140359150 and the functions under them);
-tests/fastfile/zone_check.py checks them against the game. docs/assets/weapons.md lists what each loads.
+tests/fastfile/zone_check.py checks them against the game; src/bgame/bg_weapons_load_db.cpp is the same in C++,
+checked against the exe (tests/differential/test_weapon_load.py). docs/assets/weapons.md lists what each loads.
 
 The generated loaders follow a few rules, which the helpers below name:
 - an XString (_xs), a sound alias by name (Load_SndAliasCustom, _snd), an effect, material, model, animation, physics
