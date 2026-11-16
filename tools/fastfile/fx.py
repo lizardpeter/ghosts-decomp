@@ -63,6 +63,10 @@ def _effect_ref(s, at):
         if names is None:
             names = s.fx_ref_names = {}
         names[at] = name.decode("latin1")
+        refs = getattr(s, "ref_names", None)
+        if refs is None:
+            refs = s.ref_names = {}
+        refs[at] = names[at]
         s.put_u64(at, s.find_asset(ASSET_FX, name))
 
 

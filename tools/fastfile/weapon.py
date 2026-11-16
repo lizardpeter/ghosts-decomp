@@ -380,3 +380,138 @@ def register(asset_loaders: dict, **hooks):
             raise KeyError(k)
         if v is not None:
             HOOKS[k] = v
+
+
+# ==== reader ======================================================================================================
+
+def script_string_resolver(stream, strings):
+    """Load_ScriptStringCustom leaves the low 32 bits of the string's address in each scr_string_t (this reader's
+    stand-in for SL_GetString's ids); the zone's script string table and its strings (Zone.script_strings) map them
+    back to the text."""
+    names = {}
+    for i, text in enumerate(strings if stream.string_table else []):
+        if text is not None:
+            names[stream.u64(stream.string_table + 8 * i) & 0xFFFFFFFF] = text.decode("latin1")
+    return lambda v: names.get(v, v)
+
+
+def read_weapon(mem, address: int, script_string=None, ref_names=None) -> dict:
+    """A WeaponCompleteDef with its WeaponDef as plain data (tools/fastfile/pdbtypes.py reads every field by the
+    servers' layout), plus:
+    - anims: the animation slots by name (weapAnimFiles_t, 124 slots; the complete def's szXAnims), only the ones set;
+      anims_left: WeaponDef's left-handed table, likewise;
+    - accuracyGraphKnots: the complete def's two curves as (x, y) points (counts at +0x104, +0x106);
+    - camos: the weapon's variations (Weapon bits 8..13: 0..63). Variation v draws gunXModel[v] / worldModel[v]; when
+      that model is null and camoMaterialTarget[v - 1] is set, it draws model 0 (or camoViewModel / camoWorldModel
+      when set) with camoViewModelMaterialOverride / camoWorldModelMaterialOverride replaced by
+      camoMaterialTarget[v - 1] (Store 1402FCBC0 for the view model, 1402B4640 and 1402BF240 for the world model)."""
+    import pdbtypes
+    ctx = pdbtypes.Context(script_string, ref_names=ref_names)
+    w = pdbtypes.read_struct(mem, address, "WeaponCompleteDef", ctx)
+    d = w.get("weapDef") or {}
+    slots = pdbtypes.enum_names("weapAnimFiles_t")
+
+    def anim_table(xs):
+        return {slots.get(i, i): n for i, n in enumerate(xs or []) if n}
+    # the zone carries the animations in the complete def (szXAnims); WeaponDef's two tables are null there
+    w["anims"] = anim_table(w.get("szXAnims") or d.get("szXAnimsRightHanded"))
+    w["anims_left"] = anim_table(d.get("szXAnimsLeftHanded"))
+
+    def knots(ptrs, counts):
+        out = []
+        for p, n in zip(ptrs or [], counts or []):
+            v = struct.unpack(f"<{2 * n}f", mem.read(p, 8 * n)) if p and n else ()
+            out.append([v[2 * i:2 * i + 2] for i in range(n)])
+        return out
+    w["accuracyGraphKnots"] = knots(w.get("accuracyGraphKnots"), w.get("accuracyGraphKnotCount"))
+    d["originalAccuracyGraphKnots"] = knots(d.get("originalAccuracyGraphKnots"), w.get("accuracyGraphKnotCount"))
+    camos = []
+    guns, worlds, targets = d.get("gunXModel") or [], d.get("worldModel") or [], d.get("camoMaterialTarget") or []
+    for v in range(1, 64):
+        target = targets[v - 1] if v - 1 < len(targets) else None
+        view = guns[v] if v < len(guns) else None
+        world = worlds[v] if v < len(worlds) else None
+        if view or world:
+            camos.append({"variation": v, "view_model": view, "world_model": world})
+        elif target:
+            camos.append({"variation": v, "camo_material": target,
+                          "view_model": d.get("camoViewModel") or (guns[0] if guns else None),
+                          "view_material_replaced": d.get("camoViewModelMaterialOverride"),
+                          "world_model": d.get("camoWorldModel") or (worlds[0] if worlds else None),
+                          "world_material_replaced": d.get("camoWorldModelMaterialOverride")})
+    w["camos"] = camos
+    return w
+
+
+def export_view_gltf(stream, weapon: dict, headers: dict, script_string, out_path: str, scale: float = 0.0254):
+    """The weapon's first-person gun (gunXModel[0]) as GLB with every animation slot that is in the zone, named by slot
+    (WEAP_ANIM_FIRE: viewmodel_..._fire). headers: (asset type, name) -> header address. Returns (model name, number
+    of animations) or None when the model isn't in the zone. Hands (handXModel) come with the player's character and
+    are not part of it; channels for bones the gun lacks are left out by xanim.add_to_gltf."""
+    import xanim
+    import xmodel
+    d = weapon.get("weapDef") or {}
+    guns = d.get("gunXModel") or []
+    name = guns[0] if guns else None
+    h = headers.get((4, name)) if name else None
+    if not h:
+        return None
+    model = xmodel.read_xmodel(stream, h, script_string)
+    doc, binary = xmodel.to_gltf(model, lods=[0], scale=scale)
+    binary = bytearray(binary)
+    nodes = {n["name"]: i for i, n in enumerate(doc["nodes"])}
+    done = 0
+    for slot, anim_name in weapon["anims"].items():
+        a = headers.get((2, anim_name))
+        if not a:
+            continue
+        anim = xanim.read_xanim(stream, a, script_string)
+        before = len(doc.get("animations", []))
+        xanim.add_to_gltf(doc, binary, anim, nodes)
+        if len(doc.get("animations", [])) > before:
+            doc["animations"][-1]["name"] = f"{slot}: {anim_name.lstrip(',')}"
+            done += 1
+    with open(out_path, "wb") as f:
+        f.write(xmodel.write_glb(doc, bytes(binary)))
+    return name, done
+
+
+def main(argv=None) -> int:
+    import argparse
+    import json
+    import os
+    import sys
+    ap = argparse.ArgumentParser(description="Write a Ghosts PC zone's weapons as JSON (one file per weapon).")
+    ap.add_argument("fastfile")
+    ap.add_argument("--out", default=".")
+    ap.add_argument("--gltf", action="store_true", help="also write each weapon's first-person gun with its animations")
+    opts = ap.parse_args(argv)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import loaders
+    loaders.register_all()
+    with open(opts.fastfile, "rb") as f:
+        zone = iw6ff.read_fastfile(f.read(), os.path.basename(opts.fastfile).rsplit(".", 1)[0])
+    ss = script_string_resolver(zone.stream, zone.script_strings)
+    os.makedirs(opts.out, exist_ok=True)
+    headers = {}                       # every linked model and animation, nested ones included (Stream.links)
+    for t, h in zone.stream.links:
+        if t in (2, 4) and zone.stream.u64(h):
+            headers.setdefault((t, zone.stream.cstr(zone.stream.u64(h)).decode("latin1")), h)
+    n = 0
+    for a in zone.assets:
+        if a.type == ASSET_WEAPON and a.header:
+            w = read_weapon(zone.stream, a.header, ss, getattr(zone.stream, "ref_names", None))
+            path = os.path.join(opts.out, (w.get("szInternalName") or f"weapon{n}").replace("/", "_") + ".json")
+            with open(path, "w") as f:
+                json.dump(w, f, indent=1, default=str)
+            if opts.gltf:
+                r = export_view_gltf(zone.stream, w, headers, ss, path[:-5] + ".glb")
+                if r:
+                    print(f"{path[:-5]}.glb: {r[0]}, {r[1]} animations")
+            n += 1
+    print(f"{n} weapons written to {opts.out}" + ("" if zone.complete else f" (the walk stopped at asset {zone.stopped_at})"))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

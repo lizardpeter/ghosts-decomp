@@ -262,6 +262,10 @@ def load_snd_alias_custom(s, field_at: int):
         return
     load_xstring_ptr(s, field_at)
     name = s.cstr(s.u64(s.u64(field_at)))
+    names = getattr(s, "ref_names", None)              # field address -> name, for readers: an alias of another
+    if names is None:                                  # zone leaves no name behind
+        names = s.ref_names = {}
+    names[field_at] = name.decode("latin1")
     s.put_u64(field_at, s.find_asset(ASSET_SOUND, name))
 
 

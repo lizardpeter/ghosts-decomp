@@ -69,9 +69,52 @@ projectile (0x90: model, effects, sounds: Load_AttProjectile 14034AD20).
 Sound fields are names resolved by Load_SndAliasCustom (1405367A0); effects, materials, models, animations, physics
 assets and tracers use the asset pointer rule (an inline asset is loaded and linked; an offset is an alias).
 
-## 3. Not established
+## 3. Reading a weapon
+
+`tools/fastfile/weapon.py <zone.ff> --out <folder> [--gltf]` writes every weapon of a zone as JSON (one file per
+weapon, named by its internal name) and, with `--gltf`, the weapon's first-person gun as GLB with its animations.
+The fields come from `tools/fastfile/pdbtypes.py`, which parses the servers' PDB layouts
+(analysis/iw6_ds_ps4/pdb/types.h) and reads any struct out of loaded memory: numbers, enum labels, strings, script
+strings, the names of referenced assets, nested structs, and arrays behind pointers whose counts are known
+(`pdbtypes.COUNTS`). Two things it can't take from the PDB:
+
+- `accuracyGraphKnots` (WeaponCompleteDef +0x108, and WeaponDef's original copy) is rendered as `float* x[2][2]`; it
+  is really two pointers to (x, y) pairs, counts in `accuracyGraphKnotCount` (+0x104, +0x106). read_weapon decodes it.
+- Sounds and effects are resolved by name at load time (Load_SndAliasCustom 1405367A0, Load_FxEffectDefFromName
+  140371ED0), so the zone's copy holds no header for them. The loaders keep the names they resolved
+  (`Stream.ref_names`, field address -> name) and the reader prints those.
+
+**Animations.** A weapon has 124 animation slots (weapAnimFiles_t, NUM_WEAP_ANIMS 0x7C). In zones they are in the
+complete def (`szXAnims`, +0x38, XAnimParts pointers); WeaponDef's `szXAnimsRightHanded` / `szXAnimsLeftHanded`
+are null there and are filled from it when the weapon is registered. The JSON lists the set slots by name
+(`anims`: `WEAP_ANIM_FIRE: viewmodel_..._fire`). Slots: 0 root, 1 idle, 2 empty idle, 3 fire, 4 hold fire, 5 last
+shot, 6 rechamber, 7–8 grenade prime, 9–15 melee, 16–23 reloads (normal, empty, start, end; fast), 24–37 raise and
+drop variants, 38–41 sprint, 42–44 stunned, 45 detonate, 46–47 night vision, 48–50 ADS fire, 51–54 blast, 55–57
+slide, 58 recoil settle, 59 swim, 60–73 mantles, 74–89 multiple-round reloads, 90–93 ADS up/down, recoil, adjust,
+94–123 additive layers (ADS, drag, swim, jump, walk, crawl, prone), each a root and the animation. A name starting
+with `,` is an animation of another zone.
+
+The GLB is gunXModel[0] with each slot's animation that is in the zone as a glTF animation named after the slot.
+The arms (handXModel) belong to the player's character and are not part of the weapon; channels for the arms'
+bones are dropped. Extinction's mp_alien_town gives 44 guns with 10 to 54 animations each.
+
+**Camos.** A weapon's variation is bits 8..13 of the Weapon value (0..63). For variation v the game draws
+gunXModel[v] (view) and worldModel[v] (world). When that model is null, v isn't 0 and camoMaterialTarget[v - 1]
+is set, it draws model 0, or camoViewModel (+0x20) / camoWorldModel (+0x18) when those are set, and swaps the
+material camoViewModelMaterialOverride (+0x30) / camoWorldModelMaterialOverride (+0x28) for
+camoMaterialTarget[v - 1] (WeaponDef +0x38, 63 entries). View model: Store 1402FCBC0; world model: 1402B4640 and
+1402BF240 (the servers' g_weapon / cg_weapons code has the same logic). The JSON's `camos` lists each variation
+that is set, either as model variants or as the material swap.
+
+Extinction's guns only use model variants (13 or 14 per gun: `viewmodel_ak12_gold`, `_brush`, `_caustic`, `_dark`
+and so on); none of the material camos appear in the Extinction zones. Multiplayer's camos come from
+`mp/camoTable.csv` (its column 6 is the variation index; read by 1405E3DA0) and `mp/cac/camos.csv` (the
+customization menu); their materials and images are in the common multiplayer zones and image paks.
+
+## 4. Not established
 
 | What | Status |
 |---|---|
 | C++ for WeaponCompleteDef, WeaponDef, WeaponAttachment and VehicleDef | not reconstructed |
-| A reader for the weapon fields (stats, timings, kick, spread) | the loader only; values are where the servers' layout puts them |
+| Weapon fields the Store build moved | none found; read_weapon's values are plausible for every Extinction weapon (damage, fire type, reload times, sounds), not checked field by field against the game |
+| Multiplayer camo materials and images | need the common multiplayer zones and image paks |
