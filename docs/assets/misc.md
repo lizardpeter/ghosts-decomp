@@ -29,12 +29,18 @@ The game finds the equipment table's sounds by name (Load_SndAliasCustom, 140536
 
 ## C++
 
-`src/database/db_misc_load_db.cpp` reconstructs the loaders of Lua files, the sound driver globals, reverb presets,
-vector fields, leaderboards and compute shaders, 14 functions with their Load_*Ptr. Each one matches the exe in
-`tests/differential/test_misc_load.py`. Two details there differ from the neighbouring loaders:
+`src/database/db_misc_load_db.cpp` reconstructs every loader in this file: 31 functions, each with its Load_*Ptr.
+Each one matches the exe in `tests/differential/test_misc_load.py`, and mutation checks confirm the tests catch
+changes. Details where these loaders differ from their neighbours:
 
 - Load_VectorFieldPtr aligns the header to 16.
 - Load_GfxComputeShaderLoadDef zero-extends the program size, where the material shader loaders sign-extend it.
+- Counts passed to the array loaders (segments, branches, structured data defs, the equipment arrays) are
+  zero-extended. Counts the loaders read for themselves (enum entries, struct properties, leaderboard columns,
+  entity characters) are sign-extended.
+- Load_VehicleTrackSegmentArray, Load_EquipmentSoundTable and Load_AddonMapEnts inline their element loaders
+  (segments, mantle sound sets, sub-models). Load_StructuredDataDefArray inlines the enum and struct arrays but
+  calls Load_StructuredDataEnum and Load_StructuredDataStruct for each element.
 
 ## How it was checked
 
@@ -62,4 +68,3 @@ These zones were surveyed and have none of the new types except the ones in the 
 | addon_map_ents and vectorfield | transcribed but not exercised against the game: no zone examined carries one |
 | The structured data and equipment table field names beyond those above | read as layouts; no reader yet |
 | Decompiling the HavokScript chunks | out of scope; the chunks are extracted as they are |
-| C++ for vehicle tracks, structured data, the equipment table and add-on entities | not reconstructed |

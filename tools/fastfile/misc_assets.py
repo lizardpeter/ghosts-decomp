@@ -138,7 +138,7 @@ def _struct_def_set(s, h):
     p = _follow(s, h + 0x10, 4)
     if not p:
         return
-    n = _i32(s, h + 8)
+    n = _u32(s, h + 8)   # passed zero-extended, as are the counts below
     s.load(True, p, n * 0x58)
     for i in range(n):
         d = p + 0x58 * i
@@ -233,17 +233,17 @@ def _equip_snd_table(s, h):
     for off in (0x28, 0x30):
         p = _follow(s, h + off, 4)
         if p:
-            _chance_types(s, p, _i32(s, h + 8), h)
+            _chance_types(s, p, _u32(s, h + 8), h)
     p = _follow(s, h + 0x38, 4)
     if p:
-        _move_type_sets(s, p, _i32(s, h + 8), h)
+        _move_type_sets(s, p, _u32(s, h + 8), h)
     p = _follow(s, h + 0x40, 4)
     if p:
-        _move_type_sets(s, p, _i32(s, h + 0xC), h)
+        _move_type_sets(s, p, _u32(s, h + 0xC), h)
     s.load(False, h + 0x48, 8)
     p = _follow(s, h + 0x48, 4)
     if p:
-        _sound_pairs(s, p, _i32(s, h + 0x10), True)
+        _sound_pairs(s, p, _u32(s, h + 0x10), True)
     p = _follow(s, h + 0x50, 4)
     if p:
         n = _u32(s, h + 8)
@@ -283,7 +283,7 @@ def _track_segment(s, seg, at_stream_start):
     for arr, count_at in ((0x18, 0x20), (0x28, 0x30)):
         p = _follow(s, seg + arr, 8)
         if p:
-            _segment_ptrs(s, p, _i32(s, seg + count_at))
+            _segment_ptrs(s, p, _u32(s, seg + count_at))
 
 
 def _segment_ptrs(s, at, count):
@@ -302,7 +302,7 @@ def _vehicle_track(s, h):
     each in place with 140359520's body)."""
     p = _inline_or_offset(s, h + 8, 4)
     if p:
-        n = _i32(s, h + 0x10)
+        n = _u32(s, h + 0x10)
         s.load(True, p, n * 0x48)
         for i in range(n):
             _track_segment(s, p + 0x48 * i, False)
