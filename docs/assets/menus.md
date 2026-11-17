@@ -33,6 +33,24 @@ what they load, against the PS4 PDB's layouts.
 Pointers are "any non-null value: the data follows" except expressions and supporting data, which test for -1 and
 are otherwise offsets to data loaded earlier (menus share expressions).
 
+## C++
+
+`src/ui/ui_menu_load_db.cpp` reconstructs every loader above, 30 functions, with `include/ui/ui_menu_load.h`
+(the layouts, generated from the PS4 PDB). Each one matches the exe in `tests/differential/test_menu_load.py`, and
+17 deliberate mutations were all caught (two only after the tests were widened: negative string counts, and a fake that leaves the stream 4-aligned). Points the C++ shows:
+
+- The Store build inlines many of the generated array loaders:
+  - in Load_MenuList and Load_menuDef_t: the menu and item pointer arrays;
+  - in Load_MenuEventHandlerSet: the event handlers;
+  - in Load_Statement: the expression entries;
+  - in Load_itemDef_t: the float expressions, plus its statement pointers;
+  - in Load_UIFunctionList and Load_StaticDvarList: the static dvar arrays;
+  - the bodies of Load_multiDef_t and Load_ConditionalScript.
+- Load_ItemKeyHandler walks its linked list in a loop. Each next handler is read with atStreamStart, then the loop
+  repeats without it.
+- Load_itemDefData_t tail-calls its type's loader with its own atStreamStart.
+- The Operand packs its 8-byte value to 4 bytes, so the Operand is 0xC bytes with its type at +8.
+
 ## How it was checked
 
 mp_alien_armory.ff (Nightfall: 2732 assets), which used to stop at its first menu file, walks whole with
@@ -46,6 +64,5 @@ item each.
 
 | What | Status |
 |---|---|
-| C++ for the menu loaders | not reconstructed (about 25 functions) |
 | Menus with list boxes, multis, key handlers or float expressions | not in the zones checked; their loaders are transcribed but unexercised against the game |
 | Reading expressions back as text | the reader shows a placeholder for conditions |
