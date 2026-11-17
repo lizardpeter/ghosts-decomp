@@ -25,7 +25,7 @@ chain (signed). `DB_LoadXFile` (140349300) reads the prefix with `DB_ReadXFileUn
 | 16 | 8 | *unused* | two dwords read and dropped (0 measured) |
 | 24 | 4 | streamed image row count | at most 0x6280, else `DB_DirtyDiscError` |
 | 28 | 24 × count | streamed image rows | section 11 |
-| 28 + 24n | 8 | load bar size | the first argument of `LoadBar_LoadingFastfile` (140190CE0); equals the file's size on every file measured |
+| 28 + 24n | 8 | load bar size | the first argument of `LoadBar_LoadingFastfile` (140190CE0); the file's size on every file measured except patch_mp_fahrenheit.ff, where it is where the zone's blocks end (57,484 of 82,817 bytes: the streamed-image rows point at the rest of the file) |
 | 36 + 24n | 8 | load bar end | `LoadBar_LoadingFastfile(size, end - size)`; larger than the file for map zones (mp_alien_town.ff: by 38,885,717 bytes, close to but not the sum of its first-level streamed image sizes, 39,355,114; meaning *unverified*) |
 | 44 + 24n | | the compressed zone | |
 
@@ -79,6 +79,12 @@ are never read.
    `masterBlockHashes[group - 1]`), followed by up to 256 data blocks, each hashing to its entry. After the 256th
    data block the next block is the next group's master block.
 3. **Data blocks** are the zlib stream (one stream across all of them), inflated from `g_authLoad`'s own z_stream.
+
+The blocks are checked lazily, one at a time as the inflater asks for more input, so blocks after the end of the zlib
+stream are never checked. patch_mp_fahrenheit.ff depends on this: its streamed-image rows (file 0, offsets 57,484 to
+82,817) put image data in the same file after the zone, in blocks no master hash covers. The game (in the emulator)
+loads it; `iw6ff.decompress` checks blocks the same way and reports the bytes it never needed as
+`AuthReport.unread_bytes`. Who reads the image data at those offsets is *unverified*.
 
 A failed check makes the inflater return -6, and `DB_ReadXFile` (140349B80) turns any result above 1 into
 `Sys_Error("Disc read error '%s'")`. `DB_LoadXFile` hands the header's 256-byte signature back to its caller through
@@ -369,6 +375,15 @@ every block's memory and the asset pool:
 | english/eng_patch_code_post_gfx_mp.ff (the patched tables, 8104 localized strings) | 8174 | equal |
 | english/eng_code_post_gfx_mp.ff (fonts, the multiplayer string tables) | 161 | equal |
 | mp_alien_armory.ff (Nightfall, with three menu files) | 2732 | equal |
+| common.ff (the equipment sound table, twelve menu files) | 4871 | equal |
+| code_post_gfx_mp.ff (compute shaders, leaderboards, structured data, reverb presets, the sound driver globals) | 1196 | equal |
+| patch_code_post_gfx.ff (84 Lua files: the interface's compiled HavokScript) | 149 | equal |
+| development_mp.ff (a Lua file and a menu file) | 41 | equal |
+| patch_mp_fahrenheit.ff (data after the zone, section 3) | 73 | equal |
+| satfarm.ff (a single-player level, unsigned, 387 MB: a vehicle track) | 3797 | equal |
+
+For files over 256 MB the emulator maps the file above 4 GiB (`store_emu.FILEBUF_BIG`); satfarm.ff also needed a
+256 MB CRT heap. The sound-copy check skips zone words that only look like its markers (satfarm.ff has one).
 
 Two things the check allows for, both of the emulator's doing and both explained in zone_check.py: the address of the
 engine's copy of each loaded sound's data (the copy itself must hold the same bytes, docs/assets/sound.md), and the

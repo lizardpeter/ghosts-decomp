@@ -13,6 +13,7 @@ import iw6ff
 import mapfx
 import material
 import menu
+import misc_assets
 import postfx
 import sound
 import strings
@@ -45,4 +46,6 @@ def register_all(loaders=None):
     mapfx.register(L, material_ptr=material.load_material_ptr, fx_ptr=fx.load_effect_ptr,
                    snd=clipmap.load_snd_alias_custom,
                    physpreset_ptr=lambda s, f: xmodel.asset_ptr(s, f, xmodel.ASSET_PHYSPRESET, xmodel.load_physpreset))
+    misc_assets.register(L, snd=clipmap.load_snd_alias_custom,
+                         compute_shader=material.asset_ptr(0x06, material._load_shader(0x20)))
     return L

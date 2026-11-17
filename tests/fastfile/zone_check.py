@@ -22,7 +22,9 @@ import mapfx  # noqa: E402
 import postfx  # noqa: E402
 import sound_check  # noqa: E402
 import font  # noqa: E402
+import material  # noqa: E402
 import menu  # noqa: E402
+import misc_assets as misc  # noqa: E402
 import strings  # noqa: E402
 import store_emu  # noqa: E402
 import weapon  # noqa: E402
@@ -51,6 +53,16 @@ TYPES = {
     0x1D: (0x14034CF50, 0x1444252D0, font.load_font_ptr),
     0x1E: (0x140354980, 0x144426EE8, menu.load_menu_list_ptr),
     0x1F: (0x140361710, 0x144426ED8, menu.load_menu_ptr),
+    0x06: (0x14034BF40, 0x144425C30, material.asset_ptr(0x06, material._load_shader(0x20))),
+    0x17: (0x140359430, 0x1444257E8, misc.PTRS[0x17]),
+    0x24: (0x140356F90, 0x1444264D8, misc.PTRS[0x24]),
+    0x2F: (0x140352470, 0x144426468, misc.PTRS[0x2F]),
+    0x30: (0x140357ED0, 0x144425F18, misc.PTRS[0x30]),
+    0x33: (0x14034A370, 0x144425640, misc.PTRS[0x33]),
+    0x35: (0x140355B20, 0x1444252F8, misc.PTRS[0x35]),
+    0x36: (0x140352B20, 0x1444253B8, misc.PTRS[0x36]),
+    0x3B: (0x14034CB70, 0x144425268, misc.PTRS[0x3B]),
+    0x3C: (0x140358870, 0x1444257A0, misc.PTRS[0x3C]),
 }
 
 
@@ -68,6 +80,8 @@ def _resolve(mine, game, n, copies, L, out):
         if v - sound_check.MARK >= len(copies):
             continue
         g = int.from_bytes(game[j:j + 8], "little")
+        if g == v:                  # zone data that happens to look like a marker (satfarm.ff has one), not a copy
+            continue
         data = copies[v - sound_check.MARK]
         heap = store_emu.CRT_HEAP <= g < store_emu.CRT_HEAP + store_emu.CRT_HEAP_SIZE
         if heap and bytes(L.mu.mem_read(g, len(data))) == data:

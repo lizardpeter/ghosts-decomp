@@ -257,10 +257,15 @@ class AuthReport:
     groups: int
     data_blocks: int
     trailing_bytes: int      # bytes after the last whole 8 KiB block: never processed by the game
+    unread_bytes: int = 0    # bytes after the last block the inflater needed (the trailing bytes included)
 
 
-def _auth_blocks(payload: bytes, expected_name: str | None, key) -> tuple[list[bytes], AuthReport]:
-    """The game's block chain (1403489E0): header block, then per group a master block and its data blocks."""
+def _auth_blocks(payload: bytes, expected_name: str | None, key, report_out: list):
+    """The game's block chain (1403489E0): header block, then per group a master block and its data blocks. A
+    generator, as the game is lazy: DB_AuthLoad_Inflate (140348D30) checks a block only when the inflater asks for
+    more input, so blocks after the end of the compressed zone are never checked (a file whose streamed-image rows
+    point into the file itself, such as patch_mp_fahrenheit.ff, keeps its image data there). The AuthReport is
+    appended to `report_out` when the generator is closed or exhausted."""
     blocks = [payload[i:i + AUTH_BLOCK] for i in range(0, len(payload) - AUTH_BLOCK + 1, AUTH_BLOCK)]
     trailing = len(payload) % AUTH_BLOCK
     if not blocks:
@@ -279,45 +284,54 @@ def _auth_blocks(payload: bytes, expected_name: str | None, key) -> tuple[list[b
         if name_field != want + b"\0" * (0x20 - len(want)):
             raise FastFileError("DB_AuthLoad header", f"zone name {name_field.rstrip(b'\0')!r}")
     master_hashes = subheader[0x24:]
-    data, group, chunk, master = [], 1, 0, None
-    for b in blocks[1:]:
-        if chunk == 0:
-            if group > AUTH_MAX_GROUPS:
-                # the game would index past masterBlockHashes[243] (docs/fastfiles.md); no retail file gets here
-                raise FastFileError("DB_AuthLoad master block", f"group {group} beyond {AUTH_MAX_GROUPS}")
-            if _sha256(b) != master_hashes[32 * (group - 1):32 * group]:
-                raise FastFileError("DB_AuthLoad master block", f"group {group}")
-            master, chunk = b, 1
-            continue
-        if _sha256(b) != master[32 * (chunk - 1):32 * chunk]:
-            raise FastFileError("DB_AuthLoad data block", f"group {group} block {chunk}")
-        data.append(b)
-        chunk += 1
-        if chunk == AUTH_CHUNKS_PER_GROUP + 1:
-            group, chunk = group + 1, 0
-    report = AuthReport(name_field.rstrip(b"\0").decode("latin1"), signature, key is not None,
-                        group if chunk else group - 1, len(data), trailing)
-    return data, report
+    group, chunk, master, used, data_blocks = 1, 0, None, 1, 0
+    try:
+        for b in blocks[1:]:
+            if chunk == 0:
+                if group > AUTH_MAX_GROUPS:
+                    # the game would index past masterBlockHashes[243] (docs/fastfiles.md); no retail file gets here
+                    raise FastFileError("DB_AuthLoad master block", f"group {group} beyond {AUTH_MAX_GROUPS}")
+                if _sha256(b) != master_hashes[32 * (group - 1):32 * group]:
+                    raise FastFileError("DB_AuthLoad master block", f"group {group}")
+                master, chunk = b, 1
+                used += 1
+                continue
+            if _sha256(b) != master[32 * (chunk - 1):32 * chunk]:
+                raise FastFileError("DB_AuthLoad data block", f"group {group} block {chunk}")
+            used += 1
+            data_blocks += 1
+            yield b
+            chunk += 1
+            if chunk == AUTH_CHUNKS_PER_GROUP + 1:
+                group, chunk = group + 1, 0
+    finally:
+        report_out.append(AuthReport(name_field.rstrip(b"\0").decode("latin1"), signature, key is not None,
+                                     group if chunk else group - 1, data_blocks, trailing,
+                                     (len(blocks) - used) * AUTH_BLOCK + trailing))
 
 
 def decompress(data: bytes, prefix: Prefix, zone_name: str | None = None, key=None):
-    """Verify and decompress: (zone bytes, AuthReport or None)."""
+    """Verify and decompress: (zone bytes, AuthReport or None). Signed blocks are checked as the inflater reaches
+    them and no further (_auth_blocks)."""
     payload = data[prefix.payload_offset:]
-    report = None
-    if prefix.signed:
-        chunks, report = _auth_blocks(payload, zone_name, key)
-    else:
-        chunks = [payload]
+    reports = []
+    chunks = _auth_blocks(payload, zone_name, key, reports) if prefix.signed else iter([payload])
     if prefix.compressor == COMPRESSOR_PASSTHROUGH:
-        return b"".join(chunks), report
-    z = zlib.decompressobj()
-    out = bytearray()
-    try:
-        for c in chunks:
-            out += z.decompress(c)
-    except zlib.error as e:
-        raise FastFileError("inflate", str(e)) from e
-    return bytes(out), report
+        out = b"".join(chunks)
+    else:
+        z = zlib.decompressobj()
+        buf = bytearray()
+        try:
+            for c in chunks:
+                buf += z.decompress(c)
+                if z.eof:
+                    break
+        except zlib.error as e:
+            raise FastFileError("inflate", str(e)) from e
+        out = bytes(buf)
+    if prefix.signed:
+        chunks.close()
+    return out, (reports[0] if reports else None)
 
 
 # --- the stream ----------------------------------------------------------------------------------------------------
@@ -877,7 +891,7 @@ def main(argv=None) -> int:
         "stream_image_rows": len(z.prefix.stream_images), "loadbar_sizes": list(z.prefix.loadbar_sizes),
         "auth": None if not z.auth else {"zone": z.auth.zone_name, "signature_checked": z.auth.signature_checked,
                                          "groups": z.auth.groups, "data_blocks": z.auth.data_blocks,
-                                         "trailing_bytes": z.auth.trailing_bytes},
+                                         "trailing_bytes": z.auth.trailing_bytes, "unread_bytes": z.auth.unread_bytes},
         "xfile": {"size": z.xfile_size, "external_size": z.external_size,
                   "blocks": dict(zip(BLOCK_NAMES, z.block_sizes))},
         "script_strings": len(z.script_strings),

@@ -162,6 +162,13 @@ class Signed(unittest.TestCase):
         self.tamper(base + 0x4000 + 9, "data block")           # a data block
         self.tamper(base + 0x200, "subheader hash")            # the subheader (name, master hashes)
 
+    def test_blocks_after_the_zone_are_not_checked(self):
+        # the game checks a block only when the inflater needs it (patch_mp_fahrenheit.ff keeps streamed image data
+        # in blocks after its zone, which no master block hash covers)
+        z = iw6ff.read_fastfile(self.ff + bytes(range(256)) * 32 + b"tail", "test_zone", self.pub)
+        self.assertEqual([a.name for a in z.assets], ["maps/a.cfg", "crate", "1001"])
+        self.assertGreaterEqual(z.auth.unread_bytes, 0x2000 + 4)
+
     def test_wrong_name(self):
         with self.assertRaises(iw6ff.FastFileError) as e:
             iw6ff.read_fastfile(self.ff, "other_zone", self.pub)

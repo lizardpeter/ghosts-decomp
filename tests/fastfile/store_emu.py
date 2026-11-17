@@ -36,10 +36,11 @@ TLS_BLOCK = 0x00410000
 STUBS = 0x00420000
 SCRATCH = 0x00500000          # DBFile, XZoneMemory, the output buffer, link entries
 FILEBUF = 0x10000000          # the .ff bytes
+FILEBUF_BIG = 0x100000000     # the .ff bytes of a file too large for the room below CRT_HEAP (satfarm.ff, 387 MB)
 ARENA = 0x40000000            # zone block memory (PMem_AllocFromSource)
 POOL, POOL_SIZE = 0x30000000, 0x01000000  # asset headers (DB_LinkXAssetEntry1)
 DEFAULTS, DEFAULTS_SIZE = 0x31000000, 0x01000000  # zeroed headers for references to other zones' assets
-CRT_HEAP, CRT_HEAP_SIZE = 0x20000000, 0x08000000  # malloc/calloc/realloc (libtomcrypt's bignums; never freed: a map zone authenticates hundreds of blocks)
+CRT_HEAP, CRT_HEAP_SIZE = 0x20000000, 0x10000000  # malloc/calloc/realloc (libtomcrypt's bignums; never freed: a map zone authenticates hundreds of blocks)
 
 DB_LoadXFile = 0x140349300
 FAKE_ALLOC, FAKE_SL_GETSTRING, FAKE_LINK = 0x140543A40, 0x14047D4D0, 0x14036D830
@@ -349,12 +350,13 @@ class StoreLoader:
         self.stopped = False
         self.heap_next = CRT_HEAP
         try:
-            mu.mem_unmap(FILEBUF, self._filebuf_size)
+            mu.mem_unmap(self._filebuf_at, self._filebuf_size)
         except AttributeError:
             pass
         self._filebuf_size = _page(len(ff) + 0x1000)
-        mu.mem_map(FILEBUF, self._filebuf_size)
-        mu.mem_write(FILEBUF, ff)
+        self._filebuf_at = FILEBUF if FILEBUF + self._filebuf_size <= CRT_HEAP else FILEBUF_BIG
+        mu.mem_map(self._filebuf_at, self._filebuf_size)
+        mu.mem_write(self._filebuf_at, ff)
         mu.mem_write(SCRATCH, b"\0" * 0xF0000)
         mu.mem_write(0x14A37D628, struct.pack("<QQ", self.com, self.com))
         # r_loadForRenderer (14A2E1D98) -> a bool dvar that is off: no GPU resources are created from the zone
@@ -363,7 +365,7 @@ class StoreLoader:
         mu.mem_write(0x14A2E1D98, struct.pack("<Q", SCRATCH + 0xE0000))
         dbfile, zonemem, out = SCRATCH, SCRATCH + 0x100, SCRATCH + 0x200
         name = zone_name.encode()[:63]
-        mu.mem_write(dbfile, struct.pack("<QQQ", 0, len(ff), FILEBUF) + name + b"\0")
+        mu.mem_write(dbfile, struct.pack("<QQQ", 0, len(ff), self._filebuf_at) + name + b"\0")
         sp = STACK + STACK_SIZE - 0x1000 - 8
         mu.mem_write(sp, struct.pack("<Q", SENTINEL))
         mu.reg_write(UC_X86_REG_RSP, sp)
