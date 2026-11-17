@@ -357,11 +357,12 @@ def walk_images(path, zone_name=None):
     so far are image.state_of(stream).order (linked addresses), with their in-zone pixels and stream rows."""
     import os
     try:
-        from . import iw6ff, material, xmodel
+        from . import iw6ff, loaders as all_loaders, material, xmodel
     except ImportError:  # run as a script
         import sys
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import iw6ff
+        import loaders as all_loaders
         import material
         import xmodel
     data = open(path, "rb").read()
@@ -370,6 +371,7 @@ def walk_images(path, zone_name=None):
     zone = iw6ff.decompress(data, prefix, name)
     zone = zone[0] if isinstance(zone, tuple) else zone
     loaders, saved = iw6ff.ASSET_LOADERS, dict(iw6ff.ASSET_LOADERS)
+    all_loaders.register_all()          # every asset type with a loader, so the walk reaches every image
     loaders.update({t: material.asset_ptr(t, f) for t, f in material.ASSET_LOADERS.items()})
     xmodel.register(loaders, material_loader=material.load_material_ptr)
     register(loaders, material)

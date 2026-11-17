@@ -5,6 +5,7 @@ With it, iw6ff.read_fastfile walks a zone as far as the asset types it can load 
 was). tests/fastfile/zone_check.py compares a whole walked zone with the zone as the game loaded it.
 """
 import clipmap
+import font
 import fx
 import gfxworld
 import image
@@ -31,6 +32,7 @@ def register_all(loaders=None):
     xanim.register(L, scriptable_ptr=lambda s, f: clipmap.load_scriptable_def_ptr(s, f, xmodel_ptr),
                    fx_ptr=fx.load_effect_ptr)
     clipmap.register(L, xmodel_ptr=xmodel_ptr)
+    font.register(L, material_ptr=material.load_material_ptr)
     fx.register(L, material_ptr=material.load_material_ptr, xmodel_ptr=xmodel_ptr, image_ptr=image.load_gfx_image_ptr)
     postfx.register(L, material_ptr=material.load_material_ptr)
     weapon.register(L, material_ptr=material.load_material_ptr, xmodel_ptr=xmodel_ptr,

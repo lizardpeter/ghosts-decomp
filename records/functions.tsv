@@ -852,3 +852,5 @@ iw6mp64_MSStore_ship	1403526F0	matches	src/universal/com_stringtable_load_db.cpp
 iw6mp64_MSStore_ship	1403527E0	matches	src/universal/com_stringtable_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
 iw6mp64_MSStore_ship	140536D10	matches	src/universal/com_stringtable_obj.cpp	differential test against the Store build (emulated; the CRT's tolower import played as the C locale)
 iw6mp64_MSStore_ship	140536C50	matches	src/universal/com_stringtable_obj.cpp	differential test against the Store build (emulated; the CRT's tolower import played as the C locale)
+iw6mp64_MSStore_ship	14034CE20	matches	src/gfx_d3d/r_font_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)
+iw6mp64_MSStore_ship	14034CF50	matches	src/gfx_d3d/r_font_load_db.cpp	differential test against the Store build (emulated; zone stream functions as logged fakes)

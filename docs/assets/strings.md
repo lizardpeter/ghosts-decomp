@@ -45,15 +45,10 @@ B0084 for the code that reads a seventh.
   english/eng_patch_code_post_gfx_mp.ff (8174 assets: 68 tables, 8104 localized strings) and
   english/eng_common_alien_mp.ff (23 assets) walked by `tools/fastfile/loaders.py` equal the game's
   (`tests/fastfile/zone_check.py --full`).
-- **Single assets.** english/eng_code_post_gfx_mp.ff stops at its fonts (type 0x1D, no loader yet), so its tables
-  were checked one at a time: Load_StringTablePtr calls 0, 50, 100 and 138 equal the game's.
+- **Single assets, then the whole zone.** english/eng_code_post_gfx_mp.ff first stopped at its fonts, so its tables
+  were checked one at a time (Load_StringTablePtr calls 0, 50, 100 and 138); with the font loader
+  (docs/assets/fonts.md) the whole zone equals the game's.
 - **C++.** The six functions above match the exe on random structures and strings; nine mutations (the hash
   multiplier, the string step, the alignment, the cell count, the field order, the insert slot, the search start,
   the hash test, the comparison) each fail a test. The CRT's tolower is an import the emulator doesn't have; the test
   plays it as the C locale has it.
-
-## Not established
-
-| What | Status |
-|---|---|
-| Fonts (0x1D) and the rest of eng_code_post_gfx_mp.ff | no loader yet |
