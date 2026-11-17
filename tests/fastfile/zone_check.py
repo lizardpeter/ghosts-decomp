@@ -21,6 +21,7 @@ import loaders  # noqa: E402
 import mapfx  # noqa: E402
 import postfx  # noqa: E402
 import sound_check  # noqa: E402
+import strings  # noqa: E402
 import store_emu  # noqa: E402
 import weapon  # noqa: E402
 import xanim  # noqa: E402
@@ -43,6 +44,8 @@ TYPES = {
     0x19: (0x14034E9B0, 0x144426DC0, mapfx.load_fx_world_ptr),
     0x26: (0x14034E4E0, 0x144425AE0, mapfx.load_impact_table_ptr),
     0x27: (0x1403582C0, 0x144425AF8, mapfx.load_surface_fx_table_ptr),
+    0x2E: (0x140357B00, 0x144425B50, strings.load_string_table_ptr),
+    0x21: (0x1403527E0, 0x144425A48, strings.load_localize_ptr),
 }
 
 

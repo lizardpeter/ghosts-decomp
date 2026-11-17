@@ -13,6 +13,7 @@ import mapfx
 import material
 import postfx
 import sound
+import strings
 import weapon
 import xanim
 import xmodel
@@ -25,7 +26,7 @@ def register_all(loaders=None):
     xmodel_ptr = lambda s, f: xmodel.load_xmodel_ptr(s, f, material.load_material_ptr)  # noqa: E731
     xmodel.register(L, material_loader=material.load_material_ptr)
     image.register(L, material)
-    for m in (sound, gfxworld):
+    for m in (sound, gfxworld, strings):
         m.register(L)
     xanim.register(L, scriptable_ptr=lambda s, f: clipmap.load_scriptable_def_ptr(s, f, xmodel_ptr),
                    fx_ptr=fx.load_effect_ptr)

@@ -118,9 +118,13 @@ camoMaterialTarget[v - 1] (WeaponDef +0x38, 63 entries). View model: Store 1402F
 that is set, either as model variants or as the material swap.
 
 Extinction's guns only use model variants (13 or 14 per gun: `viewmodel_ak12_gold`, `_brush`, `_caustic`, `_dark`
-and so on); none of the material camos appear in the Extinction zones. Multiplayer's camos come from
-`mp/camoTable.csv` (its column 6 is the variation index; read by 1405E3DA0) and `mp/cac/camos.csv` (the
-customization menu); their materials and images are in the common multiplayer zones and image paks.
+and so on); none of the material camos appear in the Extinction zones. Multiplayer's camos are listed
+in `mp/camoTable.csv` (english/eng_code_post_gfx_mp.ff; docs/assets/strings.md): per row the index, name (`snow`),
+localized name (`LUA_MENU_CAMO_SNOW`), menu image (`img_camo_iw6_snow`) and two numbers, 46 rows. 1405E3DA0
+(entitlements) finds a camo by name (column 1) and reads column 6, which that table doesn't have: it reads as ""
+(StringTable_GetColumnValueForRow's result outside the table), so index 0, unless a later zone's table adds the
+column. `mp/cac/camos.csv` is the character body camos (urban, woodland, desert), not the weapons'. The camo
+materials and images are in the common multiplayer zones and image paks.
 
 ## 4. Not established
 

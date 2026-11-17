@@ -364,6 +364,8 @@ every block's memory and the asset pool:
 | common_alien_mp.ff (the Extinction aliens' shared zone) | 1909 | equal |
 | mp_conflict.ff (Dynasty) | 1707 | equal |
 | mp_alien_town.ff (Point of Contact) | 2560 | equal |
+| english/eng_common_mp.ff (sounds, string tables, localized text) | 4427 | equal |
+| english/eng_common_alien_mp.ff (Extinction's string tables) | 23 | equal |
 
 Two things the check allows for, both of the emulator's doing and both explained in zone_check.py: the address of the
 engine's copy of each loaded sound's data (the copy itself must hold the same bytes, docs/assets/sound.md), and the
