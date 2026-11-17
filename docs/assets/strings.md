@@ -16,7 +16,7 @@ string (+0) and its hash (+8). The loader loads the cells whenever values is set
 int product), then each cell's string as an XString; the hash stays as stored.
 
 The hash is StringTable_HashString (140536D10): `h = h * 31 + tolower(c)` over the string's bytes as signed chars,
-in 32-bit arithmetic (a byte from 0x80 adds a negative value; tolower leaves it). Every cell of the 159 tables read
+in 32-bit arithmetic (a byte from 0x80 adds a negative value; tolower leaves it). Every cell of the 227 tables read
 has its stored hash equal to that. The lookups:
 
 - StringTable_GetColumnValueForRow (140536B00): the cell's string, or "" outside the table or for a null string.
@@ -33,12 +33,16 @@ has its stored hash equal to that. The lookups:
 | english/eng_code_post_gfx_mp.ff | 139: the multiplayer tables (attachments, camos, classes, challenges, ranks, killstreaks, perks, unlocks, the in-game store), the sound tables | none |
 | english/eng_common_mp.ff | 6 | 132 (CGAME_ messages and the like) |
 | english/eng_common_alien_mp.ff | 14: Extinction (attachments, presets, perks, ranks, spawns, collectibles) | none |
+| english/eng_patch_code_post_gfx_mp.ff | 68: the patched versions of the multiplayer tables | 8104: the menus', maps', weapons' and camos' names and descriptions (`LUA_MENU_CAMO_SNOW` "Snow", `PRESENCE_MP_ALIEN_TOWN` "Point of Contact", `WEAPON_HONEYBADGER` "Honey Badger") |
+| english/eng_ui_mp.ff | none | 85 |
 
-The menus' and weapons' display names (`LUA_MENU_CAMO_SNOW`) are not in these three zones.
+The patch's mp/camotable.csv has 47 rows (the DLC and seasonal camos added), still six columns; see records/bugs.tsv
+B0084 for the code that reads a seventh.
 
 ## How it was checked
 
-- **Whole zones.** english/eng_common_mp.ff (4427 assets: sounds, 6 tables, 132 localized strings) and
+- **Whole zones.** english/eng_common_mp.ff (4427 assets: sounds, 6 tables, 132 localized strings),
+  english/eng_patch_code_post_gfx_mp.ff (8174 assets: 68 tables, 8104 localized strings) and
   english/eng_common_alien_mp.ff (23 assets) walked by `tools/fastfile/loaders.py` equal the game's
   (`tests/fastfile/zone_check.py --full`).
 - **Single assets.** english/eng_code_post_gfx_mp.ff stops at its fonts (type 0x1D, no loader yet), so its tables
@@ -53,4 +57,3 @@ The menus' and weapons' display names (`LUA_MENU_CAMO_SNOW`) are not in these th
 | What | Status |
 |---|---|
 | Fonts (0x1D) and the rest of eng_code_post_gfx_mp.ff | no loader yet |
-| The localized names of weapons, camos and menus | in zones not checked yet |
