@@ -351,7 +351,8 @@ TYPES = {
     0x30: load_structured_data_def_set, 0x33: load_addon_map_ents, 0x35: load_reverb_preset, 0x36: load_lua_file,
     0x3B: load_equip_snd_table, 0x3C: load_vector_field,
 }
-PTRS = {t: iw6ff.asset_ptr(t, (lambda f: lambda s, h: f(s, h, True))(f)) for t, f in TYPES.items()}
+PTRS = {t: iw6ff.asset_ptr(t, (lambda f: lambda s, h: f(s, h, True))(f), 16 if t == 0x3C else 4)
+        for t, f in TYPES.items()}     # Load_VectorFieldPtr (140358870) aligns the header to 16, the others to 4
 
 
 def register(asset_loaders: dict, snd=None, compute_shader=None):

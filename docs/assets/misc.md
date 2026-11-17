@@ -27,6 +27,15 @@ Pointers in these structures come in two forms:
 
 The game finds the equipment table's sounds by name (Load_SndAliasCustom, 1405367A0).
 
+## C++
+
+`src/database/db_misc_load_db.cpp` reconstructs the loaders of Lua files, the sound driver globals, reverb presets,
+vector fields, leaderboards and compute shaders, 14 functions with their Load_*Ptr. Each one matches the exe in
+`tests/differential/test_misc_load.py`. Two details there differ from the neighbouring loaders:
+
+- Load_VectorFieldPtr aligns the header to 16.
+- Load_GfxComputeShaderLoadDef zero-extends the program size, where the material shader loaders sign-extend it.
+
 ## How it was checked
 
 `tests/fastfile/zone_check.py <zone.ff> --full` compares each zone below with the game, loaded in the emulator, and
@@ -53,4 +62,4 @@ These zones were surveyed and have none of the new types except the ones in the 
 | addon_map_ents and vectorfield | transcribed but not exercised against the game: no zone examined carries one |
 | The structured data and equipment table field names beyond those above | read as layouts; no reader yet |
 | Decompiling the HavokScript chunks | out of scope; the chunks are extracted as they are |
-| C++ for these loaders | not reconstructed |
+| C++ for vehicle tracks, structured data, the equipment table and add-on entities | not reconstructed |
