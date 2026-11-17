@@ -22,6 +22,7 @@ import mapfx  # noqa: E402
 import postfx  # noqa: E402
 import sound_check  # noqa: E402
 import font  # noqa: E402
+import menu  # noqa: E402
 import strings  # noqa: E402
 import store_emu  # noqa: E402
 import weapon  # noqa: E402
@@ -48,6 +49,8 @@ TYPES = {
     0x2E: (0x140357B00, 0x144425B50, strings.load_string_table_ptr),
     0x21: (0x1403527E0, 0x144425A48, strings.load_localize_ptr),
     0x1D: (0x14034CF50, 0x1444252D0, font.load_font_ptr),
+    0x1E: (0x140354980, 0x144426EE8, menu.load_menu_list_ptr),
+    0x1F: (0x140361710, 0x144426ED8, menu.load_menu_ptr),
 }
 
 

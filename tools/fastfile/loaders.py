@@ -12,6 +12,7 @@ import image
 import iw6ff
 import mapfx
 import material
+import menu
 import postfx
 import sound
 import strings
@@ -33,6 +34,7 @@ def register_all(loaders=None):
                    fx_ptr=fx.load_effect_ptr)
     clipmap.register(L, xmodel_ptr=xmodel_ptr)
     font.register(L, material_ptr=material.load_material_ptr)
+    menu.register(L, material_ptr=material.load_material_ptr, snd_alias_list_ptr=sound.load_alias_list_ptr)
     fx.register(L, material_ptr=material.load_material_ptr, xmodel_ptr=xmodel_ptr, image_ptr=image.load_gfx_image_ptr)
     postfx.register(L, material_ptr=material.load_material_ptr)
     weapon.register(L, material_ptr=material.load_material_ptr, xmodel_ptr=xmodel_ptr,
