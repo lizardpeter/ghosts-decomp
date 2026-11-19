@@ -15,7 +15,8 @@ Reconstructed so far (Store build, all `matches`):
 | State objects, shaders, input layouts | src/gfx_d3d/r_state.cpp, r_shader.cpp | 26 |
 | Queries and GPU fences | src/gfx_d3d/rb_query.cpp | 6 |
 | Per-frame state cache, draws, render targets (see below) | src/gfx_d3d/r_state.cpp, r_setstate_d3d.cpp, r_state_utils.cpp | 35 |
-| Material passes: shaders, input layouts, constant buffers and uploads, dynamic indices | src/gfx_d3d/r_shade.cpp | 12 |
+| Material passes: shaders, input layouts, constant buffers and uploads, dynamic vertices and indices | src/gfx_d3d/r_shade.cpp | 13 |
+| The 2D/immediate tessellation buffer and its draw | src/gfx_d3d/rb_shade.cpp | 5 |
 
 The per-frame path binds state, uploads constants and issues draws and dispatches. Its state cache is mapped (below);
 the rest (rb_backend's draw loop, worker command lists, the scene passes) is not yet.
@@ -124,11 +125,12 @@ Reconstructed (Store build, all `matches`):
 | Area | Source | Functions |
 |---|---|---|
 | Gamma writes, default device state | src/gfx_d3d/r_setstate_d3d.cpp | 2 |
-| State bits, textures, samplers, streams, draws, viewport, scissor, render targets, clears, R_DrawCall | src/gfx_d3d/r_state.cpp (`per-frame`) | 32 |
-| Material passes and constant uploads | src/gfx_d3d/r_shade.cpp | 12 |
+| State bits, textures, samplers, streams, draws, viewport, scissor, render targets, clears, R_DrawCall | src/gfx_d3d/r_state.cpp (`per-frame`) | 34 |
+| Material passes, constant uploads, dynamic vertices | src/gfx_d3d/r_shade.cpp | 13 |
+| Tessellation buffer (2D and immediate geometry) | src/gfx_d3d/rb_shade.cpp | 5 |
 | Setting up a state for a context | src/gfx_d3d/r_state_utils.cpp | 1 |
 
-Tests: tests/differential/test_r_state_cmdbuf.py and test_r_shade.py, with the context model in
+Tests: tests/differential/test_r_state_cmdbuf.py, test_r_shade.py and test_rb_shade.py, with the context model in
 tests/differential/d3dctx.py.
 
 - **State bits** (R_SetState): a pass's three 32-bit `loadBits` select prebuilt state objects.
@@ -167,6 +169,16 @@ tests/differential/d3dctx.py.
 - **Dynamic indices** (R_SetIndexData): a ring buffer of 16-bit indices, mapped NO_OVERWRITE while it fills and
   DISCARD when it starts over, always on the immediate context (its only caller draws with the back end's own
   state, so that is correct).
+- **The tessellation buffer** (rb_shade.cpp, `tess`): 2D and other immediate geometry (menus, HUD, text, debug
+  lines) is collected on the CPU as 0x20-byte vertices (position, colour, texture coordinate, packed normal) and
+  16-bit indices, up to 5450 vertices and 0x100000 indices, for one material technique at a time.
+  RB_SetTessTechnique switches technique (drawing what was collected first); RB_TessOverflow draws a full buffer and
+  goes on. RB_EndTessSurface sets the viewport if it is dirty (R_GetViewport, then R_UpdateViewport refreshes the
+  render-target-size and clip-to-texture constants), appends the indices to the dynamic index ring and the vertices
+  to the dynamic vertex ring (R_SetVertexData, NO_OVERWRITE while filling, DISCARD at the start) and draws every pass
+  of the technique with DrawIndexed. The Store build adds a variant with its own scissor rectangle. The render
+  command table (RB_RenderCommandTable, 1408AC040) dispatches the front end's 2D commands (stretch pics, quads,
+  text, lines, clears, viewport and scissor) to the functions that fill this buffer.
 - **Clears** (R_ClearScreenInternal): the bound views come back from OMGetRenderTargets (and are released after).
 - **R_DrawCall**: a fresh state for the output's context (the immediate context is locked meanwhile), the callback,
   then everything the callback left bound is unbound. The constant caches start as all ones, so the first upload
@@ -182,6 +194,8 @@ tests/differential/d3dctx.py.
   the input layout (from the vertex declaration) and the render target formats select a pipeline; stencil
   reference, blend constants, viewport and scissor are dynamic state set per command buffer. Because the indices
   come from fixed tables, pipelines can be built ahead for the combinations materials use.
+- The tess buffer maps directly onto a per-frame host-visible vertex and index ring; a flush becomes one indexed
+  draw per pass with the ring offsets. The rings must be per frame in flight, which D3D11's DISCARD did implicitly.
 - Constant uploads by WRITE_DISCARD become writes into a per-frame ring of host-visible memory with a dynamic
   uniform-buffer offset per draw; the three frequencies map naturally onto three dynamic offsets.
 - The texture and sampler dirty ranges become descriptor writes: one descriptor set per stage, updated for the dirty

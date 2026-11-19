@@ -14,6 +14,7 @@
 #include "qcommon/qcommon.h"
 
 extern "C" void *memcpy(void *dst, const void *src, unsigned long long n);
+extern "C" void Com_Memcpy(void *dest, const void *src, const unsigned int count);  // universal/com_shared.cpp
 
 bool R_SetPassShaderPrimArguments(GfxCmdBufContext context, const MaterialShaderArgument *__restrict arg,
                                   unsigned int argCount);
@@ -65,6 +66,22 @@ int R_SetIndexData(GfxCmdBufPrimState *primState, const unsigned short *indices,
 	}
 	gfxBuf.dynamicIndexBuffer->used += indexCount;
 	return baseIndex;
+}
+
+// Store 14065D0B0 (xb3 PDB gfx_d3d/r_shade.cpp:3391): appends vertices to the dynamic vertex buffer (mapped on the
+// immediate context, NO_OVERWRITE unless at its start) and returns their byte offset. The caller makes room.
+int R_SetVertexData(GfxCmdBufState *state, const void *data, int vertexCount, int vertexSize)
+{
+	int bytes = vertexCount * vertexSize;
+	int used = gfxBuf.dynamicVertexBuffer->used;
+	gfxBuf.dynamicVertexBuffer->used = used;  // an alignment that compiles to nothing
+	ID3D11Buffer *buffer = gfxBuf.dynamicVertexBuffer->buffer;
+	void *dst = R_LockVertexBuffer(dx.immediateContext, buffer, used, bytes,
+	                               used != 0 ? D3D11_MAP_WRITE_NO_OVERWRITE : D3D11_MAP_WRITE_DISCARD);
+	Com_Memcpy(dst, data, bytes);
+	R_UnlockVertexBuffer(dx.immediateContext, buffer);
+	gfxBuf.dynamicVertexBuffer->used += bytes;
+	return gfxBuf.dynamicVertexBuffer->used - bytes;
 }
 
 // Store 14065CCE0 (xb3 PDB gfx_d3d/r_shade.cpp:2572)

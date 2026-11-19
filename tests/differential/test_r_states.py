@@ -599,9 +599,9 @@ def _warn_fake(mu):
 
 OCCLUSION_FAKES = {
     "?sub_140675180@@YAXXZ": _recorder("sub_140675180"),
-    "?sub_14068D350@@YAXXZ": _recorder("sub_14068D350"),
+    "?RB_EndTessSurface@@YAXXZ": _recorder("sub_14068D350"),
     "?sub_14068CE80@@YAXPEAUOcclusionQuery@@@Z": lambda mu: _rec("sub_14068CE80", mu.reg_read(UC_X86_REG_RCX)),
-    "?sub_14068D370@@YAXPEAXHH@Z": lambda mu: _rec("sub_14068D370", mu.reg_read(UC_X86_REG_RCX),
+    "?RB_SetTessTechnique@@YAXPEBUMaterial@@W4MaterialTechniqueType@@W4GfxPrimStatsTarget@@@Z": lambda mu: _rec("sub_14068D370", mu.reg_read(UC_X86_REG_RCX),
                                                    mu.reg_read(UC_X86_REG_RDX) & 0xFFFFFFFF,
                                                    mu.reg_read(UC_X86_REG_R8) & 0xFFFFFFFF),
     "?sub_14068CAC0@@YAXPEBM_NMMIM@Z": _sprite_fake,

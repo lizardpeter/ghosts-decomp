@@ -216,15 +216,22 @@ struct GfxCmdBufSourceState
 	unsigned short constVersions[291];            // 0x2900
 	unsigned char unknown2B46[0x2C84 - 0x2B46];   // matrixVersions, ..., cameraView
 	int viewMode;                                 // 0x2C84 (GfxViewMode)
-	unsigned char unknown2C88[0x2CD0 - 0x2C88];   // sceneDef, sceneViewport
+	unsigned char unknown2C88[0x2CC0 - 0x2C88];   // sceneDef
+	GfxViewport sceneViewport;                    // 0x2CC0
 	GfxDepthStencilMode depthStencilMode;         // 0x2CD0
 	bool multiSampled;                            // 0x2CD4 (Store): R_InitCmdBufSourceState's flags bit 1
-	unsigned char unknown2CD5[0x2CFC - 0x2CD5];   // materialTime, ..., renderTargetHeight, scene lights
+	float materialTime;                           // 0x2CD8
+	unsigned int genericMaterialData;             // 0x2CDC
+	int viewportBehavior;                         // 0x2CE0: GfxViewportBehavior
+	int renderTargetWidth;                        // 0x2CE4
+	int renderTargetHeight;                       // 0x2CE8
+	unsigned char unknown2CEC[0x2CFC - 0x2CEC];   // scene lights
 	unsigned char flags;                          // 0x2CFC: bit 0 viewportIsDirty, bit 4 noPrepass (xb3 bitfields)
 	unsigned char unknown2CFD[0x2D10 - 0x2CFD];
 };
 static_assert(sizeof(GfxCmdBufSourceState) == 0x2D10, "GfxCmdBufSourceState (Store build)");
 static_assert(__builtin_offsetof(GfxCmdBufSourceState, input.data) == 0x2698, "GfxCmdBufSourceState");
+static_assert(__builtin_offsetof(GfxCmdBufSourceState, renderTargetHeight) == 0x2CE8, "GfxCmdBufSourceState");
 static_assert(__builtin_offsetof(GfxCmdBufSourceState, input.renderTargetSuites) == 0x267C, "GfxCmdBufSourceState");
 
 #define GFX_SOURCE_VIEWPORT_IS_DIRTY 0x01
@@ -265,6 +272,36 @@ void R_SetHullAndDomainShaders(GfxCmdBufState *state, const MaterialHullShader *
                                const MaterialDomainShader *domainShader);
 bool R_SetStableConstantBuffer(GfxCmdBufState *state, const MaterialPass *pass);
 
+// The back end's tessellation buffer (xb3 PDB materialCommands_t; the server keeps only 16 vertices, the Store build
+// has 5450 vertices and 0x100000 indices, checked against RB_EndTessSurface and the 2D primitives)
+struct GfxVertex  // 0x20
+{
+	float xyzw[4];
+	unsigned int color;
+	float texCoord[2];
+	unsigned int normal;
+};
+
+struct materialCommands_t
+{
+	GfxVertex verts[5450];
+	unsigned short indices[0x100000];
+	int vertDeclType;
+	unsigned int vertexSize;
+	unsigned int indexCount;
+	unsigned int vertexCount;
+	unsigned int firstVertex;
+	unsigned int lastVertex;
+};
+static_assert(__builtin_offsetof(materialCommands_t, indexCount) == 0x22A948, "materialCommands_t (Store build)");
+
+extern materialCommands_t tess;  // 14B8A0780
+
+enum GfxPrimStatsTarget  // xb3 PDB; not used by the Store build's code
+{
+	GFX_PRIM_STATS_HUD = 0x7,
+};
+
 // ---- gfx_d3d/r_state.h inlines ------------------------------------------------------------------------------------
 
 // xb3 PDB: R_HW_SetRenderTarget (gfx_d3d/r_state.h:2204), inlined everywhere in the Store build. Binds one target's
@@ -296,4 +333,35 @@ static inline void R_HW_SetRenderTarget(GfxCmdBufState *state, int newTargetId)
 			return;
 	}
 	ComCall<void>(device, CTX_OMSetRenderTargets, 1u, &color, depthStencil);
+}
+
+// The three vertex streams: stream 0 is (buffer0, offset0, stride0), the other two are cleared; the changed ones (and
+// any between them) are bound in one IASetVertexBuffers call. The Store build inlines this wherever streams are set
+// (R_SetStreamSource and the clears in the xb3 server).
+static inline void R_SetStreams(GfxCmdBufPrimState *prim, ID3D11Buffer *buffer0, unsigned int offset0,
+                                unsigned int stride0)
+{
+	unsigned int first = 3;
+	unsigned int last = 0;
+	for (unsigned int stream = 0; stream < 3; stream++)
+	{
+		ID3D11Buffer *buffer = stream == 0 ? buffer0 : nullptr;
+		unsigned int offset = stream == 0 ? offset0 : 0;
+		unsigned int stride = stream == 0 ? stride0 : 0;
+		if (prim->streamBuffers[stream] != buffer || prim->streamOffsets[stream] != offset ||
+		    prim->streamStrides[stream] != stride)
+		{
+			prim->streamBuffers[stream] = buffer;
+			prim->streamOffsets[stream] = offset;
+			prim->streamStrides[stream] = stride;
+			last = stream;
+			if (first > stream)
+				first = stream;
+		}
+	}
+	if (first != 3)
+		ComCall<void>(prim->device, CTX_IASetVertexBuffers, first, last - first + 1,
+		              (ID3D11Buffer *const *)&prim->streamBuffers[first],
+		              (const unsigned int *)&prim->streamStrides[first],
+		              (const unsigned int *)&prim->streamOffsets[first]);
 }

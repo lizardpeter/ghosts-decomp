@@ -12,6 +12,7 @@
 
 #include "gfx_d3d/com_call.h"
 #include "gfx_d3d/r_dx.h"
+#include "gfx_d3d/r_state.h"
 #include "gfx_d3d/r_state_d3d11.h"
 #include "qcommon/qcommon.h"
 
@@ -177,17 +178,17 @@ static_assert(__builtin_offsetof(OcclusionViewData, localClientNum) == 0x1820, "
 static_assert(__builtin_offsetof(OcclusionViewData, unk_18B4) == 0x18B4, "OcclusionViewData layout");
 
 extern int unk_14A37D598;   // frame counter: its low two bits pick one of an occlusion query's four D3D queries
-extern void *unk_14A34B488; // the material 14068D370 is given for the query sprites
+extern void *unk_14A34B488; // the material RB_SetTessTechnique is given for the query sprites
 extern int unk_14BACB0CC;   // set when something is batched that 14068D350 flushes
 
 void R_WarnOncePerFrame(GfxWarningType warnType, ...);
 void sub_140675180();
 void sub_14068CE80(OcclusionQuery *query);
-void sub_14068D370(void *material, int techType, int unknown);
+void RB_SetTessTechnique(const Material *material, MaterialTechniqueType techType, GfxPrimStatsTarget primStatsTarget);
 void sub_14068CAC0(const float *position, bool isWorldPos, float width, float height, unsigned int color,
                    float depthBias);
 void sub_14068D360(void *input);
-void sub_14068D350();
+void RB_EndTessSurface();
 
 // Store 14068C260 (name unknown): an occlusion query's sample count; -2 while it isn't ready (S_FALSE), -1 when
 // GetData fails
@@ -226,7 +227,7 @@ void sub_14068BE20(OcclusionViewData *view)
 			{
 				float visibility;
 				sub_140675180();
-				sub_14068D370(unk_14A34B488, 2, 5);
+				RB_SetTessTechnique((const Material *)unk_14A34B488, (MaterialTechniqueType)2, (GfxPrimStatsTarget)5);
 				sub_14068CAC0(query->position, query->isWorldPos, 16.0f, 16.0f, 0xFF000000, query->depthBias);
 				if (!query->issued[gpuIndex])
 				{
@@ -303,6 +304,6 @@ void sub_14068BE20(OcclusionViewData *view)
 			}
 		}
 		if (unk_14BACB0CC)
-			sub_14068D350();
+			RB_EndTessSurface();
 	}
 }

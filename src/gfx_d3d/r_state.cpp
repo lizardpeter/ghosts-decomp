@@ -374,6 +374,7 @@ void sub_1401AAB70()
 // immediate context's or a worker's deferred one) and the draw calls. Every setter compares with the cache first.
 // Names and order from the xb3 server, whose code for these is complete; the Store build's differences are noted.
 
+#include "gfx_d3d/r_buffers.h"
 #include "gfx_d3d/r_state.h"
 #include "qcommon/qcommon.h"
 
@@ -596,38 +597,10 @@ void R_UnbindImage(GfxCmdBufState *state, const GfxImage *image)
 	R_FlushTextureState(state);
 }
 
-// The three vertex streams: the changed ones (and any between them) are bound in one IASetVertexBuffers call. The
-// Store build inlines this wherever streams are set.
-static inline void R_SetStreams(GfxCmdBufPrimState *prim, ID3D11Buffer *buffer0, unsigned int stride0)
-{
-	unsigned int first = 3;
-	unsigned int last = 0;
-	for (unsigned int stream = 0; stream < 3; stream++)
-	{
-		ID3D11Buffer *buffer = stream == 0 ? buffer0 : nullptr;
-		unsigned int stride = stream == 0 ? stride0 : 0;
-		if (prim->streamBuffers[stream] != buffer || prim->streamOffsets[stream] != 0 ||
-		    prim->streamStrides[stream] != stride)
-		{
-			prim->streamBuffers[stream] = buffer;
-			prim->streamOffsets[stream] = 0;
-			prim->streamStrides[stream] = stride;
-			last = stream;
-			if (first > stream)
-				first = stream;
-		}
-	}
-	if (first != 3)
-		ComCall<void>(prim->device, CTX_IASetVertexBuffers, first, last - first + 1,
-		              (ID3D11Buffer *const *)&prim->streamBuffers[first],
-		              (const unsigned int *)&prim->streamStrides[first],
-		              (const unsigned int *)&prim->streamOffsets[first]);
-}
-
 // Store 140660A30 (xb3 PDB gfx_d3d/r_state.cpp)
 void R_ClearAllStreamSources(GfxCmdBufPrimState *primState)
 {
-	R_SetStreams(primState, nullptr, 0);
+	R_SetStreams(primState, nullptr, 0, 0);
 }
 
 // Store 140662ED0 (xb3 PDB gfx_d3d/r_state.cpp:2039). primType is a D3D11_PRIMITIVE_TOPOLOGY.
@@ -681,7 +654,7 @@ void R_SetMeshStream(GfxCmdBufState *state, GfxMeshData *mesh, unsigned int stre
 		ComCall<void>(state->prim.device, CTX_IASetIndexBuffer, indexBuffer, (unsigned int)DXGI_FORMAT_R16_UINT_VALUE, 0u);
 	}
 	// GfxMeshData::vb.buffer (the Store build's GfxVertexBufferState is 0x30 bytes) and ::vertSize
-	R_SetStreams(&state->prim, *(ID3D11Buffer **)((char *)mesh + 0x20), *(unsigned int *)((char *)mesh + 0x48));
+	R_SetStreams(&state->prim, *(ID3D11Buffer **)((char *)mesh + 0x20), 0, *(unsigned int *)((char *)mesh + 0x48));
 }
 
 // Store 140663D90 (xb3 PDB gfx_d3d/r_state.cpp:1196): unbinds the index buffer, the vertex streams and every texture
@@ -1056,5 +1029,77 @@ extern const char *unk_14A37D2D8[];  // the code textures' names, for the error 
 void R_TextureFromCodeError(GfxCmdBufSourceState *source, unsigned int codeTexture)
 {
 	Com_Error(ERR_DROP, "Tried to use '%s' when it isn't valid\n", unk_14A37D2D8[codeTexture]);
+}
+// GfxViewportBehavior (xb3 PDB): GFX_USE_VIEWPORT_FOR_VIEW = 0, GFX_USE_VIEWPORT_FULL = 1
+#define GFX_USE_VIEWPORT_FULL 1
+#define VIEW_MODE_2D 2
+
+// Store 140662630 (xb3 PDB gfx_d3d/r_state.cpp:3712): the whole render target or the scene viewport, shrunk about
+// its centre by g_drawConsts.scaleViewport except for 2D
+void R_GetViewport(const GfxCmdBufSourceState *source, GfxViewport *viewport)
+{
+	if (source->viewportBehavior == GFX_USE_VIEWPORT_FULL)
+	{
+		viewport->x = 0;
+		viewport->y = 0;
+		viewport->width = source->renderTargetWidth;
+		viewport->height = source->renderTargetHeight;
+	}
+	else
+	{
+		*viewport = source->sceneViewport;
+	}
+	if (source->viewMode != VIEW_MODE_2D && g_drawConsts.scaleViewport != 1.0f)
+	{
+		viewport->x += (int)((1.0f - g_drawConsts.scaleViewport) * (float)viewport->width * 0.5f);
+		viewport->y += (int)((1.0f - g_drawConsts.scaleViewport) * (float)viewport->height * 0.5f);
+		int width = (int)((float)viewport->width * g_drawConsts.scaleViewport);
+		if (width < 2)
+			width = 1;
+		viewport->width = width;
+		int height = (int)((float)viewport->height * g_drawConsts.scaleViewport);
+		if (height < 2)
+			height = 1;
+		viewport->height = height;
+	}
+}
+
+// The code constants R_UpdateViewport writes (indices into GfxCmdBufInput::consts, Store numbering)
+#define CONST_RENDER_TARGET_SIZE 0x60
+#define CONST_CLIP_SPACE_LOOKUP_SCALE 0x104
+#define CONST_CLIP_SPACE_LOOKUP_OFFSET 0x105
+
+// Store 140664010 (xb3 PDB gfx_d3d/r_state.cpp): the viewport is now set: clears the dirty flag and updates the code
+// constants that depend on it (render target size and its reciprocal; the scale and offset from clip space to the
+// viewport's texture coordinates), bumping their versions so the shader arguments are uploaded again
+void R_UpdateViewport(GfxCmdBufSourceState *source, const GfxViewport *viewport)
+{
+	source->flags &= ~GFX_SOURCE_VIEWPORT_IS_DIRTY;
+	int width = viewport->width;
+	int height = viewport->height;
+	int y = viewport->y;
+	int x = viewport->x;
+	float *size = source->input.consts[CONST_RENDER_TARGET_SIZE];
+	size[0] = (float)source->renderTargetWidth;
+	size[1] = (float)source->renderTargetHeight;
+	float invWidth = 1.0f / (float)source->renderTargetWidth;
+	float invHeight = 1.0f / (float)source->renderTargetHeight;
+	size[2] = invWidth;
+	size[3] = invHeight;
+	source->constVersions[CONST_RENDER_TARGET_SIZE]++;
+	float *scale = source->input.consts[CONST_CLIP_SPACE_LOOKUP_SCALE];
+	float *offset = source->input.consts[CONST_CLIP_SPACE_LOOKUP_OFFSET];
+	scale[2] = 0.0f;
+	scale[3] = 1.0f;
+	float halfHeight = (float)height * invHeight * 0.5f;
+	float halfWidth = (float)width * invWidth * 0.5f;
+	scale[0] = halfWidth;
+	scale[1] = -halfHeight;
+	source->constVersions[CONST_CLIP_SPACE_LOOKUP_SCALE]++;
+	offset[1] = (float)y * invHeight + halfHeight;
+	offset[2] = 0.0f;
+	offset[3] = 0.0f;
+	offset[0] = (float)x * invWidth + halfWidth;
+	source->constVersions[CONST_CLIP_SPACE_LOOKUP_OFFSET]++;
 }
 // ==== END per-frame ====

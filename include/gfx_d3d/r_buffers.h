@@ -108,7 +108,9 @@ static_assert(__builtin_offsetof(GfxBuffers, dynamicVertexBuffer) == 0x1BF9F0, "
 // Only the particle cloud buffers are used here (the servers' layout up to them; Store: g_drawConsts 14B89E280).
 struct GfxDrawConsts
 {
-	unsigned char outdoorLookupMatrixToScaleViewport[0x68];  // outdoorLookupMatrix, identityPlacement, scaleViewport
+	unsigned char outdoorLookupMatrixAndIdentityPlacement[0x60];
+	float scaleViewport;  // R_GetViewport: the 3D viewport is shrunk about its centre by this
+	unsigned char unknown64[4];
 	ID3D11Buffer *particleCloudVertexBuffer;
 	ID3D11Buffer *particleCloudIndexBuffer;
 	ID3D11Buffer *particleCloudSparkVertexBuffer;
