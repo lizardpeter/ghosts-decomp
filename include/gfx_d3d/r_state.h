@@ -194,12 +194,17 @@ struct GfxBackEndData;
 struct GfxCmdBufInput
 {
 	float consts[291][4];
-	unsigned char unknown1230[0x147C - 0x1230];  // codeImages, codeImageSamplerStates, ...
+	const GfxImage *codeImages[65];              // 0x1230: R_GetTextureFromCode
+	unsigned char codeImageSamplerStates[65];    // 0x1438
+	bool noLitPrepass;
+	bool noLightMapPrepass;
 	int renderTargetSuites[3][2];                // per GfxRenderTargetSuiteId: its two targets (R_SetRenderTargetSuite)
 	unsigned char unknown1494[4];
 	const GfxBackEndData *data;
 };
 static_assert(sizeof(GfxCmdBufInput) == 0x14A0, "GfxCmdBufInput (Store build)");
+static_assert(__builtin_offsetof(GfxCmdBufInput, codeImageSamplerStates) == 0x1438, "GfxCmdBufInput (Store build)");
+static_assert(__builtin_offsetof(GfxCmdBufInput, renderTargetSuites) == 0x147C, "GfxCmdBufInput (Store build)");
 
 // GfxCmdBufSourceState, Store layout (0x2D10). Fields named from the xb3 PDB where the Store code reads them the same
 // way.

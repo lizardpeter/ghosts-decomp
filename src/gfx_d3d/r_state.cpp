@@ -375,6 +375,7 @@ void sub_1401AAB70()
 // Names and order from the xb3 server, whose code for these is complete; the Store build's differences are noted.
 
 #include "gfx_d3d/r_state.h"
+#include "qcommon/qcommon.h"
 
 extern "C" void *memset(void *dst, int c, unsigned long long n);
 
@@ -968,5 +969,92 @@ void sub_14065FDD0(GfxCmdBufState *state)
 	// StructureByteStride is left unset (stack garbage in the original too; ignored for a constant buffer)
 	R_CreateBufferInternal(&desc, &initialData, &dx.reactiveTurbulenceEffectorBuffer);
 	ComCall<void>(device, CTX_PSSetConstantBuffers, 10u, 1u, (ID3D11Buffer *const *)&dx.reactiveTurbulenceEffectorBuffer);
+}
+// R_Set{Vertex,Domain,Pixel}{Texture,Sampler} only change the cache and widen the stage's dirty range; the next
+// R_FlushTextureState binds it.
+static inline void R_MarkDirty(int *first, int *last, unsigned int index)
+{
+	*first = (int)index <= *first ? (int)index : *first;
+	*last = *last <= (int)index ? (int)index : *last;
+}
+
+// Store 140663BA0 (xb3 PDB gfx_d3d/r_state.cpp)
+void R_SetVertexTexture(GfxCmdBufState *state, unsigned int index, const GfxImage *image)
+{
+	if (state->vertexTexture[index] != &image->texture)
+	{
+		state->vertexTexture[index] = &image->texture;
+		R_MarkDirty(&state->firstVertexTextureDirty, &state->lastVertexTextureDirty, index);
+	}
+}
+
+// Store 140662AD0 (xb3 PDB gfx_d3d/r_state.cpp)
+void R_SetDomainTexture(GfxCmdBufState *state, unsigned int index, const GfxImage *image)
+{
+	if (state->domainTexture[index] != &image->texture)
+	{
+		state->domainTexture[index] = &image->texture;
+		R_MarkDirty(&state->firstDomainTextureDirty, &state->lastDomainTextureDirty, index);
+	}
+}
+
+// Store 140662E80 (xb3 PDB gfx_d3d/r_state.cpp:3277). An image without a shader view (not loaded) is cached as
+// NULL, so it compares different again on every set and is marked dirty each time.
+void R_SetPixelTexture(GfxCmdBufState *state, unsigned int index, const GfxImage *image)
+{
+	if (state->pixelTexture[index] != &image->texture)
+	{
+		state->pixelTexture[index] = &image->texture;
+		if (!image->texture.shaderView)
+			state->pixelTexture[index] = nullptr;
+		R_MarkDirty(&state->firstPixelTextureDirty, &state->lastPixelTextureDirty, index);
+	}
+}
+
+// Store 140663B60 (xb3 PDB gfx_d3d/r_state.cpp)
+void R_SetVertexSampler(GfxCmdBufState *state, unsigned int index, unsigned char samplerState)
+{
+	if (state->vertexSamplerState[index] != samplerState)
+	{
+		state->vertexSamplerState[index] = samplerState;
+		R_MarkDirty(&state->firstVertexSamplerDirty, &state->lastVertexSamplerDirty, index);
+	}
+}
+
+// Store 140662A90 (xb3 PDB gfx_d3d/r_state.cpp)
+void R_SetDomainSampler(GfxCmdBufState *state, unsigned int index, unsigned char samplerState)
+{
+	if (state->domainSamplerState[index] != samplerState)
+	{
+		state->domainSamplerState[index] = samplerState;
+		R_MarkDirty(&state->firstDomainSamplerDirty, &state->lastDomainSamplerDirty, index);
+	}
+}
+
+// Store 140662E40 (xb3 PDB gfx_d3d/r_state.cpp)
+void R_SetPixelSampler(GfxCmdBufState *state, unsigned int index, unsigned char samplerState)
+{
+	if (state->pixelSamplerState[index] != samplerState)
+	{
+		state->pixelSamplerState[index] = samplerState;
+		R_MarkDirty(&state->firstPixelSamplerDirty, &state->lastPixelSamplerDirty, index);
+	}
+}
+
+// Store 140662610 (xb3 MAP R_GetTextureFromCode, r_state.obj): one of the frame's code textures (shadow maps, the
+// resolved scene, ...) and its sampler state
+const GfxImage *R_GetTextureFromCode(GfxCmdBufSourceState *source, unsigned int codeTexture, unsigned char *samplerState)
+{
+	*samplerState = source->input.codeImageSamplerStates[codeTexture];
+	return source->input.codeImages[codeTexture];
+}
+
+extern const char *unk_14A37D2D8[];  // the code textures' names, for the error below
+
+// Store 140663EE0 (xb3 MAP R_TextureFromCodeError, r_state.obj): a material asks for a code texture the frame has not
+// set
+void R_TextureFromCodeError(GfxCmdBufSourceState *source, unsigned int codeTexture)
+{
+	Com_Error(ERR_DROP, "Tried to use '%s' when it isn't valid\n", unk_14A37D2D8[codeTexture]);
 }
 // ==== END per-frame ====

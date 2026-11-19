@@ -578,6 +578,70 @@ def _turbulence_input(r, seed):
     return {"args": [_state_va()], "setup": setup}
 
 
+# ---- r_state.cpp: the texture and sampler setters, code textures ------------------------------------------------
+
+def _texture_setter_input(base, null_view):
+    def make(r, seed):
+        index = r.choice((0, 127, r.randrange(128)))
+        image = SCRATCH + 0x20 * r.randrange(3)  # one of three GfxTextures allocated first
+
+        def setup(w):
+            rr = random.Random(seed)
+            model = _install(w)
+            images = [w.alloc(struct.pack("<QQQ", 0, _maybe(rr, 0.7 if null_view else 1.0, model.new(VIEW)), 0)
+                              + bytes(8)) for _ in range(3)]
+            assert images[0] == SCRATCH and images[1] == SCRATCH + 0x20
+            s = _new_state(model)
+            _dirty_ranges(s, rr)
+            for i in range(128):
+                if rr.random() < 0.3:
+                    _put(s, base + 8 * i, "Q", rr.choice(images + [0]))
+            if rr.random() < 0.3:
+                _put(s, base + 8 * index, "Q", image)
+            w.write(_state_va(), bytes(s))
+        return {"args": [_state_va(), index, image], "setup": setup}
+    return make
+
+
+def _sampler_setter_input(base):
+    def make(r, seed):
+        index = r.choice((0, 15, r.randrange(16)))
+        value = r.choice((0, 1, r.getrandbits(8)))
+
+        def setup(w):
+            rr = random.Random(seed)
+            model = _install(w)
+            s = _new_state(model)
+            _sampler_bytes(s, rr)
+            _dirty_ranges(s, rr)
+            if rr.random() < 0.3:
+                s[base + index] = value
+            w.write(_state_va(), bytes(s))
+        return {"args": [_state_va(), index, value], "setup": setup}
+    return make
+
+
+def _code_texture_input(r, seed):
+    index = r.randrange(65)
+
+    def setup(w):
+        rr = random.Random(seed)
+        w.write(_source_va() + 0x2430, struct.pack("<65Q", *(rr.getrandbits(64) for _ in range(65))))
+        w.write(_source_va() + 0x2638, bytes(rr.getrandbits(8) for _ in range(65)))
+    return {"args": [_source_va(), index, b"\x5a"], "setup": setup}
+
+
+def _texture_error_fake(mu):
+    _rec("Com_Error", mu.reg_read(UC_X86_REG_RCX) & 0xFFFFFFFF, M["m"].read_cstr(mu.reg_read(UC_X86_REG_RDX)),
+         M["m"].read_cstr(mu.reg_read(UC_X86_REG_R8)))
+
+
+def _texture_error_input(r, seed):
+    def setup(w):
+        M["m"] = w.m
+    return {"args": [_source_va(), r.randrange(65)], "setup": setup}
+
+
 CALLBACK = "?R_InitCmdBufSourceState@@YAXPEAUGfxCmdBufSourceState@@PEBUGfxCmdBufInput@@I@Z"
 
 # ---- cases ----------------------------------------------------------------------------------------------------------
@@ -631,4 +695,13 @@ CASES = [
     _case("?R_InitCmdBufState@@YAXPEAUGfxCmdBufState@@@Z", "void", _inputs(_init_state_input, 26, 30)),
     _case("?sub_14065FDD0@@YAXPEAUGfxCmdBufState@@@Z", "void", _inputs(_turbulence_input, 27, 20),
           fakes={CREATE_BUFFER: _create_buffer_fake}),
+    *[_case(f"?R_Set{stage}Texture@@YAXPEAUGfxCmdBufState@@IPEBUGfxImage@@@Z", "void",
+            _inputs(_texture_setter_input(base, stage == "Pixel"), 50 + i, 120))
+      for i, (stage, base) in enumerate((("Vertex", 0xF60), ("Domain", 0x1360), ("Pixel", 0x1760)))],
+    *[_case(f"?R_Set{stage}Sampler@@YAXPEAUGfxCmdBufState@@IE@Z", "void", _inputs(_sampler_setter_input(base), 53 + i, 120))
+      for i, (stage, base) in enumerate((("Vertex", 0xF30), ("Domain", 0xF40), ("Pixel", 0xF50)))],
+    _case("?R_GetTextureFromCode@@YAPEBUGfxImage@@PEAUGfxCmdBufSourceState@@IPEAE@Z", "int64",
+          _inputs(_code_texture_input, 56, 60)),
+    _case("?R_TextureFromCodeError@@YAXPEAUGfxCmdBufSourceState@@I@Z", "void", _inputs(_texture_error_input, 57, 30),
+          fakes={"?Com_Error@@YAXW4errorParm_t@@PEBDZZ": _texture_error_fake}),
 ]

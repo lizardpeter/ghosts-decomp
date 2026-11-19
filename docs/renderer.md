@@ -14,7 +14,8 @@ Reconstructed so far (Store build, all `matches`):
 | Textures, views, render targets | src/gfx_d3d/r_image.cpp, r_image_load_common.cpp, r_rendertarget.cpp, r_compute.cpp | 42 |
 | State objects, shaders, input layouts | src/gfx_d3d/r_state.cpp, r_shader.cpp | 26 |
 | Queries and GPU fences | src/gfx_d3d/rb_query.cpp | 6 |
-| Per-frame state cache, draws, render targets (see below) | src/gfx_d3d/r_state.cpp, r_setstate_d3d.cpp, r_state_utils.cpp | 27 |
+| Per-frame state cache, draws, render targets (see below) | src/gfx_d3d/r_state.cpp, r_setstate_d3d.cpp, r_state_utils.cpp | 35 |
+| Material passes: shaders, input layouts, constant buffers and uploads, dynamic indices | src/gfx_d3d/r_shade.cpp | 12 |
 
 The per-frame path binds state, uploads constants and issues draws and dispatches. Its state cache is mapped (below);
 the rest (rb_backend's draw loop, worker command lists, the scene passes) is not yet.
@@ -123,10 +124,12 @@ Reconstructed (Store build, all `matches`):
 | Area | Source | Functions |
 |---|---|---|
 | Gamma writes, default device state | src/gfx_d3d/r_setstate_d3d.cpp | 2 |
-| State bits, textures, samplers, streams, draws, viewport, scissor, render targets, clears, R_DrawCall | src/gfx_d3d/r_state.cpp (`per-frame`) | 24 |
+| State bits, textures, samplers, streams, draws, viewport, scissor, render targets, clears, R_DrawCall | src/gfx_d3d/r_state.cpp (`per-frame`) | 32 |
+| Material passes and constant uploads | src/gfx_d3d/r_shade.cpp | 12 |
 | Setting up a state for a context | src/gfx_d3d/r_state_utils.cpp | 1 |
 
-Tests: tests/differential/test_r_state_cmdbuf.py, with the context model in tests/differential/d3dctx.py.
+Tests: tests/differential/test_r_state_cmdbuf.py and test_r_shade.py, with the context model in
+tests/differential/d3dctx.py.
 
 - **State bits** (R_SetState): a pass's three 32-bit `loadBits` select prebuilt state objects.
   - Bits 3-5 of word 0 and 4-5 of word 1 choose the rasterizer state (`dx.rasterizerStates`, 32).
@@ -153,6 +156,17 @@ Tests: tests/differential/test_r_state_cmdbuf.py, with the context model in test
   multisampled and the target has them); R_SetRenderTargetSuite binds a suite's two targets (three suites in the
   Store build, two in the servers) with the depth view of the last one that has one. Both unbind the target images
   from the texture slots first and mark the viewport dirty.
+- **Material passes** (r_shade.cpp): R_SetupPass picks the technique's pass, sets the pixel, hull and domain
+  shaders, the state bits (depth writes forced in the depth hack modes, and for prepass-tagged passes when there is
+  no prepass) and the material's own constant buffers (slot 3 of each stage). R_UpdateVertexDecl binds the input
+  layout for the prim state's vertex type and the vertex shader. Constants come in three frequencies, each in its own
+  constant buffer slot: per primitive (0), per object (1) and stable (2), bound to VS and PS, and to HS and DS for
+  tessellated passes. Their values are built on the CPU in shadow arrays (R_SetPassShader*Arguments, not yet
+  reconstructed); when the buffer or any value changed, the buffer is mapped with WRITE_DISCARD and the shadow
+  copied in. The Store build adds a hull shader resource (slot 1) for tessellated passes with custom flag 0x2000.
+- **Dynamic indices** (R_SetIndexData): a ring buffer of 16-bit indices, mapped NO_OVERWRITE while it fills and
+  DISCARD when it starts over, always on the immediate context (its only caller draws with the back end's own
+  state, so that is correct).
 - **Clears** (R_ClearScreenInternal): the bound views come back from OMGetRenderTargets (and are released after).
 - **R_DrawCall**: a fresh state for the output's context (the immediate context is locked meanwhile), the callback,
   then everything the callback left bound is unbound. The constant caches start as all ones, so the first upload
@@ -168,6 +182,8 @@ Tests: tests/differential/test_r_state_cmdbuf.py, with the context model in test
   the input layout (from the vertex declaration) and the render target formats select a pipeline; stencil
   reference, blend constants, viewport and scissor are dynamic state set per command buffer. Because the indices
   come from fixed tables, pipelines can be built ahead for the combinations materials use.
+- Constant uploads by WRITE_DISCARD become writes into a per-frame ring of host-visible memory with a dynamic
+  uniform-buffer offset per draw; the three frequencies map naturally onto three dynamic offsets.
 - The texture and sampler dirty ranges become descriptor writes: one descriptor set per stage, updated for the dirty
   range and bound before the draw (or push descriptors).
 - Gamma writes become a choice between two image views of the target, so the framebuffer (or dynamic rendering
