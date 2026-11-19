@@ -155,21 +155,30 @@ enum
 	MAPTYPE_ARRAY = 6,  // Store build: 2D texture array (numElements slices)
 };
 
-// GfxImage::semantic (TextureSemantic, the servers' PDBs)
-enum
+// GfxImage::semantic (TextureSemantic, the servers' PDBs). The same values as MaterialTextureSemantic in
+// gfx_d3d/r_material.h; whichever header comes first defines it.
+#ifndef IW6_MATERIAL_TEXTURE_SEMANTIC
+#define IW6_MATERIAL_TEXTURE_SEMANTIC
+enum MaterialTextureSemantic
 {
-	TS_2D = 0,
-	TS_FUNCTION = 1,
-	TS_COLOR_MAP = 2,
-	TS_DETAIL_MAP = 3,
-	TS_NORMAL_MAP = 5,
-	TS_SPECULAR_MAP = 8,
-	TS_OCEANFLOW_DISPLACEMENT_MAP = 10,
-	TS_WATER_MAP = 11,
-	TS_OCEAN_DISPLACEMENT_MAP = 12,
-	TS_DISPLACEMENT_MAP = 13,
-	TS_PARALLAX_MAP = 14,
+	TS_2D = 0x0,
+	TS_FUNCTION = 0x1,
+	TS_COLOR_MAP = 0x2,
+	TS_DETAIL_MAP = 0x3,
+	TS_UNUSED_2 = 0x4,
+	TS_NORMAL_MAP = 0x5,
+	TS_UNUSED_3 = 0x6,
+	TS_UNUSED_4 = 0x7,
+	TS_SPECULAR_MAP = 0x8,
+	TS_UNUSED_5 = 0x9,
+	TS_OCEANFLOW_DISPLACEMENT_MAP = 0xa,
+	TS_WATER_MAP = 0xb,
+	TS_OCEAN_DISPLACEMENT_MAP = 0xc,
+	TS_DISPLACEMENT_MAP = 0xd,
+	TS_PARALLAX_MAP = 0xe,
+	TS_COUNT = 0xf,
 };
+#endif
 
 // GfxImage::flags bits the Store image code tests
 #define IMG_FLAG_NOPICMIP 0x02     // Image_SetStreamPicmip leaves every stream level (load screens, UI)

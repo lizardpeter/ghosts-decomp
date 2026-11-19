@@ -14,9 +14,10 @@ Reconstructed so far (Store build, all `matches`):
 | Textures, views, render targets | src/gfx_d3d/r_image.cpp, r_image_load_common.cpp, r_rendertarget.cpp, r_compute.cpp | 42 |
 | State objects, shaders, input layouts | src/gfx_d3d/r_state.cpp, r_shader.cpp | 26 |
 | Queries and GPU fences | src/gfx_d3d/rb_query.cpp | 6 |
+| Per-frame state cache, draws, render targets (see below) | src/gfx_d3d/r_state.cpp, r_setstate_d3d.cpp, r_state_utils.cpp | 27 |
 
-Not mapped yet: the per-frame path, which binds state, uploads constants and issues draws and dispatches (rb_backend,
-the state cache, the draw wrappers). It is the next step, and the biggest.
+The per-frame path binds state, uploads constants and issues draws and dispatches. Its state cache is mapped (below);
+the rest (rb_backend's draw loop, worker command lists, the scene passes) is not yet.
 
 ## The device
 
@@ -109,6 +110,72 @@ Every buffer goes through `ID3D11Device::CreateBuffer`:
   a pipeline key is (shaders, blend index, depth index, rasterizer index, input layout, render target formats),
   built and cached on first use.
 
+## The per-frame path: the state cache
+
+Every draw goes through one `GfxCmdBufState` (gfx_d3d/r_state.h): the renderer's copy of what is bound to one
+context. The back end's own state is the global `gfxCmdBufState` on the immediate context; R_DrawCall builds one on
+the stack for each callback, on whichever context the caller passes (a worker's deferred context or the immediate
+one). Every setter compares with the cache and calls Direct3D only on a change. Its partner `GfxCmdBufSourceState`
+holds what the shaders read: the code constants, matrices and the frame's inputs.
+
+Reconstructed (Store build, all `matches`):
+
+| Area | Source | Functions |
+|---|---|---|
+| Gamma writes, default device state | src/gfx_d3d/r_setstate_d3d.cpp | 2 |
+| State bits, textures, samplers, streams, draws, viewport, scissor, render targets, clears, R_DrawCall | src/gfx_d3d/r_state.cpp (`per-frame`) | 24 |
+| Setting up a state for a context | src/gfx_d3d/r_state_utils.cpp | 1 |
+
+Tests: tests/differential/test_r_state_cmdbuf.py, with the context model in tests/differential/d3dctx.py.
+
+- **State bits** (R_SetState): a pass's three 32-bit `loadBits` select prebuilt state objects.
+  - Bits 3-5 of word 0 and 4-5 of word 1 choose the rasterizer state (`dx.rasterizerStates`, 32).
+  - Word 1 and bits 8-15 of word 0 choose the depth-stencil state, per depth-stencil mode, from the zone's table;
+    bits 8-15 are also the stencil reference.
+  - Word 2 chooses the blend state from the zone's table, with the cache's blend factor and sample mask.
+  - Bit 6 of word 0 is gamma writes. D3D11 has no such render state: R_HW_SetGammaWriteEnable rebinds the target
+    through its sRGB view. Float formats (R16G16B16A16_FLOAT, R11G11B10_FLOAT, R16_FLOAT) have none, so it is
+    ignored for them, and with a suite (two targets) bound it is always off.
+  - The depth hack modes force depth writes by moving to the next three entries of the per-mode table.
+- **Samplers and textures**: R_Set{Vertex,Domain,Pixel}{Texture,Sampler} only write the cache and widen a dirty
+  range [first, last] per stage. R_FlushTextureState binds each dirty range in one call (slots in between that did
+  not change are sent again). The xb3 server only resets the texture ranges; the Store build binds them. Hull shaders
+  get no samplers or textures from here. R_UnbindImage unbinds an image from every stage right away, before it
+  becomes a render target.
+- **Streams and draws**: three vertex streams, bound together as the range of streams that changed. Index counts
+  come from the topology: lines ×2, triangles and 3-point patches ×3, 16-point patches ×16, anything else 0.
+  DrawIndexed and DrawIndexedInstanced are the only draw calls here; the index format is always R16_UINT.
+- **Viewport and scissor**: every rasterizer state has scissoring on, so "no scissor" is an 8192 × 8192 rectangle.
+  The viewport's depth range is the cache's: scene 0..0.984375, view model 0.984375..1, force near 1..1, force far
+  0..0, full 0..1. With reversed depth (MinDepth is the far end) the gun is drawn in front of the world by giving it
+  the top 1.6% of the depth range.
+- **Render targets**: R_SetRenderTarget binds one target (its multisampled surfaces when the source state is
+  multisampled and the target has them); R_SetRenderTargetSuite binds a suite's two targets (three suites in the
+  Store build, two in the servers) with the depth view of the last one that has one. Both unbind the target images
+  from the texture slots first and mark the viewport dirty.
+- **Clears** (R_ClearScreenInternal): the bound views come back from OMGetRenderTargets (and are released after).
+- **R_DrawCall**: a fresh state for the output's context (the immediate context is locked meanwhile), the callback,
+  then everything the callback left bound is unbound. The constant caches start as all ones, so the first upload
+  always happens.
+- **R_InitCmdBufState**: clears the cache and puts the context in a matching state: default states, triangle lists,
+  no shaders, every sampler `dx.samplerStates[1]`, static-model constant buffers in vertex slots 6 and 7. The cached
+  pixel shader, input layout and streams start at values no real one has, so their first set always reaches the
+  context. It caches a full-screen scissor and an empty viewport without setting them (B0085).
+
+**In Vulkan:**
+
+- The cache maps onto a pipeline key plus dynamic state. Rasterizer, depth-stencil and blend indices, the shaders,
+  the input layout (from the vertex declaration) and the render target formats select a pipeline; stencil
+  reference, blend constants, viewport and scissor are dynamic state set per command buffer. Because the indices
+  come from fixed tables, pipelines can be built ahead for the combinations materials use.
+- The texture and sampler dirty ranges become descriptor writes: one descriptor set per stage, updated for the dirty
+  range and bound before the draw (or push descriptors).
+- Gamma writes become a choice between two image views of the target, so the framebuffer (or dynamic rendering
+  attachment) changes; the float-format exception carries over.
+- Each R_DrawCall maps to a secondary command buffer (or a section of one) with its own state; the unbind-everything
+  at the end has no cost in Vulkan and can go.
+- B0085 matters there: viewport and scissor must be set explicitly in every command buffer.
+
 ## Queries
 
 - **Occlusion:** 32 × 4 OCCLUSION queries, plus one more. The per-frame update brackets a 16×16 sprite with
@@ -118,7 +185,7 @@ Every buffer goes through `ID3D11Device::CreateBuffer`:
 
 ## Bugs found here
 
-B0032–B0045 in records/bugs.tsv. The ones that matter most:
+B0032–B0045 and B0085 in records/bugs.tsv. The ones that matter most:
 
 - Load_Texture's 4096-entry stack array has no bounds check (security).
 - R_EnumDisplayModes overflows `displayModes[256]` on systems with more modes.

@@ -472,6 +472,9 @@ enum MaterialShaderType
 };
 
 // MaterialTextureDef::semantic (server PDB). TS_WATER_MAP is the one the loader treats specially: its u is a water_t.
+// Also in gfx_d3d/r_image.h (GfxImage::semantic): whichever header comes first defines it.
+#ifndef IW6_MATERIAL_TEXTURE_SEMANTIC
+#define IW6_MATERIAL_TEXTURE_SEMANTIC
 enum MaterialTextureSemantic
 {
 	TS_2D = 0x0,
@@ -491,6 +494,7 @@ enum MaterialTextureSemantic
 	TS_PARALLAX_MAP = 0xe,
 	TS_COUNT = 0xf,
 };
+#endif
 
 // Material::cameraRegion (server PDB GfxCameraRegionType; CAMERA_REGION_NONE == 8 is tested by the Store build's
 // R_AddBModelSurfacesCamera counterpart, 140651710)

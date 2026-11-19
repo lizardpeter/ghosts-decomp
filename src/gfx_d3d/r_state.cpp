@@ -368,3 +368,605 @@ void sub_1401AAB70()
 	}
 }
 // ==== END states ====
+
+// ==== BEGIN per-frame ====
+// The per-frame state cache (xb3 PDB gfx_d3d/r_state.cpp): what is bound to one context (GfxCmdBufState, the
+// immediate context's or a worker's deferred one) and the draw calls. Every setter compares with the cache first.
+// Names and order from the xb3 server, whose code for these is complete; the Store build's differences are noted.
+
+#include "gfx_d3d/r_state.h"
+
+extern "C" void *memset(void *dst, int c, unsigned long long n);
+
+struct GfxSceneDef;
+struct GfxViewParms;
+
+// xb3 PDB: the output of R_DrawCall's caller (a worker's or the immediate command buffer); only the context is used
+struct GfxDrawCallOutput
+{
+	ID3D11DeviceContext *device;
+};
+
+void R_BeginView(GfxCmdBufSourceState *source, const GfxSceneDef *sceneDef, const GfxViewParms *viewParms);
+HRESULT R_CreateBufferInternal(const D3D11_BUFFER_DESC *pDesc, const D3D11_SUBRESOURCE_DATA *pInitialData,
+                               ID3D11Buffer **ppBuffer);
+
+// The cache's "nothing dirty" values: first > last
+#define SAMPLER_DIRTY_NONE 16
+#define TEXTURE_DIRTY_NONE 128
+
+// Store 140663410 (xb3 PDB gfx_d3d/r_state.cpp:2527). stateBits are the pass's GfxStateBits::loadBits with the
+// caller's changes; refStateBits->rasterizerState, depthStencilState[mode] and blendState index the state object
+// tables built at load (gfx_d3d/r_state.cpp, `states` above). Bit 0 of stateBits[1] forces depth writes for the
+// first three depth-stencil modes (the next three entries of the table, GFX_DEPTH_STENCIL_FIRST_FORCE_DEPTH); bits 8
+// to 15 of stateBits[0] are the stencil reference.
+void R_SetState(GfxCmdBufContext context, const unsigned int *const stateBits, const GfxStateBits *refStateBits)
+{
+	GfxCmdBufState *state = context.state;
+	unsigned int blendBits = stateBits[2];
+	unsigned int oldBlendBits = state->refStateBits[2];
+	unsigned int changed1 = stateBits[1] ^ state->refStateBits[1];
+	unsigned int changed0 = state->refStateBits[0] ^ stateBits[0];
+	if (changed0 & 0x40)
+		R_HW_SetGammaWriteEnable(state, stateBits[0]);
+	if ((changed0 & 0x38) || (changed1 & 0x30))
+	{
+		ID3D11RasterizerState *rasterizerState = dx.rasterizerStates[refStateBits->rasterizerState & 0x1F];
+		ComCall<void>(state->prim.device, CTX_RSSetState, rasterizerState);
+		state->deviceState.rasterizerState = rasterizerState;
+	}
+	if ((changed1 & 0xFFFFFFCF) || (changed0 & 0xFF00) || state->depthStencilMode != context.source->depthStencilMode)
+	{
+		int mode;
+		if (!(stateBits[1] & 1) || (int)context.source->depthStencilMode > 2)
+			mode = context.source->depthStencilMode;
+		else
+			mode = context.source->depthStencilMode + GFX_DEPTH_STENCIL_MODE_FORCE_DEPTH_WRITE;
+		state->depthStencilMode = (GfxDepthStencilMode)mode;
+		ID3D11DepthStencilState *depthStencilState =
+			dx.depthStencilStateTables[refStateBits->zone][refStateBits->depthStencilState[mode]].depthStencilState;
+		if ((changed0 & 0xFF00) || depthStencilState != state->deviceState.depthStencilState)
+		{
+			ComCall<void>(state->prim.device, CTX_OMSetDepthStencilState, depthStencilState,
+			              (unsigned int)((const unsigned char *)stateBits)[1]);
+			state->deviceState.depthStencilState = depthStencilState;
+		}
+	}
+	if ((blendBits ^ oldBlendBits) & 0xF7FF7FF)
+	{
+		ID3D11BlendState *blendState = dx.blendStateTables[refStateBits->zone][refStateBits->blendState].blendState;
+		ComCall<void>(state->prim.device, CTX_OMSetBlendState, blendState,
+		              (const float *)state->deviceState.blendFactor, state->deviceState.sampleMask);
+		state->deviceState.blendState = blendState;
+	}
+	state->refStateBits[0] = stateBits[0];
+	state->refStateBits[1] = stateBits[1];
+	state->refStateBits[2] = stateBits[2];
+}
+
+// Store 140662A00 (xb3 PDB gfx_d3d/r_state.cpp:4506): unbinds the rasterizer, blend and depth-stencil states (the
+// device defaults) and sets gamma writes from stateBits[0]
+void R_SetCompleteState(GfxCmdBufState *state, const unsigned int *const stateBits)
+{
+	ComCall<void>(state->prim.device, CTX_RSSetState, (ID3D11RasterizerState *)nullptr);
+	state->deviceState.rasterizerState = nullptr;
+	ComCall<void>(state->prim.device, CTX_OMSetBlendState, (ID3D11BlendState *)nullptr,
+	              (const float *)state->deviceState.blendFactor, state->deviceState.sampleMask);
+	state->deviceState.blendState = nullptr;
+	ComCall<void>(state->prim.device, CTX_OMSetDepthStencilState, (ID3D11DepthStencilState *)nullptr,
+	              (unsigned int)((const unsigned char *)stateBits)[1]);
+	state->deviceState.depthStencilState = nullptr;
+	R_HW_SetGammaWriteEnable(state, stateBits[0]);
+}
+
+// The three stages' sampler and texture slots are flushed the same way: the dirty range [first, last] is bound in one
+// call (slots in between that did not change are sent again) and the range is reset.
+template <unsigned int SetSamplers>
+static inline void R_FlushSamplers(GfxCmdBufState *state, const unsigned char *samplerState, int *first, int *last)
+{
+	unsigned int start = (unsigned int)*first;
+	if ((int)start <= *last)
+	{
+		ID3D11SamplerState *samplers[16];
+		ID3D11DeviceContext *device = state->prim.device;
+		unsigned int count = *last - start + 1;
+		for (unsigned int i = 0; i < count; i++)
+			samplers[i] = dx.samplerStates[samplerState[start + i]];
+		ComCall<void>(device, SetSamplers, start, count, (ID3D11SamplerState *const *)samplers);
+		*first = SAMPLER_DIRTY_NONE;
+		*last = -1;
+	}
+}
+
+template <unsigned int SetShaderResources>
+static inline void R_FlushTextures(GfxCmdBufState *state, const GfxTexture *const *textures, int *first, int *last)
+{
+	unsigned int start = (unsigned int)*first;
+	if ((int)start <= *last)
+	{
+		ID3D11ShaderResourceView *views[128];
+		ID3D11DeviceContext *device = state->prim.device;
+		unsigned int count = *last - start + 1;
+		for (unsigned int i = 0; i < count; i++)
+		{
+			const GfxTexture *texture = textures[start + i];
+			views[i] = texture ? texture->shaderView : nullptr;
+		}
+		ComCall<void>(device, SetShaderResources, (unsigned long long)start, count,
+		              (ID3D11ShaderResourceView *const *)views);
+		*first = TEXTURE_DIRTY_NONE;
+		*last = -1;
+	}
+}
+
+// Store 140661B00 (xb3 PDB gfx_d3d/r_state.cpp:3034). The xb3 server only resets the texture ranges; the Store build
+// binds them (VS, DS and PS shader resources). Hull shaders get no samplers or textures here.
+void R_FlushTextureState(GfxCmdBufState *state)
+{
+	R_FlushSamplers<CTX_VSSetSamplers>(state, state->vertexSamplerState, &state->firstVertexSamplerDirty,
+	                                   &state->lastVertexSamplerDirty);
+	R_FlushSamplers<CTX_DSSetSamplers>(state, state->domainSamplerState, &state->firstDomainSamplerDirty,
+	                                   &state->lastDomainSamplerDirty);
+	R_FlushSamplers<CTX_PSSetSamplers>(state, state->pixelSamplerState, &state->firstPixelSamplerDirty,
+	                                   &state->lastPixelSamplerDirty);
+	R_FlushTextures<CTX_VSSetShaderResources>(state, state->vertexTexture, &state->firstVertexTextureDirty,
+	                                          &state->lastVertexTextureDirty);
+	R_FlushTextures<CTX_DSSetShaderResources>(state, state->domainTexture, &state->firstDomainTextureDirty,
+	                                          &state->lastDomainTextureDirty);
+	R_FlushTextures<CTX_PSSetShaderResources>(state, state->pixelTexture, &state->firstPixelTextureDirty,
+	                                          &state->lastPixelTextureDirty);
+}
+
+// Store 140660EE0 (xb3 PDB gfx_d3d/r_state.cpp:3127): unbinds one domain shader texture right away
+void R_ClearDomainTexture(GfxCmdBufState *state, unsigned int index)
+{
+	if (state->domainTexture[index])
+	{
+		state->domainTexture[index] = nullptr;
+		ID3D11ShaderResourceView *view = nullptr;
+		ComCall<void>(state->prim.device, CTX_DSSetShaderResources, index, 1u, &view);
+	}
+}
+
+// R_ClearAll*Textures: every bound slot is cleared and marked dirty; R_FlushTextureState unbinds them
+static inline void R_ClearAllTextures(const GfxTexture **textures, int *first, int *last)
+{
+	for (int index = 0; index < 128; index++)
+	{
+		if (textures[index])
+		{
+			textures[index] = nullptr;
+			*first = index <= *first ? index : *first;
+			*last = *last <= index ? index : *last;
+		}
+	}
+}
+
+// Store 140660B00 (xb3 PDB gfx_d3d/r_state.cpp)
+void R_ClearAllVertexTextures(GfxCmdBufState *state)
+{
+	R_ClearAllTextures(state->vertexTexture, &state->firstVertexTextureDirty, &state->lastVertexTextureDirty);
+}
+
+// Store 140660270 (xb3 PDB gfx_d3d/r_state.cpp)
+void R_ClearAllDomainTextures(GfxCmdBufState *state)
+{
+	R_ClearAllTextures(state->domainTexture, &state->firstDomainTextureDirty, &state->lastDomainTextureDirty);
+}
+
+// Store 140660650 (xb3 PDB gfx_d3d/r_state.cpp)
+void R_ClearAllPixelTextures(GfxCmdBufState *state)
+{
+	R_ClearAllTextures(state->pixelTexture, &state->firstPixelTextureDirty, &state->lastPixelTextureDirty);
+}
+
+// Store 140663F00 (xb3 PDB gfx_d3d/r_state.cpp): unbinds an image from every texture slot it is bound to (before it
+// becomes a render target), right away, slot by slot
+void R_UnbindImage(GfxCmdBufState *state, const GfxImage *image)
+{
+	const GfxTexture *texture = &image->texture;
+	for (unsigned int index = 0; index < 128; index++)
+	{
+		if (state->vertexTexture[index] == texture && state->vertexTexture[index])
+		{
+			state->vertexTexture[index] = nullptr;
+			ID3D11ShaderResourceView *view = nullptr;
+			ComCall<void>(state->prim.device, CTX_VSSetShaderResources, index, 1u, &view);
+		}
+	}
+	for (unsigned int index = 0; index < 128; index++)
+	{
+		if (state->domainTexture[index] == texture && state->domainTexture[index])
+		{
+			state->domainTexture[index] = nullptr;
+			ID3D11ShaderResourceView *view = nullptr;
+			ComCall<void>(state->prim.device, CTX_DSSetShaderResources, index, 1u, &view);
+		}
+	}
+	for (unsigned int index = 0; index < 128; index++)
+	{
+		if (state->pixelTexture[index] == texture && state->pixelTexture[index])
+		{
+			state->pixelTexture[index] = nullptr;
+			ID3D11ShaderResourceView *view = nullptr;
+			ComCall<void>(state->prim.device, CTX_PSSetShaderResources, index, 1u, &view);
+		}
+	}
+	R_FlushTextureState(state);
+}
+
+// The three vertex streams: the changed ones (and any between them) are bound in one IASetVertexBuffers call. The
+// Store build inlines this wherever streams are set.
+static inline void R_SetStreams(GfxCmdBufPrimState *prim, ID3D11Buffer *buffer0, unsigned int stride0)
+{
+	unsigned int first = 3;
+	unsigned int last = 0;
+	for (unsigned int stream = 0; stream < 3; stream++)
+	{
+		ID3D11Buffer *buffer = stream == 0 ? buffer0 : nullptr;
+		unsigned int stride = stream == 0 ? stride0 : 0;
+		if (prim->streamBuffers[stream] != buffer || prim->streamOffsets[stream] != 0 ||
+		    prim->streamStrides[stream] != stride)
+		{
+			prim->streamBuffers[stream] = buffer;
+			prim->streamOffsets[stream] = 0;
+			prim->streamStrides[stream] = stride;
+			last = stream;
+			if (first > stream)
+				first = stream;
+		}
+	}
+	if (first != 3)
+		ComCall<void>(prim->device, CTX_IASetVertexBuffers, first, last - first + 1,
+		              (ID3D11Buffer *const *)&prim->streamBuffers[first],
+		              (const unsigned int *)&prim->streamStrides[first],
+		              (const unsigned int *)&prim->streamOffsets[first]);
+}
+
+// Store 140660A30 (xb3 PDB gfx_d3d/r_state.cpp)
+void R_ClearAllStreamSources(GfxCmdBufPrimState *primState)
+{
+	R_SetStreams(primState, nullptr, 0);
+}
+
+// Store 140662ED0 (xb3 PDB gfx_d3d/r_state.cpp:2039). primType is a D3D11_PRIMITIVE_TOPOLOGY.
+void R_SetPrimType(GfxCmdBufPrimState *primState, unsigned int primType)
+{
+	if (primState->primType != primType)
+	{
+		primState->primType = primType;
+		ComCall<void>(primState->device, CTX_IASetPrimitiveTopology, primType);
+	}
+}
+
+// Indices per primitive for the topologies the game draws: line list, triangle list, 3-point patch list, 16-point
+// patch list (others draw nothing)
+static inline int R_IndexCountForPrims(unsigned int primType, int primCount)
+{
+	if (primType == 2)
+		return primCount * 2;
+	if (primType == 4 || primType == 0x23)
+		return primCount * 3;
+	if (primType == 0x30)
+		return primCount * 16;
+	return 0;
+}
+
+// Store 1406616D0 (xb3 PDB gfx_d3d/r_state.cpp:2108)
+void R_DrawIndexedPrimitive(GfxCmdBufPrimState *primState, const GfxDrawPrimArgs *args)
+{
+	int indexCount = R_IndexCountForPrims(primState->primType, args->primCount);
+	ComCall<void>(primState->device, CTX_DrawIndexed, (unsigned int)indexCount, (unsigned int)args->baseIndex,
+	              args->vertIndexBase);
+}
+
+// Store 140661720 (xb3 PDB gfx_d3d/r_state.cpp:2279)
+void R_DrawInstancedIndexedPrimitive(GfxCmdBufPrimState *primState, const GfxDrawPrimArgs *args,
+                                     unsigned int instanceCount)
+{
+	int indexCount = R_IndexCountForPrims(primState->primType, args->primCount);
+	ComCall<void>(primState->device, CTX_DrawIndexedInstanced, (unsigned int)indexCount, instanceCount,
+	              (unsigned int)args->baseIndex, args->vertIndexBase, 0u);
+}
+
+// Store 140662CD0 (xb3 PDB gfx_d3d/r_state.cpp): a static mesh's index buffer and its vertex buffer as stream 0.
+// `streamIndex` (xb3's third argument) is not used by the Store build.
+void R_SetMeshStream(GfxCmdBufState *state, GfxMeshData *mesh, unsigned int streamIndex)
+{
+	ID3D11Buffer *indexBuffer = *(ID3D11Buffer **)((char *)mesh + 0x08);  // GfxMeshData::ib
+	if (state->prim.indexBuffer != indexBuffer)
+	{
+		state->prim.indexBuffer = indexBuffer;
+		ComCall<void>(state->prim.device, CTX_IASetIndexBuffer, indexBuffer, (unsigned int)DXGI_FORMAT_R16_UINT_VALUE, 0u);
+	}
+	// GfxMeshData::vb.buffer (the Store build's GfxVertexBufferState is 0x30 bytes) and ::vertSize
+	R_SetStreams(&state->prim, *(ID3D11Buffer **)((char *)mesh + 0x20), *(unsigned int *)((char *)mesh + 0x48));
+}
+
+// Store 140663D90 (xb3 PDB gfx_d3d/r_state.cpp:1196): unbinds the index buffer, the vertex streams and every texture
+void R_ShutdownCmdBufState(GfxCmdBufState *state)
+{
+	if (state->prim.indexBuffer)
+	{
+		state->prim.indexBuffer = nullptr;
+		ComCall<void>(state->prim.device, CTX_IASetIndexBuffer, (ID3D11Buffer *)nullptr,
+		              (unsigned int)DXGI_FORMAT_R16_UINT_VALUE, 0u);
+	}
+	R_ClearAllStreamSources(&state->prim);
+	R_ClearAllVertexTextures(state);
+	R_ClearAllDomainTextures(state);
+	R_ClearAllPixelTextures(state);
+	R_FlushTextureState(state);
+}
+
+// Store 1406600C0 (xb3 PDB gfx_d3d/r_state.cpp): the viewport's depth range for the scene, the view model (the gun,
+// drawn in front: with reversed depth it gets 0.984..1), everything at the near or far plane, or the full range, and
+// sets the viewport again
+void R_ChangeDepthRange(GfxCmdBufState *state, GfxDepthRangeType depthRangeType)
+{
+	state->depthRangeType = depthRangeType;
+	float minDepth;
+	float maxDepth;
+	switch (depthRangeType)
+	{
+	case GFX_DEPTH_RANGE_FULL:
+		minDepth = 0.0f;
+		maxDepth = 1.0f;
+		break;
+	case GFX_DEPTH_RANGE_SCENE:
+		maxDepth = 0.984375f;
+		minDepth = 0.0f;
+		break;
+	case GFX_DEPTH_RANGE_VIEWMODEL:
+		minDepth = 0.984375f;
+		maxDepth = 1.0f;
+		break;
+	case GFX_DEPTH_RANGE_FORCE_NEAR:
+		minDepth = 1.0f;
+		maxDepth = 1.0f;
+		break;
+	case GFX_DEPTH_RANGE_FORCE_FAR:
+		minDepth = 0.0f;
+		maxDepth = 0.0f;
+		break;
+	default:
+		minDepth = 0.0f;
+		maxDepth = 1.0f;
+		break;
+	}
+	state->depthRangeNear = maxDepth;
+	state->depthRangeFar = minDepth;
+	D3D11_VIEWPORT viewport;
+	viewport.TopLeftX = (float)state->viewport.x;
+	viewport.TopLeftY = (float)state->viewport.y;
+	viewport.Width = (float)state->viewport.width;
+	viewport.Height = (float)state->viewport.height;
+	viewport.MinDepth = minDepth;
+	viewport.MaxDepth = maxDepth;
+	ComCall<void>(state->prim.device, CTX_RSSetViewports, 1u, (const D3D11_VIEWPORT *)&viewport);
+}
+
+// The full-screen scissor rectangle (8192 x 8192), set when scissoring is "off": the rasterizer states all have
+// ScissorEnable on.
+static inline void R_HW_DisableScissorInternal(GfxCmdBufState *state)
+{
+	if (state->scissorX != 0 || state->scissorY != 0 || state->scissorW != 0x2000 || state->scissorH != 0x2000)
+	{
+		D3D11_RECT rect;
+		rect.left = 0;
+		rect.top = 0;
+		rect.right = 0x2000;
+		rect.bottom = 0x2000;
+		ComCall<void>(state->prim.device, CTX_RSSetScissorRects, 1u, (const D3D11_RECT *)&rect);
+		state->scissorW = 0x2000;
+		state->scissorX = 0;
+		state->scissorY = 0;
+		state->scissorH = 0x2000;
+	}
+}
+
+// Store 140662780 (xb3 PDB gfx_d3d/r_state.cpp: R_HW_DisableScissor2D)
+void R_HW_DisableScissor2D(GfxCmdBufState *state)
+{
+	R_HW_DisableScissorInternal(state);
+}
+
+// Store 140662700 (name unknown): the same code as R_HW_DisableScissor2D, not folded with it
+void sub_140662700(GfxCmdBufState *state)
+{
+	R_HW_DisableScissorInternal(state);
+}
+
+// Store 140662940 (xb3 PDB gfx_d3d/r_state.cpp)
+void R_HW_SetScissor(GfxCmdBufState *state, const GfxViewport *scissor)
+{
+	if (state->scissorX != scissor->x || state->scissorY != scissor->y || state->scissorW != scissor->width ||
+	    state->scissorH != scissor->height)
+	{
+		D3D11_RECT rect;
+		rect.left = scissor->x;
+		rect.top = scissor->y;
+		rect.right = scissor->x + scissor->width;
+		rect.bottom = scissor->height + scissor->y;
+		ComCall<void>(state->prim.device, CTX_RSSetScissorRects, 1u, (const D3D11_RECT *)&rect);
+		state->scissorX = scissor->x;
+		state->scissorY = scissor->y;
+		state->scissorW = scissor->width;
+		state->scissorH = scissor->height;
+	}
+}
+
+// Store 140663BE0 (xb3 PDB gfx_d3d/r_state.cpp; R_ForceSetViewportAndScissorSeparate is inlined)
+void R_SetViewportAndScissorSeparate(GfxCmdBufState *state, const GfxViewport *viewport, const GfxViewport *scissor)
+{
+	if (viewport->x != state->viewport.x || viewport->y != state->viewport.y ||
+	    viewport->width != state->viewport.width || viewport->height != state->viewport.height ||
+	    scissor->x != state->scissorX || scissor->y != state->scissorY || scissor->width != state->scissorW ||
+	    scissor->height != state->scissorH)
+	{
+		state->viewport = *viewport;
+		D3D11_VIEWPORT d3dViewport;
+		d3dViewport.TopLeftX = (float)viewport->x;
+		d3dViewport.TopLeftY = (float)viewport->y;
+		d3dViewport.Width = (float)viewport->width;
+		d3dViewport.Height = (float)viewport->height;
+		d3dViewport.MinDepth = state->depthRangeFar;
+		d3dViewport.MaxDepth = state->depthRangeNear;
+		ComCall<void>(state->prim.device, CTX_RSSetViewports, 1u, (const D3D11_VIEWPORT *)&d3dViewport);
+		R_HW_SetScissor(state, scissor);
+	}
+}
+
+// Store 140660F20 (xb3 PDB gfx_d3d/r_state.cpp:R_ClearScreenInternal): clears the bound colour target
+// (whichToClear bit 2) and the depth and stencil (bits 0 and 1: D3D11_CLEAR_DEPTH, D3D11_CLEAR_STENCIL). The views
+// come from OMGetRenderTargets, which adds a reference to each. `viewport` only selects between two copies of the
+// same code.
+void R_ClearScreenInternal(GfxCmdBufState *state, unsigned char whichToClear, const float *const color, float depth,
+                           unsigned char stencil, const GfxViewport *viewport)
+{
+	ID3D11DeviceContext *device = state->prim.device;
+	ID3D11RenderTargetView *colorView;
+	ID3D11DepthStencilView *depthView;
+	ComCall<void>(device, CTX_OMGetRenderTargets, 1u, &colorView, &depthView);
+	if ((whichToClear & 4) && colorView)
+		ComCall<void>(device, CTX_ClearRenderTargetView, colorView, color);
+	if ((whichToClear & 3) && depthView)
+		ComCall<void>(device, CTX_ClearDepthStencilView, depthView, (unsigned int)(whichToClear & 3), depth, stencil);
+	if (colorView)
+		ComCall<unsigned long>(colorView, UNK_Release);
+	if (depthView)
+		ComCall<unsigned long>(depthView, UNK_Release);
+}
+
+// Store 140663020 (xb3 PDB gfx_d3d/r_state.cpp:3986). The Store build picks the target's multisampled surfaces when
+// the source state is multisampled and the target has a multisampled colour view, and inlines R_HW_SetRenderTarget.
+void R_SetRenderTarget(GfxCmdBufContext context, GfxRenderTargetId newTargetId)
+{
+	GfxCmdBufState *state = context.state;
+	if (newTargetId == state->renderTargetId)
+		return;
+	if (state->refStateBits[0] & 0x40)
+	{
+		state->refStateBits[0] &= ~0x40u;
+		R_HW_SetGammaWriteEnable(state, 0);
+	}
+	GfxCmdBufSourceState *source = context.source;
+	unsigned int msaa = 0;
+	if (source->multiSampled)
+		msaa = gfxRenderTargets[newTargetId].imageAndSurfaces[1].surface.color != nullptr;
+	state->msaaTarget = (bool)msaa;
+	if (gfxRenderTargets[newTargetId].imageAndSurfaces[msaa].image)
+		R_UnbindImage(state, gfxRenderTargets[newTargetId].imageAndSurfaces[msaa].image);
+	R_HW_SetRenderTarget(state, newTargetId);
+	state->renderTargetId = newTargetId;
+	state->renderTargetSuiteId = R_RENDERTARGET_SUITE_NONE_STORE;
+	source->viewMode = 0;  // VIEW_MODE_NONE
+	source->flags |= GFX_SOURCE_VIEWPORT_IS_DIRTY;
+}
+
+// Store 140663210 (xb3 PDB gfx_d3d/r_state.cpp:4100): binds a suite's two colour targets together, with the depth
+// view of the last one that has one. Gamma writes are off with a suite.
+void R_SetRenderTargetSuite(GfxCmdBufContext context, GfxRenderTargetSuiteId suiteId)
+{
+	GfxCmdBufSourceState *source = context.source;
+	GfxCmdBufState *state = context.state;
+	const int *targets = source->input.renderTargetSuites[suiteId];
+	if (state->renderTargetSuiteId == suiteId)
+		return;
+	if (state->refStateBits[0] & 0x40)
+	{
+		state->refStateBits[0] &= ~0x40u;
+		R_HW_SetGammaWriteEnable(state, 0);
+	}
+	state->msaaTarget = source->multiSampled
+	                        ? gfxRenderTargets[targets[0]].imageAndSurfaces[1].surface.color != nullptr
+	                        : false;
+	unsigned int msaa = state->msaaTarget;
+	for (int i = 0; i < 2; i++)
+	{
+		if (targets[i] != R_RENDERTARGET_NONE_STORE && gfxRenderTargets[targets[i]].imageAndSurfaces[msaa].image)
+			R_UnbindImage(state, gfxRenderTargets[targets[i]].imageAndSurfaces[msaa].image);
+	}
+	msaa = state->msaaTarget;
+	ID3D11DepthStencilView *depthStencil = nullptr;
+	ID3D11RenderTargetView *colors[2];
+	state->deviceState.srgbRenderTarget = false;
+	unsigned int count;
+	state->renderTargetSuite[0] = targets[0];
+	if (targets[0] == R_RENDERTARGET_NONE_STORE)
+		colors[0] = nullptr;
+	else
+	{
+		const GfxRenderTargetSurface *surface = &gfxRenderTargets[targets[0]].imageAndSurfaces[msaa].surface;
+		colors[0] = surface->color;
+		if (surface->depthStencil)
+			depthStencil = surface->depthStencil;
+	}
+	state->renderTargetSuite[1] = targets[1];
+	if (targets[1] == R_RENDERTARGET_NONE_STORE)
+	{
+		colors[1] = nullptr;
+		count = 1;
+	}
+	else
+	{
+		count = 2;
+		const GfxRenderTargetSurface *surface = &gfxRenderTargets[targets[1]].imageAndSurfaces[msaa].surface;
+		colors[1] = surface->color;
+		if (surface->depthStencil)
+			depthStencil = surface->depthStencil;
+	}
+	ComCall<void>(state->prim.device, CTX_OMSetRenderTargets, count, (ID3D11RenderTargetView *const *)colors,
+	              depthStencil);
+	state->renderTargetId = R_RENDERTARGET_NONE_STORE;
+	state->renderTargetSuiteId = suiteId;
+	source->viewMode = 0;  // VIEW_MODE_NONE
+	source->flags |= GFX_SOURCE_VIEWPORT_IS_DIRTY;
+}
+
+// Store 140661470 (xb3 PDB gfx_d3d/r_state.cpp:4610): runs one draw callback on a fresh state for `output`'s context
+// (the immediate one is locked meanwhile), then unbinds everything the callback left bound. The constant caches
+// start invalid (all ones).
+void R_DrawCall(void (*callback)(const void *, GfxCmdBufContext), const void *userData, GfxCmdBufSourceState *source,
+                const GfxSceneDef *sceneDef, const GfxViewParms *viewParms, GfxDrawCallOutput *output)
+{
+	GfxCmdBufState state;
+	R_BeginView(source, sceneDef, viewParms);
+	state.prim.device = output->device;
+	if (state.prim.device == dx.immediateContext)
+		R_LockImmediateContext();
+	R_InitCmdBufState(&state);
+	memset(state.perPrimConstantState, 0xFF, sizeof(state.perPrimConstantState));
+	memset(state.perObjectConstantState, 0xFF, sizeof(state.perObjectConstantState));
+	memset(state.stableConstantState, 0xFF, sizeof(state.stableConstantState));
+	GfxCmdBufContext context;
+	context.source = source;
+	context.state = &state;
+	callback(userData, context);
+	R_ShutdownCmdBufState(&state);
+	if (state.prim.device == dx.immediateContext)
+		R_UnlockImmediateContext();
+}
+
+// Store 14065FDD0 (name unknown; the xb3 server has no code for it): creates dx.reactiveTurbulenceEffectorBuffer
+// (0x300 bytes of zeros, dynamic) and binds it as pixel shader constant buffer 10
+void sub_14065FDD0(GfxCmdBufState *state)
+{
+	ID3D11DeviceContext *device = state->prim.device;
+	unsigned char zeros[0x300];
+	memset(zeros, 0, sizeof(zeros));
+	D3D11_SUBRESOURCE_DATA initialData;
+	initialData.pSysMem = zeros;
+	initialData.SysMemPitch = 0x300;
+	initialData.SysMemSlicePitch = 0;
+	D3D11_BUFFER_DESC desc;
+	desc.ByteWidth = 0x300;
+	desc.Usage = (D3D11_USAGE)D3D11_USAGE_DYNAMIC;
+	desc.BindFlags = 4;           // D3D11_BIND_CONSTANT_BUFFER
+	desc.CPUAccessFlags = 0x10000;  // D3D11_CPU_ACCESS_WRITE
+	desc.MiscFlags = 0;
+	// StructureByteStride is left unset (stack garbage in the original too; ignored for a constant buffer)
+	R_CreateBufferInternal(&desc, &initialData, &dx.reactiveTurbulenceEffectorBuffer);
+	ComCall<void>(device, CTX_PSSetConstantBuffers, 10u, 1u, (ID3D11Buffer *const *)&dx.reactiveTurbulenceEffectorBuffer);
+}
+// ==== END per-frame ====
