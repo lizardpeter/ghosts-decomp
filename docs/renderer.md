@@ -206,6 +206,25 @@ tests/differential/d3dctx.py.
   at the end has no cost in Vulkan and can go.
 - B0085 matters there: viewport and scissor must be set explicitly in every command buffer.
 
+## The per-frame path: what remains
+
+Done so far: the state cache, material pass setup with its constant uploads, and the tess flush (55 functions,
+all `matches`). About 350–400 functions remain before nothing in the renderer calls D3D11 directly. In order:
+
+1. **The 2D command handlers and the rest of tess.** The render command table at 1408AC040 has 25 handlers that
+   line up one-for-one with the Xbox server's command enum, which names them. Together with the remaining tess
+   primitives (quads, rotated pics, text) they complete the main-menu path, the first Vulkan milestone.
+2. **Shader argument setup.** R_SetPass{Prim,Object,Stable}ShaderArguments and the code-matrix derivation: pure CPU,
+   but every pass needs them. The Store has three folded copies of one Xbox function (kept as `sub_`).
+3. **The rest of rb_backend (14066E000–140690000).** About 280 functions: text drawing, the draw-surface iterators
+   and the scene passes.
+4. **The other direct D3D11 callers.** About 78 functions: post-effects and resolves, compute dispatch, skinning
+   and static model buffer uploads, the scene draw loops in 140613xxx–140622xxx, the occlusion sprite.
+5. **Worker command lists.** FinishCommandList/ExecuteCommandList, in the 1401CC–1402xx area; in Vulkan these
+   become secondary command buffers recorded on the workers.
+
+After that, separately: the DXBC to SPIR-V converter for the game's shaders, and the Vulkan backend itself.
+
 ## Queries
 
 - **Occlusion:** 32 × 4 OCCLUSION queries, plus one more. The per-frame update brackets a 16×16 sprite with
