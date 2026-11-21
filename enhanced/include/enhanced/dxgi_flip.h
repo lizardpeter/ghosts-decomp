@@ -4,6 +4,7 @@
 // interfaces' positions and values, and every use falls back to the original behaviour when a call fails.
 #pragma once
 
+#include "gfx_d3d/com_call.h"  // ID3D11DeviceContext slots (CTX_OMSetRenderTargets, CTX_OMGetRenderTargets)
 #include "gfx_d3d/r_dxgi.h"
 
 struct ID3D11RenderTargetView;
@@ -24,8 +25,6 @@ enum EnhancedDxgiSlot : unsigned int
 	DXGIDEVICE1_SetMaximumFrameLatency = 12,  // IDXGIDevice1
 	SWAPCHAIN2_SetMaximumFrameLatency = 31,   // IDXGISwapChain2 (IDXGISwapChain 0-17, IDXGISwapChain1 18-28)
 	SWAPCHAIN2_GetFrameLatencyWaitableObject = 33,
-	CTX_OMSetRenderTargets = 33,         // ID3D11DeviceContext (checked: Store 140663172 `call [rax+0x108]`)
-	CTX_OMGetRenderTargets = 89,         // ID3D11DeviceContext (checked: Store 14067066C `call [rax+0x2c8]`)
 };
 
 #define DXGI_SWAP_EFFECT_FLIP_DISCARD 4
